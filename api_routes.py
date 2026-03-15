@@ -99,7 +99,8 @@ def _get_campaign_or_404(campaign_id):
 
 
 def _save_state(campaign):
-    db.session.flag_modified(campaign, 'current_state')
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(campaign, 'current_state')
     db.session.commit()
 
 
@@ -724,7 +725,8 @@ def api_loot():
             equip = ch.equipment or []
             equip.append(text)
             ch.equipment = equip
-            db.session.flag_modified(ch, 'equipment')
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(ch, 'equipment')
             db.session.commit()
             result['character'] = ch.name
             result['equipment'] = equip
@@ -1091,6 +1093,175 @@ def api_log(cid):
         result['sms_log'] = (state.get('sms_log') or [])[-count:]
 
     return jsonify(campaign_id=cid, logs=result)
+
+
+# ══════════════════════════════════════════════════════════════
+# PLAY AS CHARACTER (for external AI agents like Claude)
+# ══════════════════════════════════════════════════════════════
+
+@api_bp.route('/play', methods=['POST'])
+@require_api_key
+def api_play():
+    """
+    Play as a character — designed for external AI agents (e.g. Claude).
+
+    Body: {campaign_id, character_id, message}
+    The message is a natural-language action from the character's perspective.
+    It goes through the AI DM pipeline just like a human player's action,
+    and the result is posted to Discord.
+
+    Returns the AI DM's response and updated character state.
+    """
+    data = request.get_json(force=True)
+    cid = data.get('campaign_id')
+    char_id = data.get('character_id')
+    message = data.get('message', '')
+
+    if not all([cid, char_id, message]):
+        return jsonify(error="Required: campaign_id, character_id, message"), 400
+
+    c, err = _get_campaign_or_404(cid)
+    if err:
+        return err
+    ch = Character.query.get(char_id)
+    if not ch:
+        return jsonify(error=f"Character {char_id} not found"), 404
+
+    _post_debug(c, f"[PLAY] {ch.name}: {message}")
+
+    # Process through the AI DM pipeline
+    from services.ai_dm import process_player_sms
+    try:
+        response = process_player_sms(message, ch, c)
+    except Exception as e:
+        _post_debug(c, f"[PLAY] error: {e}")
+        return jsonify(error=str(e)), 500
+
+    # Log the action
+    _log_action(c, ch.name, 'play', f"{ch.name}: {message} → {response[:200]}")
+
+    # Post to Discord tavern channel
+    try:
+        from services.discord_bot import bot, _bot_loop
+        import asyncio
+        import discord as _discord
+
+        async def _send():
+            state = c.current_state or {}
+            discord_cfg = state.get('discord', {})
+            tavern_id = discord_cfg.get('channels', {}).get('tavern')
+            if not tavern_id:
+                return
+
+            channel = bot.get_channel(int(tavern_id))
+            if not channel:
+                return
+
+            from services.discord_bot import CLASS_COLORS, DM_COLOR
+            color = CLASS_COLORS.get(ch.class_name, DM_COLOR)
+
+            em = _discord.Embed(
+                description=(
+                    f"🤖 **{ch.name}** *(via Claude)*: _{message}_\n\n"
+                    f"{response}"
+                ),
+                color=color,
+            )
+            await channel.send(embed=em)
+
+            # Post to dice-log if there's a mechanical result
+            if response.startswith('['):
+                dice_log_id = discord_cfg.get('channels', {}).get('dice_log')
+                if dice_log_id:
+                    dice_ch = bot.get_channel(int(dice_log_id))
+                    if dice_ch:
+                        roll_em = _discord.Embed(
+                            description=f"🎲 **{ch.name}**: {response}",
+                            color=color,
+                        )
+                        await dice_ch.send(embed=roll_em)
+
+        if _bot_loop and bot.is_ready():
+            asyncio.run_coroutine_threadsafe(_send(), _bot_loop)
+    except Exception:
+        pass
+
+    # Refresh character state after action
+    db.session.refresh(ch)
+
+    _post_debug(c, f"[PLAY] {ch.name} response: {response[:200]}")
+    return jsonify(
+        character=_char_json(ch),
+        message=message,
+        response=response,
+        campaign_state={
+            'combat_active': (c.current_state or {}).get('combat_active', False),
+            'round': (c.current_state or {}).get('round', 0),
+            'initiative_order': (c.current_state or {}).get('initiative_order', []),
+        },
+    )
+
+
+@api_bp.route('/play/context', methods=['GET'])
+@require_api_key
+def api_play_context():
+    """
+    Get the current game context for a character — everything an AI agent
+    needs to decide what to do next.
+
+    Query params: campaign_id, character_id
+    Returns: character sheet, recent log, combat state, party info.
+    """
+    cid = request.args.get('campaign_id', type=int)
+    char_id = request.args.get('character_id', type=int)
+
+    if not cid or not char_id:
+        return jsonify(error="Required query params: campaign_id, character_id"), 400
+
+    c, err = _get_campaign_or_404(cid)
+    if err:
+        return err
+    ch = Character.query.get(char_id)
+    if not ch:
+        return jsonify(error=f"Character {char_id} not found"), 404
+
+    state = c.current_state or {}
+
+    # Get party members
+    party = []
+    for pid in (c.players or []):
+        pc = Character.query.filter_by(user_id=pid, campaign_id=c.id).first()
+        if not pc:
+            pc = Character.query.filter_by(user_id=pid).first()
+        if pc:
+            party.append({
+                'name': pc.name,
+                'class': pc.class_name,
+                'level': pc.level,
+                'hp': f"{pc.hp_current}/{pc.hp_max}",
+                'is_you': pc.id == ch.id,
+            })
+
+    # Recent events
+    combat_log = (state.get('combat_log') or [])[-15:]
+    narration_log = (state.get('narration_log') or [])[-5:]
+
+    return jsonify(
+        character=_char_json(ch),
+        campaign={
+            'id': c.id,
+            'name': c.name,
+            'combat_active': state.get('combat_active', False),
+            'round': state.get('round', 0),
+            'turn_index': state.get('turn_index', 0),
+            'initiative_order': state.get('initiative_order', []),
+            'active_conditions': state.get('active_conditions', {}),
+            'session_active': state.get('session_active', False),
+        },
+        party=party,
+        recent_combat_log=combat_log,
+        recent_narration=narration_log,
+    )
 
 
 @api_bp.route('/whisper', methods=['POST'])

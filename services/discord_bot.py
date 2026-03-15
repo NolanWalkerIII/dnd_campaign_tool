@@ -411,12 +411,32 @@ async def setup_campaign_channels(guild, campaign, dm_discord_user):
     )
     await quest_board.send(embed=welcome_em)
 
+    # Post channel guide to quest-board
+    guide_em = discord.Embed(
+        title="📋 Channel Guide",
+        description=(
+            "Here's what each channel is for:\n\n"
+            "**#quest-board** — Story updates, quest hooks, and objectives (read-only)\n"
+            "**#tavern** — Main gameplay channel. Describe your actions here!\n"
+            "**#combat** — Dedicated combat encounters, initiative, and attacks\n"
+            "**#dice-log** — Automated log of all dice rolls (read-only)\n"
+            "**#character-sheets** — Your character stats and inventory (read-only)\n\n"
+            "*Two other channels (dm-screen, debug) are hidden — only the DM can see them.*"
+        ),
+        color=discord.Color.blue(),
+    )
+    await quest_board.send(embed=guide_em)
+
     # Post to DM screen
     dm_em = discord.Embed(
         title="🛡 DM Screen",
         description=(
             "This channel is only visible to you and the bot.\n\n"
-            "**DM Commands:**\n"
+            "**Session Commands:**\n"
+            "`/start` — Begin the session with an AI-generated opening scene\n"
+            "`/reset` — Abort and tear down all campaign channels\n"
+            "`/recap` — AI-generated session recap\n\n"
+            "**Gameplay Commands:**\n"
             "`/scene <text>` — Set scene narration\n"
             "`/combat start` — Begin combat\n"
             "`/npc add <name> <hp> <ac>` — Add NPC\n"
@@ -424,8 +444,7 @@ async def setup_campaign_channels(guild, campaign, dm_discord_user):
             "`/damage @player <amount>` — Apply damage\n"
             "`/heal @player <amount>` — Heal a player\n"
             "`/whisper @player <text>` — Private message\n"
-            "`/recap` — AI-generated session recap\n"
-            "`/agent toggle @player` — Toggle AI autopilot"
+            "`/agent @player` — Toggle AI autopilot for a player"
         ),
         color=DM_COLOR,
     )
@@ -652,41 +671,239 @@ async def verify_cmd(interaction: discord.Interaction, code: str):
 async def setup_cmd(interaction: discord.Interaction, join_code: str):
     await interaction.response.defer()
 
-    with _flask_app.app_context():
-        from models import Campaign, User, db
-        from sqlalchemy.orm.attributes import flag_modified
+    try:
+        with _flask_app.app_context():
+            from models import Campaign, User, db
+            from sqlalchemy.orm.attributes import flag_modified
 
-        campaign = Campaign.query.filter_by(join_code=join_code.upper().strip()).first()
-        if not campaign:
-            await interaction.followup.send("❌ No campaign found with that join code.", ephemeral=True)
-            return
+            campaign = Campaign.query.filter_by(join_code=join_code.upper().strip()).first()
+            if not campaign:
+                await interaction.followup.send("❌ No campaign found with that join code.", ephemeral=True)
+                return
 
-        # Link DM's discord account
-        dm = User.query.get(campaign.dm_id)
-        if dm:
-            dm.discord_id = str(interaction.user.id)
+            campaign_name = campaign.name
+            campaign_join_code = campaign.join_code
 
-        # Create channels
+            # Link DM's discord account
+            dm = User.query.get(campaign.dm_id)
+            if dm:
+                dm.discord_id = str(interaction.user.id)
+                db.session.commit()
+
+        # Create channels outside the app context to avoid long-held DB connections
         channels = await setup_campaign_channels(
             interaction.guild, campaign, interaction.user
         )
 
-        # Store Discord config in campaign state
-        state = campaign.current_state or {}
-        state['discord'] = {
-            'guild_id': str(interaction.guild_id),
-            'channels': channels,
-            'enabled': True,
-        }
-        campaign.current_state = state
-        flag_modified(campaign, 'current_state')
-        db.session.commit()
+        with _flask_app.app_context():
+            from models import Campaign, db
+            from sqlalchemy.orm.attributes import flag_modified
 
-    await interaction.followup.send(
-        f"✅ **{campaign.name}** is set up! Channels created. "
-        f"Share the join code `{campaign.join_code}` with your players.\n\n"
-        f"Players: type `/join your_username` then `/verify {campaign.join_code}` to link your account."
-    )
+            # Re-fetch campaign to avoid detached instance
+            campaign = Campaign.query.filter_by(join_code=campaign_join_code).first()
+
+            # Store Discord config in campaign state
+            state = campaign.current_state or {}
+            state['discord'] = {
+                'guild_id': str(interaction.guild_id),
+                'channels': channels,
+                'enabled': True,
+            }
+            campaign.current_state = state
+            flag_modified(campaign, 'current_state')
+            db.session.commit()
+
+        await interaction.followup.send(
+            f"✅ **{campaign_name}** is set up! Channels created. "
+            f"Share the join code `{campaign_join_code}` with your players.\n\n"
+            f"Players: type `/join your_username` then `/verify {campaign_join_code}` to link your account.\n\n"
+            f"DM: use `/start` when you're ready to begin the adventure!"
+        )
+    except Exception as e:
+        print(f'[Discord] /setup error: {e}', flush=True)
+        import traceback
+        traceback.print_exc()
+        try:
+            await interaction.followup.send(f"❌ Setup error: {e}")
+        except Exception:
+            pass
+
+
+@bot.tree.command(name="start", description="[DM] Begin the adventure with an AI-generated opening scene")
+async def start_cmd(interaction: discord.Interaction):
+    await interaction.response.defer()
+
+    try:
+        with _flask_app.app_context():
+            is_dm, campaign = _is_dm(interaction.guild_id, interaction.user.id)
+            if not is_dm:
+                await interaction.followup.send("Only the DM can start the adventure.", ephemeral=True)
+                return
+
+            from models import Character, db
+            from sqlalchemy.orm.attributes import flag_modified
+            from services.ai_dm import _call
+            from services.engine import get_character_summary
+
+            # Gather party info
+            party_lines = []
+            for pid in (campaign.players or []):
+                char = Character.query.filter_by(user_id=pid, campaign_id=campaign.id).first()
+                if not char:
+                    char = Character.query.filter_by(user_id=pid).first()
+                if char:
+                    party_lines.append(get_character_summary(char))
+
+            party_text = "\n".join(party_lines) if party_lines else "No players have joined yet."
+
+            state = campaign.current_state or {}
+            setting = state.get('setting', 'a classic fantasy world')
+            hook = state.get('adventure_hook', '')
+
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert D&D Dungeon Master. Write an atmospheric opening scene "
+                        "for a new adventure. Set the mood, describe the environment, introduce the "
+                        "situation, and give the party a clear hook to act on. "
+                        "Keep it under 1500 characters. Use vivid, immersive language. "
+                        "Address the characters by name."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Campaign: {campaign.name}\n"
+                        f"Setting: {setting}\n"
+                        f"Adventure hook: {hook or 'Create an interesting opening hook'}\n\n"
+                        f"Party:\n{party_text}\n\n"
+                        f"Write the opening scene."
+                    ),
+                },
+            ]
+
+            narration, error = _call(messages, temperature=0.9, max_tokens=600)
+            if error:
+                narration = (
+                    f"*The AI DM is unavailable ({error}). "
+                    f"Use `/scene` to narrate manually.*"
+                )
+
+            # Mark session as started
+            state['session_active'] = True
+            campaign.current_state = state
+            flag_modified(campaign, 'current_state')
+            db.session.commit()
+
+            # Get channel IDs
+            tavern_id = state.get('discord', {}).get('channels', {}).get('tavern')
+            quest_board_id = state.get('discord', {}).get('channels', {}).get('quest_board')
+
+        # Post the opening scene
+        em = narration_embed(narration, dm_name="Dungeon Master")
+        em.title = f"⚔ {campaign.name} — The Adventure Begins"
+        await interaction.followup.send(embed=em)
+
+        # Also post to tavern if we're not already there
+        if tavern_id and str(interaction.channel_id) != tavern_id:
+            tavern = bot.get_channel(int(tavern_id))
+            if tavern:
+                await tavern.send(embed=em)
+
+        # Post party summary to quest board
+        if quest_board_id and party_lines:
+            party_em = discord.Embed(
+                title="🛡 The Adventuring Party",
+                description="\n".join(f"• {line}" for line in party_lines),
+                color=SUCCESS_COLOR,
+            )
+            qb = bot.get_channel(int(quest_board_id))
+            if qb:
+                await qb.send(embed=party_em)
+
+    except Exception as e:
+        print(f'[Discord] /start error: {e}', flush=True)
+        import traceback
+        traceback.print_exc()
+        try:
+            await interaction.followup.send(f"❌ Error starting adventure: {e}")
+        except Exception:
+            pass
+
+
+@bot.tree.command(name="reset", description="[DM] Reset the campaign — removes Discord channels and unlinks the server")
+async def reset_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        with _flask_app.app_context():
+            is_dm, campaign = _is_dm(interaction.guild_id, interaction.user.id)
+            if not is_dm:
+                await interaction.followup.send("Only the DM can reset the campaign.", ephemeral=True)
+                return
+
+            from models import db
+            from sqlalchemy.orm.attributes import flag_modified
+
+            state = campaign.current_state or {}
+            discord_cfg = state.get('discord', {})
+            channel_ids = discord_cfg.get('channels', {})
+            category_id = channel_ids.get('category')
+            campaign_name = campaign.name
+
+        # Delete all campaign channels
+        deleted = 0
+        for key, ch_id in channel_ids.items():
+            if key == 'category':
+                continue
+            try:
+                ch = bot.get_channel(int(ch_id))
+                if ch:
+                    await ch.delete(reason=f"Campaign reset by DM")
+                    deleted += 1
+            except Exception as e:
+                print(f'[Discord] Failed to delete channel {key}: {e}', flush=True)
+
+        # Delete category
+        if category_id:
+            try:
+                cat = bot.get_channel(int(category_id))
+                if cat:
+                    await cat.delete(reason=f"Campaign reset by DM")
+            except Exception as e:
+                print(f'[Discord] Failed to delete category: {e}', flush=True)
+
+        # Clear Discord state from campaign
+        with _flask_app.app_context():
+            from models import Campaign, db
+            from sqlalchemy.orm.attributes import flag_modified
+
+            campaign = _get_campaign_for_guild(interaction.guild_id)
+            if campaign:
+                state = campaign.current_state or {}
+                state.pop('discord', None)
+                state['session_active'] = False
+                state['combat_active'] = False
+                state['initiative_order'] = []
+                campaign.current_state = state
+                flag_modified(campaign, 'current_state')
+                db.session.commit()
+
+        await interaction.followup.send(
+            f"🔄 **{campaign_name}** has been reset. {deleted} channels deleted.\n"
+            f"Use `/setup {campaign_name}` with the join code to set up again.",
+            ephemeral=True,
+        )
+
+    except Exception as e:
+        print(f'[Discord] /reset error: {e}', flush=True)
+        import traceback
+        traceback.print_exc()
+        try:
+            await interaction.followup.send(f"❌ Reset error: {e}", ephemeral=True)
+        except Exception:
+            pass
 
 
 @bot.tree.command(name="scene", description="[DM] Narrate a scene")
