@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+{% block title %}{{ character.name }} — D&D Manager{% endblock %}
+
+{% block content %}
+{% set spells_data = character.spells or {} %}
+{% set slots = spells_data.get('slots', {}) %}
+{% set hit_dice_cur = spells_data.get('hit_dice_current', 0) %}
+{% set hit_dice_max = spells_data.get('hit_dice_max', 0) %}
+{% set gold = spells_data.get('gold', 0) %}
+{% set concentration = spells_data.get('concentration') %}
+{% set is_owner = character.user_id == session.get('user_id') %}
+{% set can_edit = is_owner or session.get('role') == 'dm' %}
+
+<div class="page-header">
+  <div>
+    <h1>{{ character.name }}</h1>
+    <p style="color:var(--muted); font-size:0.9rem;">
+      Level {{ character.level }}
+      {{ character.race }} {{ character.class_name }}
+      {% if character.background %} · {{ character.background }}{% endif %}
+      {% if character.alignment %} · {{ character.alignment }}{% endif %}
+    </p>
+  </div>
+  <div style="display:flex; gap:0.75rem; align-items:center;">
+    <a href="/characters" class="btn btn-outline">← All Characters</a>
+    {% if can_edit %}
+    <a href="/characters/{{ character.id }}/delete"
+       class="btn btn-primary"
+       onclick="return confirm('Delete {{ character.name }}?')">Delete</a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── ABILITY SCORES ── -->
+<div class="card">
+  <h2>Ability Scores</h2>
+  <div class="stat-grid">
+    {% for ab in ability_order %}
+    {% set score = character.ability_scores[ab] %}
+    {% set m = score_mod(score) %}
+    <div class="stat-block">
+      <div class="stat-name">{{ ability_names[ab] }}</div>
+      <div class="stat-score">{{ score }}</div>
+      <div class="stat-mod">{{ mod_str(m) }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ── COMBAT STATS ── -->
+<div class="card">
+  <h2>Combat Stats</h2>
+  <div class="info-row">
+    <div class="info-pill">
+      <div class="pill-label">HP</div>
+      <div class="pill-value">{{ character.hp_current }} / {{ character.hp_max }}</div>
+    </div>
+    <div class="info-pill">
+      <div class="pill-label">AC</div>
+      <div class="pill-value">{{ character.ac }}</div>
+    </div>
+    <div class="info-pill">
+      <div class="pill-label">Initiative</div>
+      <div class="pill-value">{{ mod_str(score_mod(character.ability_scores['DEX'])) }}</div>
+    </div>
+    <div class="info-pill">
+      <div class="pill-label">Speed</div>
+      <div class="pill-value">{{ race_speed }} ft</div>
+    </div>
+    <div class="info-pill">
+      <div class="pill-label">Prof. Bonus</div>
+      <div class="pill-value">+{{ character.proficiency_bonus }}</div>
+    </div>
+    <div class="info-pill">
+      <div class="pill-label">Hit Die</div>
+      <div class="pill-value">d{{ hit_die }}</div>
+    </div>
+    {% if spellcasting_ability %}
+    <div class="info-pill">
+      <div class="pill-label">Spell DC</div>
+      <div class="pill-value">{{ spell_dc }}</div>
+    </div>
+    <div class="info-pill">
+      <div class="pill-label">Spell Atk</div>
+      <div class="pill-value">{{ mod_str(spell_atk) }}</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- DM HP Adjustment (only visible to DMs) -->
+{% if session.get('role') == 'dm' %}
+<div class="card" style="border-color:var(--accent);">
+  <h2 style="color:var(--accent);">DM Controls</h2>
+  <div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap;">
+    <form method="POST" action="/dm/characters/{{ character.id }}/hp"
+          style="display:flex; gap:0.75rem; align-items:flex-end;">
+      {% if owner_campaigns %}
+      <div class="form-group">
+        <label>Return to Campaign</label>
+        <select name="campaign_id">
+          <option value="">— Stay on sheet —</option>
+          {% for c in owner_campaigns %}
+          <option value="{{ c.id }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% else %}
+      <input type="hidden" name="campaign_id" value="">
+      {% endif %}
+      <div class="form-group">
+        <label>HP Delta (+ heal / − damage)</label>
+        <input type="number" name="delta" placeholder="e.g. -5 or +10" style="width:140px;">
+      </div>
+      <button type="submit" class="btn btn-gold">Apply</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── SPELL SLOTS (spellcasters only, owner/DM) ── -->
+{% if spellcasting_ability and can_edit and slots %}
+<div class="card">
+  <h2>Spell Slots</h2>
+
+  {% if concentration %}
+  <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;
+              background:rgba(233,69,96,0.1); border:1px solid var(--accent);
+              border-radius:var(--radius); padding:8px 12px;">
+    <span style="color:var(--accent); font-size:0.9rem;">
+      ✦ Concentrating: <strong>{{ concentration }}</strong>
+    </span>
+    <form method="POST" action="/characters/{{ character.id }}/concentration/clear" style="margin:0;">
+      <button type="submit" class="btn btn-outline"
+              style="padding:2px 10px; font-size:0.78rem; color:var(--accent);">Drop</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <!-- Slot circles per level -->
+  <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1.25rem;">
+    {% for lvl in ['1','2','3','4','5','6','7','8','9'] %}
+    {% if lvl in slots %}
+    {% set slot = slots[lvl] %}
+    <div style="text-align:center;">
+      <div style="font-size:0.72rem; color:var(--muted); margin-bottom:4px; letter-spacing:1px;">
+        {{ lvl }}{% if lvl == '1' %}st{% elif lvl == '2' %}nd{% elif lvl == '3' %}rd{% else %}th{% endif %}
+      </div>
+      <div style="display:flex; gap:4px; justify-content:center; margin-bottom:3px;">
+        {% for i in range(slot.max) %}
+        {% set filled = i < slot.current %}
+        <span style="width:14px; height:14px; border-radius:50%;
+                     background:{{ 'var(--gold)' if filled else 'transparent' }};
+                     border:2px solid {{ 'var(--gold)' if filled else 'var(--muted)' }};
+                     display:inline-block;"></span>
+        {% endfor %}
+      </div>
+      <div style="font-size:0.72rem; color:var(--muted);">{{ slot.current }}/{{ slot.max }}</div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+
+  <!-- Cast Spell Form -->
+  <form method="POST" action="/characters/{{ character.id }}/cast"
+        style="display:flex; gap:0.5rem; align-items:flex-end; flex-wrap:wrap;">
+    <div class="form-group" style="flex:1; min-width:160px;">
+      <label>Spell name (optional)</label>
+      <input type="text" name="spell_name" placeholder="e.g. Fireball">
+    </div>
+    <div class="form-group">
+      <label>Slot level</label>
+      <select name="slot_level" style="width:80px;">
+        {% for lvl in ['1','2','3','4','5','6','7','8','9'] %}
+        {% if lvl in slots and slots[lvl].current > 0 %}
+        <option value="{{ lvl }}">{{ lvl }}</option>
+        {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="display:flex; align-items:center; gap:6px; padding-bottom:8px;">
+      <input type="checkbox" name="concentration" id="conc_check" style="width:auto;">
+      <label for="conc_check" style="margin:0; font-size:0.85rem; color:var(--muted);">Concentration</label>
+    </div>
+    <button type="submit" class="btn btn-gold" style="padding:8px 16px;">Cast</button>
+  </form>
+</div>
+{% endif %}
+
+<!-- ── HIT DICE & RESTS ── -->
+{% if can_edit %}
+<div class="card">
+  <h2>Hit Dice &amp; Rests</h2>
+  <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem; flex-wrap:wrap;">
+    <!-- Hit dice circles -->
+    <div style="display:flex; gap:5px; align-items:center;">
+      {% for i in range(hit_dice_max) %}
+      <span style="width:16px; height:16px; border-radius:3px;
+                   background:{{ 'var(--success)' if i < hit_dice_cur else 'var(--border)' }};
+                   border:1px solid {{ 'var(--success)' if i < hit_dice_cur else 'var(--muted)' }};
+                   display:inline-block;" title="Hit die {{ i+1 }}"></span>
+      {% endfor %}
+    </div>
+    <span style="font-size:0.85rem; color:var(--text);">
+      {{ hit_dice_cur }}/{{ hit_dice_max }} d{{ hit_die }} remaining
+    </span>
+  </div>
+
+  <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+    <!-- Short Rest -->
+    <form method="POST" action="/characters/{{ character.id }}/rest/short"
+          style="display:flex; gap:0.5rem; align-items:flex-end;">
+      <div class="form-group">
+        <label>Dice to spend</label>
+        <input type="number" name="num_dice" value="1" min="1" max="{{ hit_dice_max }}"
+               style="width:65px;">
+      </div>
+      <button type="submit" class="btn btn-outline"
+              style="padding:7px 14px;"
+              {% if hit_dice_cur <= 0 %}disabled title="No hit dice remaining"{% endif %}>
+        Short Rest
+      </button>
+    </form>
+
+    <!-- Long Rest -->
+    <form method="POST" action="/characters/{{ character.id }}/rest/long">
+      <button type="submit" class="btn btn-gold"
+              onclick="return confirm('Take a long rest? This fully restores HP and spell slots.')"
+              style="padding:7px 16px;">Long Rest</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<div class="two-col">
+  <!-- ── SAVING THROWS & SKILLS ── -->
+  <div>
+    <div class="card">
+      <h2>Saving Throws</h2>
+      {% for ab in ability_order %}
+      {% set m = score_mod(character.ability_scores[ab]) %}
+      {% set prof = ab in saving_throw_profs %}
+      <div class="skill-row">
+        <span class="prof-dot {{ 'filled' if prof else '' }}"></span>
+        <span>{{ ability_names[ab] }}</span>
+        <span class="skill-mod">{{ mod_str(m + (character.proficiency_bonus if prof else 0)) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="card">
+      <h2>Skills</h2>
+      {% for skill_name, ab in skills_sorted %}
+      {% set base_mod = score_mod(character.ability_scores[ab]) %}
+      {% set prof = skill_name in character.skills %}
+      <div class="skill-row">
+        <span class="prof-dot {{ 'filled' if prof else '' }}"></span>
+        <span>{{ skill_name }}</span>
+        <span style="font-size:0.75rem; color:var(--muted); margin-left:4px;">({{ ab }})</span>
+        <span class="skill-mod">{{ mod_str(base_mod + (character.proficiency_bonus if prof else 0)) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ── PROFICIENCIES, EQUIPMENT & RACIAL TRAITS ── -->
+  <div>
+    <div class="card">
+      <h2>Proficiencies</h2>
+      <h3 style="margin-top:0.5rem;">Armor</h3>
+      <p style="font-size:0.88rem; color:var(--muted);">
+        {{ armor_profs | join(', ') or 'None' }}
+      </p>
+      <h3 style="margin-top:0.75rem;">Weapons</h3>
+      <p style="font-size:0.88rem; color:var(--muted);">
+        {{ weapon_profs | join(', ') }}
+      </p>
+      {% if spellcasting_ability %}
+      <h3 style="margin-top:0.75rem;">Spellcasting</h3>
+      <p style="font-size:0.88rem; color:var(--muted);">
+        Ability: {{ ability_names[spellcasting_ability] }} ({{ spellcasting_ability }})
+      </p>
+      {% endif %}
+    </div>
+
+    <!-- Equipment + Gold -->
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+        <h2 style="margin:0;">Equipment</h2>
+        <!-- Gold display -->
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:0.82rem; color:var(--gold); font-weight:600;">
+            ◆ {{ gold }} gp
+          </span>
+          {% if can_edit %}
+          <form method="POST" action="/characters/{{ character.id }}/gold"
+                style="display:flex; gap:4px;">
+            <input type="number" name="delta" placeholder="±gp"
+                   style="width:60px; padding:3px 6px; font-size:0.78rem;">
+            <button type="submit" class="btn btn-outline"
+                    style="padding:2px 8px; font-size:0.78rem;">Apply</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if character.equipment %}
+      <ul class="equip-list" style="margin-bottom:{% if can_edit %}0.75rem{% else %}0{% endif %};">
+        {% for item in character.equipment %}
+        <li style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+          <span>{{ item }}</span>
+          {% if can_edit %}
+          <form method="POST"
+                action="/characters/{{ character.id }}/inventory/remove/{{ loop.index0 }}"
+                style="margin:0;">
+            <button type="submit" class="btn btn-outline"
+                    style="padding:1px 7px; font-size:0.72rem; color:var(--accent);"
+                    onclick="return confirm('Remove {{ item }}?')">✕</button>
+          </form>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p style="color:var(--muted); font-size:0.88rem; margin-bottom:{% if can_edit %}0.75rem{% else %}0{% endif %};">
+        No equipment.
+      </p>
+      {% endif %}
+
+      {% if can_edit %}
+      <form method="POST" action="/characters/{{ character.id }}/inventory/add"
+            style="display:flex; gap:0.5rem; align-items:flex-end;">
+        <div class="form-group" style="flex:1; margin:0;">
+          <label style="font-size:0.78rem;">Add item</label>
+          <input type="text" name="item" placeholder="e.g. Rope (50 ft)"
+                 style="font-size:0.85rem;">
+        </div>
+        <button type="submit" class="btn btn-outline"
+                style="padding:7px 12px; font-size:0.82rem;">Add</button>
+      </form>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Racial Traits</h2>
+      {% if race_traits %}
+      <ul class="trait-list">
+        {% for trait in race_traits %}
+        <li>{{ trait }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p style="color:var(--muted); font-size:0.88rem;">None listed.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

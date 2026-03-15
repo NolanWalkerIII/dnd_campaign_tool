@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+{% block title %}Create Character — D&D Manager{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Create a Character</h1>
+</div>
+
+<!-- ── IMPORT BANNER ── -->
+<div class="card" style="border-color:var(--gold); margin-bottom:1.5rem;">
+  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <h2 style="margin:0 0 4px;">Import from Markdown</h2>
+      <p style="color:var(--muted); font-size:0.85rem; margin:0;">
+        Download the template, fill it in, then import it here — no form required.
+      </p>
+    </div>
+    <a href="/characters/template" class="btn btn-outline" style="white-space:nowrap;">
+      ⬇ Download Template
+    </a>
+  </div>
+  <hr style="border-color:var(--border); margin:1rem 0;">
+  <form method="POST" action="/characters/import" enctype="multipart/form-data"
+        style="display:flex; align-items:flex-end; gap:0.75rem; flex-wrap:wrap;">
+    <div class="form-group" style="flex:1; min-width:220px;">
+      <label>Character .md file</label>
+      <input type="file" name="md_file" accept=".md,.txt" required
+             style="padding:6px 10px;">
+    </div>
+    <button type="submit" class="btn btn-gold" style="padding:8px 20px; white-space:nowrap;">
+      Import Character
+    </button>
+  </form>
+</div>
+
+<p style="color:var(--muted); font-size:0.88rem; margin-bottom:1.5rem;">
+  — or fill in the form below —
+</p>
+
+<form method="POST" action="/characters/new" id="create-form">
+
+  <!-- ── STEP 1: BASICS ── -->
+  <div class="form-section">
+    <h2>1. Basics</h2>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label for="name">Character Name</label>
+        <input type="text" id="name" name="name" required placeholder="e.g. Thorin Ironforge">
+      </div>
+      <div class="form-group">
+        <label for="race">Race</label>
+        <select id="race" name="race" required onchange="onRaceChange()">
+          <option value="">— Choose a Race —</option>
+          {% for race_name, race in races.items() %}
+            <option value="{{ race_name }}">{{ race_name }}</option>
+          {% endfor %}
+        </select>
+        <div id="race-traits" style="margin-top:8px; font-size:0.82rem; color:var(--muted);"></div>
+      </div>
+      <div class="form-group">
+        <label for="class_name">Class</label>
+        <select id="class_name" name="class_name" required onchange="onClassChange()">
+          <option value="">— Choose a Class —</option>
+          {% for class_name, cls in classes.items() %}
+            <option value="{{ class_name }}">{{ class_name }} (d{{ cls.hit_die }})</option>
+          {% endfor %}
+        </select>
+        <div id="class-info" style="margin-top:8px; font-size:0.82rem; color:var(--muted);"></div>
+      </div>
+      <div class="form-group">
+        <label for="background">Background</label>
+        <select id="background" name="background" required onchange="onBackgroundChange()">
+          <option value="">— Choose a Background —</option>
+          {% for bg_name, bg in backgrounds.items() %}
+            <option value="{{ bg_name }}">{{ bg_name }}</option>
+          {% endfor %}
+        </select>
+        <div id="bg-info" style="margin-top:8px; font-size:0.82rem; color:var(--muted);"></div>
+      </div>
+      <div class="form-group">
+        <label for="alignment">Alignment</label>
+        <select id="alignment" name="alignment">
+          <option value="True Neutral">True Neutral</option>
+          <option value="Lawful Good">Lawful Good</option>
+          <option value="Neutral Good">Neutral Good</option>
+          <option value="Chaotic Good">Chaotic Good</option>
+          <option value="Lawful Neutral">Lawful Neutral</option>
+          <option value="Lawful Evil">Lawful Evil</option>
+          <option value="Neutral Evil">Neutral Evil</option>
+          <option value="Chaotic Evil">Chaotic Evil</option>
+          <option value="Chaotic Neutral">Chaotic Neutral</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: ABILITY SCORES ── -->
+  <div class="form-section">
+    <h2>2. Ability Scores — Standard Array</h2>
+    <p style="font-size:0.85rem; color:var(--muted); margin-bottom:1rem;">
+      Assign each value from the standard array <strong style="color:var(--gold);">15, 14, 13, 12, 10, 8</strong> to one ability score.
+      Racial bonuses are applied automatically.
+    </p>
+    <div class="ability-grid">
+      {% for ab in ability_scores %}
+      <div class="ability-block">
+        <div class="ability-name">{{ ab }}</div>
+        <select name="base_{{ ab.lower() }}" id="sel_{{ ab }}"
+                onchange="onScoreChange()" required>
+          <option value="">—</option>
+          {% for v in standard_array %}
+          <option value="{{ v }}">{{ v }}</option>
+          {% endfor %}
+        </select>
+        <div class="racial-bonus" id="racial_{{ ab }}"></div>
+        <div class="final-score" id="final_{{ ab }}">—</div>
+        <div class="modifier" id="mod_{{ ab }}"></div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Half-Elf flex ASI -->
+    <div id="flex-asi-section" style="display:none; margin-top:1rem;">
+      <p style="font-size:0.85rem; color:var(--gold); margin-bottom:0.5rem;">Half-Elf: Choose two ability scores to gain +1 each.</p>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>First +1 bonus goes to</label>
+          <select name="flex_asi_1" id="flex_asi_1" onchange="onScoreChange()">
+            <option value="">— Choose —</option>
+            {% for ab in ability_scores %}{% if ab != 'CHA' %}<option value="{{ ab }}">{{ ab }} ({{ ability_names[ab] }})</option>{% endif %}{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Second +1 bonus goes to</label>
+          <select name="flex_asi_2" id="flex_asi_2" onchange="onScoreChange()">
+            <option value="">— Choose —</option>
+            {% for ab in ability_scores %}{% if ab != 'CHA' %}<option value="{{ ab }}">{{ ab }} ({{ ability_names[ab] }})</option>{% endif %}{% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="array-warning" style="display:none; margin-top:0.75rem;" class="flash flash-error">
+      Each value in the standard array may only be used once.
+    </div>
+  </div>
+
+  <!-- ── STEP 3: SKILL PROFICIENCIES ── -->
+  <div class="form-section">
+    <h2>3. Skill Proficiencies</h2>
+    <p style="font-size:0.85rem; color:var(--muted); margin-bottom:0.75rem;">
+      Background skills are automatically selected. Choose your class skill proficiencies from the available options.
+    </p>
+    <div id="skills-container">
+      <div id="skill-instruction" style="color:var(--muted); font-size:0.85rem;">
+        Select a race, class, and background above to see skill options.
+      </div>
+      <div id="skills-grid" class="skills-grid" style="display:none;"></div>
+    </div>
+    <div id="skill-count" style="margin-top:0.5rem; font-size:0.82rem; color:var(--muted);"></div>
+  </div>
+
+  <!-- ── SUBMIT ── -->
+  <div style="display:flex; gap:1rem; align-items:center;">
+    <button type="submit" class="btn btn-gold" id="submit-btn">Create Character</button>
+    <a href="/characters" class="btn btn-outline">Cancel</a>
+    <span id="form-warning" style="color:var(--accent); font-size:0.85rem; display:none;"></span>
+  </div>
+
+</form>
+
+<script>
+// ── Data from server ──
+const RACES   = {{ races_json | safe }};
+const CLASSES = {{ classes_json | safe }};
+const BKGS    = {{ bgs_json | safe }};
+const ABILITY_SCORES = {{ ability_scores_json | safe }};
+
+const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
+
+function mod(score) {
+  return Math.floor((score - 10) / 2);
+}
+function modStr(m) {
+  return m >= 0 ? '+' + m : '' + m;
+}
+
+// ── Race changed ──
+function onRaceChange() {
+  const raceName = document.getElementById('race').value;
+  const race = RACES[raceName];
+  const traitEl = document.getElementById('race-traits');
+  const flexSec = document.getElementById('flex-asi-section');
+
+  if (race) {
+    traitEl.innerHTML = '<strong>Traits:</strong> ' + race.traits.join(', ')
+      + '<br><strong>Speed:</strong> ' + race.speed + ' ft'
+      + '<br><strong>Languages:</strong> ' + race.languages.join(', ');
+    flexSec.style.display = (race.flex_asi && race.flex_asi > 0) ? 'block' : 'none';
+  } else {
+    traitEl.innerHTML = '';
+    flexSec.style.display = 'none';
+  }
+  onScoreChange();
+  refreshSkills();
+}
+
+// ── Class changed ──
+function onClassChange() {
+  const cn = document.getElementById('class_name').value;
+  const cls = CLASSES[cn];
+  const infoEl = document.getElementById('class-info');
+  if (cls) {
+    infoEl.innerHTML =
+      '<strong>Hit Die:</strong> d' + cls.hit_die
+      + ' &nbsp;|&nbsp; <strong>Saves:</strong> ' + cls.saving_throws.join(', ')
+      + '<br><strong>Armor:</strong> ' + (cls.armor_proficiencies.join(', ') || 'None')
+      + '<br><strong>Skills:</strong> Choose ' + cls.num_skills + ' from options';
+  } else {
+    infoEl.innerHTML = '';
+  }
+  refreshSkills();
+}
+
+// ── Background changed ──
+function onBackgroundChange() {
+  const bgName = document.getElementById('background').value;
+  const bg = BKGS[bgName];
+  const infoEl = document.getElementById('bg-info');
+  if (bg) {
+    infoEl.innerHTML =
+      '<strong>Skills:</strong> ' + bg.skills.join(', ')
+      + '<br><strong>Feature:</strong> ' + bg.feature
+      + '<br><strong>Equipment:</strong> ' + bg.equipment.join(', ');
+  } else {
+    infoEl.innerHTML = '';
+  }
+  refreshSkills();
+}
+
+// ── Score changed ── update racial bonuses + final scores
+function onScoreChange() {
+  const raceName = document.getElementById('race').value;
+  const race = RACES[raceName] || {};
+  const asi = race.asi || {};
+  const flex1 = document.getElementById('flex_asi_1')?.value || '';
+  const flex2 = document.getElementById('flex_asi_2')?.value || '';
+
+  // Collect chosen base values
+  const chosen = {};
+  let dupes = false;
+  const counts = {};
+
+  ABILITY_SCORES.forEach(ab => {
+    const sel = document.getElementById('sel_' + ab);
+    const val = sel ? parseInt(sel.value) : NaN;
+    if (!isNaN(val)) {
+      counts[val] = (counts[val] || 0) + 1;
+      if (counts[val] > 1) dupes = true;
+      chosen[ab] = val;
+    }
+  });
+
+  document.getElementById('array-warning').style.display = dupes ? 'block' : 'none';
+
+  // Update each ability block
+  ABILITY_SCORES.forEach(ab => {
+    const base = chosen[ab];
+    let racial = asi[ab] || 0;
+    if (ab === flex1) racial += 1;
+    if (ab === flex2) racial += 1;
+
+    const racialEl = document.getElementById('racial_' + ab);
+    const finalEl  = document.getElementById('final_' + ab);
+    const modEl    = document.getElementById('mod_' + ab);
+
+    if (!isNaN(base)) {
+      const final = base + racial;
+      racialEl.textContent = racial > 0 ? '+' + racial + ' racial' : '';
+      finalEl.textContent  = final;
+      modEl.textContent    = modStr(mod(final));
+    } else {
+      racialEl.textContent = racial > 0 ? '+' + racial + ' racial (once assigned)' : '';
+      finalEl.textContent  = '—';
+      modEl.textContent    = '';
+    }
+  });
+}
+
+// ── Skills grid ──
+let lockedSkills = [];   // from background (cannot uncheck)
+let classSkills  = [];   // allowed by class
+let classLimit   = 0;
+
+function refreshSkills() {
+  const cn     = document.getElementById('class_name').value;
+  const bgName = document.getElementById('background').value;
+  const cls    = CLASSES[cn];
+  const bg     = BKGS[bgName];
+
+  const container = document.getElementById('skills-grid');
+  const instruction = document.getElementById('skill-instruction');
+
+  if (!cls && !bg) {
+    container.style.display = 'none';
+    instruction.style.display = 'block';
+    return;
+  }
+  container.style.display = 'grid';
+  instruction.style.display = 'none';
+
+  lockedSkills = bg ? bg.skills : [];
+  classSkills  = cls ? cls.skill_options : [];
+  classLimit   = cls ? cls.num_skills : 0;
+
+  // All skills that can appear = union of class options + background skills
+  const allSkills = Object.keys(ALL_SKILLS).sort();
+
+  container.innerHTML = '';
+  allSkills.forEach(skill => {
+    const fromBg    = lockedSkills.includes(skill);
+    const fromClass = classSkills.includes(skill);
+    if (!fromBg && !fromClass) return; // not available
+
+    const label = document.createElement('label');
+    label.className = 'skill-check' + (fromBg ? ' locked' : '');
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.name = 'skills';
+    cb.value = skill;
+    cb.checked = fromBg;
+    cb.disabled = fromBg;
+    if (!fromBg) cb.addEventListener('change', enforceSkillLimit);
+
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(skill + ' (' + ALL_SKILLS[skill] + ')'));
+    container.appendChild(label);
+  });
+
+  updateSkillCount();
+}
+
+function enforceSkillLimit() {
+  const allCbs = document.querySelectorAll('#skills-grid input[type=checkbox]:not(:disabled)');
+  const checked = Array.from(allCbs).filter(c => c.checked).length;
+  if (checked >= classLimit) {
+    allCbs.forEach(c => { if (!c.checked) c.disabled = true; });
+  } else {
+    allCbs.forEach(c => { c.disabled = false; });
+  }
+  updateSkillCount();
+}
+
+function updateSkillCount() {
+  const allCbs = document.querySelectorAll('#skills-grid input[type=checkbox]:not(:disabled)');
+  const checked = Array.from(document.querySelectorAll('#skills-grid input[type=checkbox]')).filter(c => c.checked && !c.disabled).length;
+  const countEl = document.getElementById('skill-count');
+  if (classLimit > 0) {
+    countEl.textContent = checked + ' / ' + classLimit + ' class skills selected'
+      + (lockedSkills.length > 0 ? ' (+ ' + lockedSkills.length + ' from background)' : '');
+  }
+}
+
+// All skills available (injected from server)
+const ALL_SKILLS = {{ skills_json | safe }};
+
+// Form submit validation
+document.getElementById('create-form').addEventListener('submit', function(e) {
+  const raceName = document.getElementById('race').value;
+  const race = RACES[raceName] || {};
+  const asi = race.asi || {};
+
+  // Check all scores assigned
+  let missing = false;
+  ABILITY_SCORES.forEach(ab => {
+    if (!document.getElementById('sel_' + ab).value) missing = true;
+  });
+  if (missing) {
+    e.preventDefault();
+    document.getElementById('form-warning').textContent = 'Please assign all 6 ability scores.';
+    document.getElementById('form-warning').style.display = 'inline';
+    return;
+  }
+
+  // Check duplicates
+  const vals = ABILITY_SCORES.map(ab => document.getElementById('sel_' + ab).value);
+  const unique = new Set(vals);
+  if (unique.size < 6) {
+    e.preventDefault();
+    document.getElementById('form-warning').textContent = 'Each standard array value must be used exactly once.';
+    document.getElementById('form-warning').style.display = 'inline';
+    return;
+  }
+
+  // Check Half-Elf flex
+  if (race.flex_asi && race.flex_asi > 0) {
+    const f1 = document.getElementById('flex_asi_1').value;
+    const f2 = document.getElementById('flex_asi_2').value;
+    if (!f1 || !f2 || f1 === f2) {
+      e.preventDefault();
+      document.getElementById('form-warning').textContent = 'Half-Elf: choose two different ability scores for your +1 bonuses.';
+      document.getElementById('form-warning').style.display = 'inline';
+      return;
+    }
+  }
+
+  // Check skill count
+  const cn = document.getElementById('class_name').value;
+  const cls = CLASSES[cn];
+  if (cls) {
+    const classChecked = Array.from(
+      document.querySelectorAll('#skills-grid input[type=checkbox]:not(:disabled):checked')
+    ).length;
+    if (classChecked < cls.num_skills) {
+      e.preventDefault();
+      document.getElementById('form-warning').textContent =
+        'Please select ' + cls.num_skills + ' skill proficiencies for your class.';
+      document.getElementById('form-warning').style.display = 'inline';
+      return;
+    }
+  }
+});
+</script>
+{% endblock %}

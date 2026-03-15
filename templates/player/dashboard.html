@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Player Dashboard — D&D Manager{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>My Dashboard</h1>
+  <span style="color:var(--muted); font-size:0.9rem;">Welcome, {{ current_user.username }}</span>
+</div>
+
+<div class="two-col" style="align-items:start;">
+
+  <!-- ── MY CHARACTERS ── -->
+  <div>
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+        <h2 style="margin:0;">My Characters</h2>
+        <a href="/characters/new" class="btn btn-gold" style="padding:5px 14px;">+ New</a>
+      </div>
+
+      {% if my_chars %}
+        {% for char in my_chars %}
+        <a href="/characters/{{ char.id }}"
+           style="display:flex; align-items:center; justify-content:space-between;
+                  padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius);
+                  margin-bottom:8px; text-decoration:none; color:var(--text);
+                  transition:border-color 0.15s;"
+           onmouseover="this.style.borderColor='var(--gold)'"
+           onmouseout="this.style.borderColor='var(--border)'">
+          <div>
+            <div style="font-weight:600; color:var(--gold);">{{ char.name }}</div>
+            <div style="font-size:0.82rem; color:var(--muted);">
+              Level {{ char.level }} {{ char.race }} {{ char.class_name }}
+              {% if char.background %} · {{ char.background }}{% endif %}
+            </div>
+          </div>
+          <div style="text-align:right; font-size:0.82rem; color:var(--muted);">
+            <div>HP {{ char.hp_current }}/{{ char.hp_max }}</div>
+            <div>AC {{ char.ac }}</div>
+          </div>
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state" style="padding:2rem 0;">
+          <p>No characters yet.</p>
+          <a href="/characters/new" class="btn btn-gold">Create Your First Character</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── MY CAMPAIGNS ── -->
+  <div>
+    <div class="card">
+      <h2>My Campaigns</h2>
+
+      <!-- Join form -->
+      <form method="POST" action="/player/campaigns/join"
+            style="display:flex; gap:0.75rem; margin-bottom:1.25rem;">
+        <input type="text" name="join_code" placeholder="Enter join code…"
+               maxlength="10" style="flex:1; text-transform:uppercase; letter-spacing:2px;">
+        <button type="submit" class="btn btn-gold">Join</button>
+      </form>
+
+      {% if my_campaigns %}
+        {% for c in my_campaigns %}
+        <a href="/player/campaigns/{{ c.id }}"
+           style="display:flex; align-items:center; justify-content:space-between;
+                  padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius);
+                  margin-bottom:8px; text-decoration:none; color:var(--text);
+                  transition:border-color 0.15s;"
+           onmouseover="this.style.borderColor='var(--gold)'"
+           onmouseout="this.style.borderColor='var(--border)'">
+          <div>
+            <div style="font-weight:600; color:var(--gold);">{{ c.name }}</div>
+            <div style="font-size:0.82rem; color:var(--muted);">
+              {{ (c.players or [])|length }} player(s)
+            </div>
+          </div>
+          <span style="font-size:0.78rem; padding:3px 10px; border-radius:12px;
+                background:{{ 'var(--success)' if c.is_active else 'var(--border)' }};
+                color:{{ '#1a1a2e' if c.is_active else 'var(--muted)' }};">
+            {{ 'Active' if c.is_active else 'Inactive' }}
+          </span>
+        </a>
+        {% endfor %}
+      {% else %}
+        <p style="color:var(--muted); font-size:0.88rem;">
+          You haven't joined any campaigns yet. Ask your DM for a join code!
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

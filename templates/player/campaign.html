@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block title %}{{ campaign.name }} — Player View{% endblock %}
+
+{% block content %}
+{% set state = campaign.current_state or {} %}
+{% set combat_active = state.get('combat_active', false) %}
+{% set order = state.get('initiative_order', []) %}
+{% set turn_idx = state.get('turn_index', 0) %}
+{% set round_num = state.get('round', 1) %}
+{% set combat_log = state.get('combat_log', []) %}
+{% set my_uid = view_uid %}
+{% set is_my_turn = combat_active and order and order[turn_idx].get('user_id') == my_uid %}
+
+<div class="page-header">
+  <div>
+    <h1>{{ campaign.name }}</h1>
+    <p style="color:var(--muted); font-size:0.9rem;">
+      DM: <strong style="color:var(--text);">{{ dm.username if dm else 'Unknown' }}</strong>
+      &nbsp;·&nbsp;
+      <span style="color:{{ 'var(--success)' if campaign.is_active else 'var(--muted)' }};">
+        {{ 'Active' if campaign.is_active else 'Inactive' }}
+      </span>
+      {% if combat_active %}
+      &nbsp;·&nbsp; <span style="color:var(--accent); font-weight:600;">⚔ Round {{ round_num }}</span>
+      {% endif %}
+    </p>
+  </div>
+  <a href="/player/dashboard" class="btn btn-outline">← Dashboard</a>
+</div>
+
+<!-- YOUR TURN BANNER -->
+{% if is_my_turn %}
+<div style="background:var(--accent); color:#fff; text-align:center; padding:12px;
+            border-radius:var(--radius); margin-bottom:1.5rem; font-size:1.05rem; font-weight:600;">
+  ⚡ IT'S YOUR TURN! — Submit your action below.
+</div>
+{% endif %}
+
+<div class="two-col" style="align-items:start;">
+
+  <!-- ── LEFT: INITIATIVE + SCENE + COMBAT LOG ── -->
+  <div>
+
+    <!-- Initiative Order (when combat active) -->
+    {% if combat_active and order %}
+    <div class="card" style="border-color:var(--accent);">
+      <h2 style="color:var(--accent);">⚔ Initiative Order — Round {{ round_num }}</h2>
+      {% for entry in order %}
+      {% set is_current = loop.index0 == turn_idx %}
+      <div style="display:flex; align-items:center; gap:8px; padding:6px 8px;
+                  border-radius:var(--radius); margin-bottom:4px;
+                  background:{{ 'rgba(233,69,96,0.12)' if is_current else 'transparent' }};
+                  border:{{ '1px solid var(--accent)' if is_current else '1px solid transparent' }};">
+        <span style="width:18px; text-align:center;">{{ '⚡' if is_current else '' }}</span>
+        <span style="background:var(--card); border-radius:4px; padding:1px 7px;
+                     font-size:0.78rem; color:var(--gold);">{{ entry.initiative }}</span>
+        <span style="font-weight:{{ '600' if is_current else '400' }};
+                     color:{{ 'var(--text)' if entry.is_npc else 'var(--gold)' }};">
+          {{ entry.name }}
+        </span>
+        {% if entry.is_npc %}
+        <span style="font-size:0.72rem; color:var(--muted);">(NPC)</span>
+        {% endif %}
+        {% if entry.get('user_id') == my_uid %}
+        <span style="font-size:0.72rem; background:var(--gold); color:#1a1a2e;
+                     padding:1px 6px; border-radius:10px;">You</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Latest Scene -->
+    <div class="card">
+      <h2>Scene</h2>
+      {% if narration_log %}
+        {% set latest = narration_log[-1] %}
+        <div style="background:var(--card); border-left:3px solid var(--gold);
+                    padding:1rem 1.25rem; border-radius:0 var(--radius) var(--radius) 0;
+                    margin-bottom:1rem;">
+          <p style="font-size:0.95rem; line-height:1.7; font-style:italic;">"{{ latest.text }}"</p>
+          <span style="font-size:0.75rem; color:var(--muted);">— {{ latest.timestamp }}</span>
+        </div>
+        {% if narration_log|length > 1 %}
+        <details>
+          <summary style="cursor:pointer; color:var(--muted); font-size:0.82rem; user-select:none;">
+            Earlier ({{ narration_log|length - 1 }})
+          </summary>
+          {% for entry in narration_log[-9:-1]|reverse %}
+          <div style="padding:6px 0; border-bottom:1px solid var(--border);
+                      font-size:0.83rem; color:var(--muted);">
+            <p>{{ entry.text }}</p>
+            <span style="font-size:0.72rem;">{{ entry.timestamp }}</span>
+          </div>
+          {% endfor %}
+        </details>
+        {% endif %}
+      {% else %}
+        <p style="color:var(--muted);">Waiting for the DM to set the scene…</p>
+      {% endif %}
+    </div>
+
+    <!-- Combat Log -->
+    {% if combat_log %}
+    <div class="card">
+      <h2>Combat Log</h2>
+      <div style="max-height:260px; overflow-y:auto;">
+        {% for entry in combat_log | reverse %}
+        <div style="padding:4px 0; border-bottom:1px solid var(--border); font-size:0.82rem;">
+          <span style="color:{{ 'var(--accent)' if entry.type == 'attack' else ('var(--success)' if entry.type == 'skill' else ('var(--muted)' if entry.type == 'system' else 'var(--gold)')) }};
+                       font-weight:600;">{{ entry.actor }}</span>
+          <span style="color:var(--muted); font-size:0.72rem; margin-left:4px;">{{ entry.timestamp }}</span>
+          <div style="color:var(--text); white-space:pre-wrap;">{{ entry.text }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- ── RIGHT: ACTIONS + MY CHARACTERS ── -->
+  <div>
+
+    <!-- Action Panel -->
+    <div class="card" style="border-color:{{ 'var(--gold)' if is_my_turn else 'var(--border)' }};">
+      <h2>Actions</h2>
+
+      <!-- Free Dice Roll -->
+      <details open>
+        <summary style="cursor:pointer; color:var(--gold); font-size:0.95rem;
+                        font-weight:600; user-select:none; padding:4px 0; margin-bottom:0.5rem;">
+          🎲 Roll Dice
+        </summary>
+        <form method="POST" action="/player/campaigns/{{ campaign.id }}/roll"
+              style="display:flex; gap:0.5rem; align-items:flex-end;">
+          <div class="form-group" style="flex:1;">
+            <label>Dice expression</label>
+            <input type="text" name="dice" value="1d20" placeholder="1d20, 2d6+3, d8…"
+                   style="font-family:monospace;">
+          </div>
+          <button type="submit" class="btn btn-gold" style="padding:8px 16px;">Roll</button>
+        </form>
+      </details>
+
+      <hr style="border-color:var(--border); margin:1rem 0;">
+
+      <!-- Skill Check -->
+      <details>
+        <summary style="cursor:pointer; color:var(--gold); font-size:0.95rem;
+                        font-weight:600; user-select:none; padding:4px 0; margin-bottom:0.5rem;">
+          🧠 Skill Check
+        </summary>
+        <form method="POST" action="/player/campaigns/{{ campaign.id }}/skill"
+              style="display:flex; gap:0.5rem; align-items:flex-end;">
+          <div class="form-group" style="flex:1;">
+            <label>Skill</label>
+            <select name="skill">
+              {% for skill_name in skills_sorted %}
+              <option value="{{ skill_name }}">{{ skill_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-gold" style="padding:8px 16px;">Roll</button>
+        </form>
+      </details>
+
+      <hr style="border-color:var(--border); margin:1rem 0;">
+
+      <!-- Attack -->
+      <details {{ 'open' if is_my_turn else '' }}>
+        <summary style="cursor:pointer; color:{{ 'var(--accent)' if is_my_turn else 'var(--gold)' }};
+                        font-size:0.95rem; font-weight:600; user-select:none;
+                        padding:4px 0; margin-bottom:0.5rem;">
+          ⚔ Attack Roll
+          {% if is_my_turn %}<span style="font-size:0.78rem;">(your turn!)</span>{% endif %}
+        </summary>
+        <form method="POST" action="/player/campaigns/{{ campaign.id }}/attack">
+          <div class="form-grid" style="gap:0.5rem; margin-bottom:0.75rem;">
+            <div class="form-group">
+              <label>Target name</label>
+              <input type="text" name="target" placeholder="e.g. Goblin">
+            </div>
+            <div class="form-group">
+              <label>Target AC (optional)</label>
+              <input type="number" name="target_ac" placeholder="e.g. 13" min="1" max="30">
+            </div>
+            <div class="form-group">
+              <label>Attack ability</label>
+              <select name="ability">
+                <option value="STR">STR (melee)</option>
+                <option value="DEX">DEX (finesse/ranged)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Damage dice (optional)</label>
+              <input type="text" name="damage_dice" placeholder="e.g. 1d8, 2d6+2"
+                     style="font-family:monospace;">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;">Roll Attack</button>
+        </form>
+      </details>
+
+      <!-- Cast Spell (only shown when active character has slots) -->
+      {% if active_slots %}
+      <hr style="border-color:var(--border); margin:1rem 0;">
+      <details>
+        <summary style="cursor:pointer; color:var(--gold); font-size:0.95rem;
+                        font-weight:600; user-select:none; padding:4px 0; margin-bottom:0.5rem;">
+          ✦ Cast Spell
+        </summary>
+        <!-- Slot indicators -->
+        <div style="display:flex; flex-wrap:wrap; gap:0.75rem; margin-bottom:0.75rem;">
+          {% for lvl in ['1','2','3','4','5','6','7','8','9'] %}
+          {% if lvl in active_slots %}
+          {% set sl = active_slots[lvl] %}
+          <div style="text-align:center;">
+            <div style="font-size:0.68rem; color:var(--muted); margin-bottom:3px;">{{ lvl }}{% if lvl == '1' %}st{% elif lvl == '2' %}nd{% elif lvl == '3' %}rd{% else %}th{% endif %}</div>
+            <div style="display:flex; gap:3px; justify-content:center; margin-bottom:2px;">
+              {% for i in range(sl.max) %}
+              <span style="width:10px; height:10px; border-radius:50%;
+                           background:{{ 'var(--gold)' if i < sl.current else 'transparent' }};
+                           border:1px solid {{ 'var(--gold)' if i < sl.current else 'var(--muted)' }};
+                           display:inline-block;"></span>
+              {% endfor %}
+            </div>
+            <div style="font-size:0.68rem; color:var(--muted);">{{ sl.current }}/{{ sl.max }}</div>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+        <form method="POST" action="/player/campaigns/{{ campaign.id }}/cast"
+              style="display:flex; gap:0.5rem; align-items:flex-end; flex-wrap:wrap;">
+          <div class="form-group" style="flex:1; min-width:130px;">
+            <label>Spell name</label>
+            <input type="text" name="spell_name" placeholder="e.g. Fireball">
+          </div>
+          <div class="form-group">
+            <label>Slot</label>
+            <select name="slot_level" style="width:70px;">
+              {% for lvl in ['1','2','3','4','5','6','7','8','9'] %}
+              {% if lvl in active_slots and active_slots[lvl].current > 0 %}
+              <option value="{{ lvl }}">{{ lvl }}</option>
+              {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group" style="display:flex; align-items:center; gap:5px; padding-bottom:8px;">
+            <input type="checkbox" name="concentration" id="p_conc" style="width:auto;">
+            <label for="p_conc" style="margin:0; font-size:0.8rem; color:var(--muted);">Conc.</label>
+          </div>
+          <button type="submit" class="btn btn-gold" style="padding:7px 14px;">Cast</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+
+    <!-- My Characters -->
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+        <h2 style="margin:0;">My Characters</h2>
+        <a href="/characters/new" class="btn btn-outline"
+           style="padding:4px 12px; font-size:0.82rem;">+ New</a>
+      </div>
+      {% if my_chars %}
+        {% for char in my_chars %}
+        {% set pct = [(char.hp_current / char.hp_max * 100)|int, 0]|max %}
+        {% set bar_col = 'var(--success)' if pct > 50 else ('var(--gold)' if pct > 25 else 'var(--accent)') %}
+        <div style="border:1px solid var(--border); border-radius:var(--radius);
+                    padding:10px 12px; margin-bottom:8px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <div>
+              <a href="/characters/{{ char.id }}"
+                 style="font-weight:600; color:var(--gold); text-decoration:none;">{{ char.name }}</a>
+              <span style="font-size:0.8rem; color:var(--muted); margin-left:6px;">
+                Lv{{ char.level }} {{ char.race }} {{ char.class_name }}
+              </span>
+            </div>
+            <span style="font-size:0.82rem; color:var(--muted);">AC {{ char.ac }}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="flex:1; background:var(--border); border-radius:4px; height:7px; overflow:hidden;">
+              <div style="width:{{ pct }}%; background:{{ bar_col }}; height:100%;"></div>
+            </div>
+            <span style="font-size:0.78rem; color:var(--text);">{{ char.hp_current }}/{{ char.hp_max }} HP</span>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p style="color:var(--muted); font-size:0.88rem;">No characters yet.</p>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<script>
+// Pause auto-refresh while user is interacting with a form
+let refreshTimer;
+function scheduleRefresh() {
+  refreshTimer = setTimeout(() => location.reload(), 20000);
+}
+document.querySelectorAll('input, textarea, select').forEach(el => {
+  el.addEventListener('focus', () => clearTimeout(refreshTimer));
+  el.addEventListener('blur', () => scheduleRefresh());
+});
+scheduleRefresh();
+</script>
+{% endblock %}

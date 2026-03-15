@@ -1,0 +1,470 @@
+{% extends "base.html" %}
+{% block title %}{{ campaign.name }} — DM View{% endblock %}
+
+{% block content %}
+{% set state = campaign.current_state or {} %}
+{% set combat_active = state.get('combat_active', false) %}
+{% set order = state.get('initiative_order', []) %}
+{% set turn_idx = state.get('turn_index', 0) %}
+{% set round_num = state.get('round', 1) %}
+{% set conditions_map = state.get('active_conditions', {}) %}
+{% set death_saves_map = state.get('death_saves', {}) %}
+{% set combat_log = state.get('combat_log', []) %}
+
+<div class="page-header">
+  <div>
+    <h1>{{ campaign.name }}</h1>
+    <p style="color:var(--muted); font-size:0.9rem;">
+      Join Code: <strong style="color:var(--gold); letter-spacing:3px;">{{ campaign.join_code }}</strong>
+      &nbsp;·&nbsp;
+      <span style="color:{{ 'var(--success)' if campaign.is_active else 'var(--muted)' }};">
+        {{ 'Active' if campaign.is_active else 'Inactive' }}
+      </span>
+      {% if combat_active %}
+      &nbsp;·&nbsp;
+      <span style="color:var(--accent); font-weight:600;">⚔ Combat Round {{ round_num }}</span>
+      {% endif %}
+    </p>
+  </div>
+  <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+    <form method="POST" action="/dm/campaigns/{{ campaign.id }}/toggle">
+      <button type="submit" class="btn btn-outline" style="font-size:0.85rem;">
+        {{ 'Deactivate' if campaign.is_active else 'Activate' }}
+      </button>
+    </form>
+    <!-- Save -->
+    <a href="/dm/campaigns/{{ campaign.id }}/save" class="btn btn-outline"
+       style="font-size:0.85rem;" title="Download full campaign state as JSON">
+      💾 Save
+    </a>
+    <!-- Load -->
+    <button type="button" class="btn btn-outline" style="font-size:0.85rem;"
+            onclick="document.getElementById('load-panel').style.display =
+                     document.getElementById('load-panel').style.display === 'none' ? 'flex' : 'none';"
+            title="Restore campaign from a save file">
+      📂 Load
+    </button>
+    <a href="/dm/dashboard" class="btn btn-outline">← Dashboard</a>
+  </div>
+</div>
+
+<!-- Load save file panel (hidden by default) -->
+<div id="load-panel"
+     style="display:none; align-items:flex-end; gap:0.75rem; flex-wrap:wrap;
+            background:var(--surface); border:1px solid var(--gold);
+            border-radius:var(--radius); padding:1rem; margin-bottom:1.5rem;">
+  <div style="flex:1;">
+    <p style="font-size:0.85rem; color:var(--gold); font-weight:600; margin-bottom:4px;">
+      ⚠ Loading a save will overwrite the current campaign state and character HP/slots.
+    </p>
+    <p style="font-size:0.82rem; color:var(--muted);">
+      Only load a save file that was created from <strong style="color:var(--text);">this campaign</strong>.
+    </p>
+  </div>
+  <form method="POST" action="/dm/campaigns/{{ campaign.id }}/load"
+        enctype="multipart/form-data"
+        style="display:flex; gap:0.5rem; align-items:flex-end; flex-wrap:wrap;"
+        onsubmit="return confirm('Load this save? Current campaign state will be overwritten.');">
+    <div class="form-group" style="min-width:200px;">
+      <label style="font-size:0.8rem;">Save file (.json)</label>
+      <input type="file" name="save_file" accept=".json" required
+             style="padding:5px 8px; font-size:0.82rem;">
+    </div>
+    <button type="submit" class="btn btn-primary"
+            style="padding:7px 18px; font-size:0.85rem; white-space:nowrap;">
+      Restore
+    </button>
+  </form>
+</div>
+
+<!-- ══ COMBAT SECTION ══════════════════════════════════════════════════════ -->
+<div class="card" style="border-color:{{ 'var(--accent)' if combat_active else 'var(--border)' }};">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+    <h2 style="margin:0; color:{{ 'var(--accent)' if combat_active else 'var(--gold)' }};">
+      ⚔ Combat
+    </h2>
+    {% if combat_active %}
+    <div style="display:flex; gap:0.75rem;">
+      <form method="POST" action="/dm/campaigns/{{ campaign.id }}/combat/next">
+        <button type="submit" class="btn btn-gold">Next Turn →</button>
+      </form>
+      <form method="POST" action="/dm/campaigns/{{ campaign.id }}/combat/end">
+        <button type="submit" class="btn btn-outline"
+                onclick="return confirm('End combat?')">End Combat</button>
+      </form>
+    </div>
+    {% else %}
+    <form method="POST" action="/dm/campaigns/{{ campaign.id }}/combat/start">
+      <button type="submit" class="btn btn-primary">⚔ Start Combat</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <!-- Initiative Order -->
+  {% if order %}
+  <div style="margin-bottom:1rem;">
+    {% for entry in order %}
+    {% set is_current = loop.index0 == turn_idx and combat_active %}
+    {% set cond_key = 'char_' ~ entry.char_id if not entry.is_npc else 'npc_' ~ loop.index0 %}
+    {% set conds = conditions_map.get(cond_key, []) %}
+    {% set ds = death_saves_map.get(entry.char_id|string, {}) if not entry.is_npc else {} %}
+
+    {% if entry.is_npc %}
+      {% set hp_cur = entry.npc_hp %}
+      {% set hp_max = entry.npc_hp_max %}
+    {% else %}
+      {% set char = combatant_chars.get(entry.char_id) %}
+      {% set hp_cur = char.hp_current if char else 0 %}
+      {% set hp_max = char.hp_max if char else 0 %}
+    {% endif %}
+    {% set pct = [(hp_cur / hp_max * 100)|int, 0]|max if hp_max else 0 %}
+    {% set bar_col = 'var(--success)' if pct > 50 else ('var(--gold)' if pct > 25 else 'var(--accent)') %}
+
+    <div style="border:{{ '2px solid var(--accent)' if is_current else '1px solid var(--border)' }};
+                border-radius:var(--radius); padding:10px 14px; margin-bottom:6px;
+                background:{{ 'rgba(233,69,96,0.08)' if is_current else 'transparent' }};">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <!-- Turn indicator -->
+        <span style="font-size:1.1rem; width:20px; text-align:center;">
+          {{ '⚡' if is_current else '' }}
+        </span>
+        <!-- Init badge -->
+        <span style="background:var(--card); border-radius:4px; padding:2px 8px;
+                     font-size:0.8rem; color:var(--gold); min-width:32px; text-align:center;">
+          {{ entry.initiative }}
+        </span>
+        <!-- Name + type -->
+        <strong style="color:{{ 'var(--text)' if entry.is_npc else 'var(--gold)' }};">
+          {{ entry.name }}
+        </strong>
+        {% if entry.is_npc %}
+        <span style="font-size:0.75rem; color:var(--muted); background:var(--border);
+                     padding:1px 7px; border-radius:10px;">NPC · AC {{ entry.npc_ac }}</span>
+        {% else %}
+        <span style="font-size:0.75rem; color:var(--muted);">PC</span>
+        {% endif %}
+        <!-- Roll detail -->
+        <span style="font-size:0.75rem; color:var(--muted);">({{ entry.roll_detail }})</span>
+
+        <!-- Conditions -->
+        {% if conds %}
+        <div style="display:flex; gap:4px; flex-wrap:wrap;">
+          {% for c in conds %}
+          <span style="font-size:0.72rem; background:var(--accent); color:#fff;
+                       padding:1px 7px; border-radius:10px;">{{ c }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Death saves (PC only) -->
+        {% if not entry.is_npc and hp_cur == 0 and ds %}
+        <span style="font-size:0.78rem; color:var(--accent);">
+          Death saves: ✓×{{ ds.get('successes',0) }} ✗×{{ ds.get('failures',0) }}
+        </span>
+        {% endif %}
+      </div>
+
+      <!-- HP bar -->
+      {% if hp_max %}
+      <div style="display:flex; align-items:center; gap:8px; margin-top:8px; margin-left:30px;">
+        <div style="flex:1; background:var(--border); border-radius:4px; height:6px; max-width:200px; overflow:hidden;">
+          <div style="width:{{ pct }}%; background:{{ bar_col }}; height:100%;"></div>
+        </div>
+        <span style="font-size:0.78rem; color:var(--text);">{{ hp_cur }}/{{ hp_max }} HP</span>
+
+        <!-- HP adjust (NPC) — pass full-order index -->
+        {% if entry.is_npc %}
+        <form method="POST"
+              action="/dm/campaigns/{{ campaign.id }}/npc/{{ loop.index0 }}/hp"
+              style="display:flex; gap:4px;">
+          <input type="number" name="delta" placeholder="±HP"
+                 style="width:65px; padding:3px 6px; font-size:0.78rem;">
+          <button type="submit" class="btn btn-outline"
+                  style="padding:2px 8px; font-size:0.78rem;">Apply</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- Condition controls -->
+      <details style="margin-top:6px; margin-left:30px;">
+        <summary style="cursor:pointer; font-size:0.78rem; color:var(--muted); user-select:none;">
+          Manage conditions
+        </summary>
+        <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+          <form method="POST" action="/dm/campaigns/{{ campaign.id }}/conditions"
+                style="display:flex; gap:4px; align-items:center;">
+            <input type="hidden" name="target_key" value="{{ cond_key }}">
+            <input type="hidden" name="target_name" value="{{ entry.name }}">
+            <select name="condition" style="padding:3px 6px; font-size:0.8rem;">
+              {% for c in conditions %}
+              <option>{{ c }}</option>
+              {% endfor %}
+            </select>
+            <button name="action" value="add" class="btn btn-outline"
+                    style="padding:2px 8px; font-size:0.78rem;">+Add</button>
+            <button name="action" value="remove" class="btn btn-outline"
+                    style="padding:2px 8px; font-size:0.78rem; color:var(--accent);">−Remove</button>
+          </form>
+        </div>
+      </details>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Add NPC -->
+  <details style="margin-top:0.5rem;">
+    <summary style="cursor:pointer; color:var(--muted); font-size:0.85rem; user-select:none; padding:4px 0;">
+      + Add NPC to combat
+    </summary>
+    <form method="POST" action="/dm/campaigns/{{ campaign.id }}/npc/add"
+          style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.75rem; align-items:flex-end;">
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" name="npc_name" placeholder="e.g. Goblin" required style="width:120px;">
+      </div>
+      <div class="form-group">
+        <label>Initiative</label>
+        <input type="number" name="npc_initiative" value="10" min="1" max="30" style="width:70px;">
+      </div>
+      <div class="form-group">
+        <label>HP</label>
+        <input type="number" name="npc_hp" value="10" min="1" style="width:60px;">
+      </div>
+      <div class="form-group">
+        <label>AC</label>
+        <input type="number" name="npc_ac" value="12" min="1" style="width:60px;">
+      </div>
+      <button type="submit" class="btn btn-gold" style="padding:7px 14px;">Add</button>
+    </form>
+  </details>
+</div>
+
+<div class="two-col" style="align-items:start;">
+
+  <!-- ── LEFT: NARRATION + COMBAT LOG ── -->
+  <div>
+
+    <div class="card">
+      <h2>Narrate a Scene</h2>
+      <form method="POST" action="/dm/campaigns/{{ campaign.id }}/narrate" id="narrate-form">
+        <div class="form-group" style="margin-bottom:0.75rem;">
+          <textarea name="narration" id="narration-text" rows="4" required
+                    placeholder="Describe the scene…"
+                    style="resize:vertical;"></textarea>
+        </div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+          <button type="submit" class="btn btn-gold">Post Narration</button>
+          <button type="button" class="btn btn-outline" id="btn-cleanup"
+                  style="font-size:0.85rem;" title="Refine the text in the box using xAI Grok">
+            ✨ Clean Up
+          </button>
+          <button type="button" class="btn btn-outline" id="btn-generate"
+                  style="font-size:0.85rem;" title="Generate a new narration based on recent log">
+            🎲 Generate
+          </button>
+          <span id="ai-status" style="font-size:0.8rem; color:var(--muted); display:none;"></span>
+        </div>
+      </form>
+    </div>
+
+    <!-- Combat Log -->
+    {% if combat_log %}
+    <div class="card">
+      <h2>Combat Log</h2>
+      <div style="max-height:300px; overflow-y:auto;">
+        {% for entry in combat_log | reverse %}
+        <div style="padding:5px 0; border-bottom:1px solid var(--border); font-size:0.83rem;">
+          <span style="color:{{ 'var(--accent)' if entry.type == 'attack' else ('var(--success)' if entry.type == 'skill' else ('var(--muted)' if entry.type == 'system' else 'var(--gold)')) }};
+                       font-weight:600;">{{ entry.actor }}</span>
+          <span style="color:var(--muted); font-size:0.72rem; margin-left:6px;">{{ entry.timestamp }}</span>
+          <div style="color:var(--text); white-space:pre-wrap;">{{ entry.text }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Narration Log -->
+    <div class="card">
+      <h2>Narration Log</h2>
+      {% if narration_log %}
+        {% for entry in narration_log[-8:]|reverse %}
+        <div style="padding:8px 0; border-bottom:1px solid var(--border);">
+          <p style="font-size:0.88rem; line-height:1.6;">{{ entry.text }}</p>
+          <span style="font-size:0.75rem; color:var(--muted);">{{ entry.timestamp }}</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p style="color:var(--muted); font-size:0.88rem;">No narrations yet.</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- ── RIGHT: PLAYERS ── -->
+  <div>
+    <div class="card">
+      <h2>Players ({{ players|length }})</h2>
+
+      {% if players %}
+        {% for player in players %}
+        <div style="border:1px solid var(--border); border-radius:var(--radius);
+                    padding:1rem; margin-bottom:1rem;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
+            <span style="font-weight:600; color:var(--gold);">{{ player.username }}</span>
+            <a href="/dm/impersonate/{{ player.id }}/campaign/{{ campaign.id }}"
+               class="btn btn-outline"
+               style="padding:3px 10px; font-size:0.78rem;">👁 View As</a>
+          </div>
+          {% set chars = player_chars.get(player.id, []) %}
+          {% if chars %}
+            {% for char in chars %}
+            {% set pct = [(char.hp_current / char.hp_max * 100)|int, 0]|max %}
+            {% set bar_col = 'var(--success)' if pct > 50 else ('var(--gold)' if pct > 25 else 'var(--accent)') %}
+            <div style="background:var(--card); border-radius:var(--radius);
+                        padding:10px 12px; margin-bottom:8px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                <div>
+                  <a href="/characters/{{ char.id }}"
+                     style="font-weight:600; color:var(--text); text-decoration:none;">
+                    {{ char.name }}
+                  </a>
+                  <span style="font-size:0.8rem; color:var(--muted); margin-left:6px;">
+                    Lv{{ char.level }} {{ char.race }} {{ char.class_name }}
+                  </span>
+                </div>
+                <span style="font-size:0.82rem; color:var(--muted);">AC {{ char.ac }}</span>
+              </div>
+              <!-- HP bar -->
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <div style="flex:1; background:var(--border); border-radius:4px; height:7px; overflow:hidden;">
+                  <div style="width:{{ pct }}%; background:{{ bar_col }}; height:100%;"></div>
+                </div>
+                <span style="font-size:0.8rem; color:var(--text); white-space:nowrap;">
+                  {{ char.hp_current }}/{{ char.hp_max }} HP
+                </span>
+              </div>
+              <!-- HP adjust -->
+              <form method="POST" action="/dm/characters/{{ char.id }}/hp"
+                    style="display:flex; gap:6px;">
+                <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+                <input type="number" name="delta" placeholder="±HP"
+                       style="width:80px; padding:4px 8px; font-size:0.85rem;">
+                <button type="submit" class="btn btn-outline"
+                        style="padding:4px 10px; font-size:0.8rem;">Apply</button>
+              </form>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p style="font-size:0.85rem; color:var(--muted);">No characters yet.</p>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state" style="padding:2rem 0;">
+          <p>No players yet.</p>
+          <p style="font-size:0.85rem; margin-top:0.5rem;">
+            Share code <strong style="color:var(--gold); letter-spacing:2px;">{{ campaign.join_code }}</strong>
+          </p>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- NPC Presets (populated via campaign import) -->
+    {% set npc_presets = state.get('npc_presets', []) %}
+    {% if npc_presets %}
+    <div class="card" style="border-color:var(--gold);">
+      <h2 style="color:var(--gold);">📋 Imported NPC Presets</h2>
+      <p style="color:var(--muted); font-size:0.82rem; margin-bottom:1rem;">
+        These NPCs were loaded from your campaign file. Use the form below to add one to combat.
+      </p>
+      {% for npc in npc_presets %}
+      <div style="border:1px solid var(--border); border-radius:var(--radius);
+                  padding:10px 12px; margin-bottom:8px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+          <span style="font-weight:600; color:var(--text);">{{ npc.name }}</span>
+          <div style="display:flex; gap:6px; font-size:0.78rem; color:var(--muted);">
+            <span>HP {{ npc.hp }}</span>
+            <span>AC {{ npc.ac }}</span>
+            <span>Init {{ '+' if npc.initiative_bonus >= 0 else '' }}{{ npc.initiative_bonus }}</span>
+          </div>
+        </div>
+        {% if npc.notes %}
+        <p style="font-size:0.78rem; color:var(--muted); margin-bottom:8px;">{{ npc.notes }}</p>
+        {% endif %}
+        <!-- Quick-add to combat form (pre-fills the existing NPC add form values) -->
+        <form method="POST" action="/dm/campaigns/{{ campaign.id }}/npc/add"
+              style="display:flex; gap:5px; flex-wrap:wrap;">
+          <input type="hidden" name="npc_name" value="{{ npc.name }}">
+          <input type="hidden" name="npc_hp"   value="{{ npc.hp }}">
+          <input type="hidden" name="npc_ac"   value="{{ npc.ac }}">
+          <input type="hidden" name="npc_initiative" value="{{ npc.initiative_bonus }}">
+          <button type="submit" class="btn btn-outline"
+                  style="padding:3px 12px; font-size:0.78rem;">⚔ Add to Combat</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  </div>
+
+</div>
+
+<script>
+(function () {
+  const textarea  = document.getElementById('narration-text');
+  const statusEl  = document.getElementById('ai-status');
+  const btnClean  = document.getElementById('btn-cleanup');
+  const btnGen    = document.getElementById('btn-generate');
+
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg;
+    statusEl.style.color = isError ? 'var(--accent)' : 'var(--muted)';
+    statusEl.style.display = msg ? 'inline' : 'none';
+  }
+
+  function setLoading(loading) {
+    btnClean.disabled = loading;
+    btnGen.disabled   = loading;
+    btnClean.style.opacity = loading ? '0.5' : '1';
+    btnGen.style.opacity   = loading ? '0.5' : '1';
+  }
+
+  async function aiRequest(url, body) {
+    setLoading(true);
+    setStatus('Asking Grok…');
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        setStatus(data.error || 'Unknown error.', true);
+      } else {
+        textarea.value = data.text;
+        setStatus('Done! Review and post when ready.');
+      }
+    } catch (e) {
+      setStatus('Network error — is the server running?', true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  btnClean.addEventListener('click', function () {
+    const text = textarea.value.trim();
+    if (!text) { setStatus('Type some narration first.', true); return; }
+    aiRequest('/dm/campaigns/{{ campaign.id }}/ai/cleanup', { text });
+  });
+
+  btnGen.addEventListener('click', function () {
+    aiRequest('/dm/campaigns/{{ campaign.id }}/ai/generate', {});
+  });
+})();
+</script>
+{% endblock %}

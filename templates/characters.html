@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Characters — D&D Manager{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Characters</h1>
+  <a href="/characters/new" class="btn btn-gold">+ New Character</a>
+</div>
+
+{% if characters %}
+<div class="card-grid">
+  {% for char in characters %}
+  <a href="/characters/{{ char.id }}" class="char-card">
+    <div class="char-name">{{ char.name }}</div>
+    <div class="char-sub">
+      Level {{ char.level }} {{ char.race }} {{ char.class_name }}
+      {% if char.background %} · {{ char.background }}{% endif %}
+    </div>
+    <div class="char-stats">
+      <span class="stat-pill">HP {{ char.hp_current }}/{{ char.hp_max }}</span>
+      <span class="stat-pill">AC {{ char.ac }}</span>
+      <span class="stat-pill">Prof +{{ char.proficiency_bonus }}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <p>No characters yet. Create your first adventurer!</p>
+  <a href="/characters/new" class="btn btn-gold">Create Character</a>
+</div>
+{% endif %}
+{% endblock %}

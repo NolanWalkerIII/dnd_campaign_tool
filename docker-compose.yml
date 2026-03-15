@@ -1,0 +1,15 @@
+services:
+  dnd:
+    build: .
+    ports:
+      - "5001:5000"
+    volumes:
+      # Persist the SQLite database across container restarts
+      - ./instance:/app/instance
+    env_file:
+      # Copy .env.example → .env and fill in your XAI_API_KEY before running
+      - path: .env
+        required: false
+    environment:
+      - FLASK_ENV=production
+    restart: unless-stopped

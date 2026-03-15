@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Register — D&D Manager{% endblock %}
+
+{% block content %}
+<div style="max-width:420px; margin:4rem auto;">
+  <h1 style="text-align:center; margin-bottom:0.25rem;">Create Account</h1>
+  <p style="text-align:center; color:var(--muted); margin-bottom:2rem;">Join the adventure</p>
+
+  <div class="card">
+    <form method="POST" action="/register">
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" required autofocus
+               minlength="3" maxlength="50" autocomplete="username"
+               placeholder="At least 3 characters">
+      </div>
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required
+               minlength="4" autocomplete="new-password"
+               placeholder="At least 4 characters">
+      </div>
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label for="confirm">Confirm Password</label>
+        <input type="password" id="confirm" name="confirm" required
+               autocomplete="new-password">
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.5rem;">
+        <label>Role</label>
+        <div style="display:flex; gap:1rem; margin-top:6px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;
+                        background:var(--card); border:1px solid var(--border);
+                        border-radius:var(--radius); padding:10px 16px; flex:1;"
+                 id="lbl-player">
+            <input type="radio" name="role" value="player" checked
+                   onchange="highlightRole()">
+            <span>
+              <strong style="color:var(--text);">Player</strong><br>
+              <span style="font-size:0.78rem; color:var(--muted);">Create characters &amp; join campaigns</span>
+            </span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;
+                        background:var(--card); border:1px solid var(--border);
+                        border-radius:var(--radius); padding:10px 16px; flex:1;"
+                 id="lbl-dm">
+            <input type="radio" name="role" value="dm"
+                   onchange="highlightRole()">
+            <span>
+              <strong style="color:var(--text);">Dungeon Master</strong><br>
+              <span style="font-size:0.78rem; color:var(--muted);">Run campaigns &amp; manage players</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-gold" style="width:100%;">Create Account</button>
+    </form>
+  </div>
+
+  <p style="text-align:center; color:var(--muted); font-size:0.88rem; margin-top:1rem;">
+    Already have an account?
+    <a href="/login" style="color:var(--gold);">Login here</a>
+  </p>
+</div>
+
+<script>
+function highlightRole() {
+  const playerChecked = document.querySelector('input[value="player"]').checked;
+  document.getElementById('lbl-player').style.borderColor = playerChecked ? 'var(--gold)' : 'var(--border)';
+  document.getElementById('lbl-dm').style.borderColor    = !playerChecked ? 'var(--gold)' : 'var(--border)';
+}
+highlightRole();
+</script>
+{% endblock %}
