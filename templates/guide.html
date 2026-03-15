@@ -1,0 +1,461 @@
+{% extends "base.html" %}
+{% block title %}How to Play — QuesterLedger{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>How to Play</h1>
+  {% if current_user %}
+  <a href="{{ '/dm/dashboard' if session.role == 'dm' else '/player/dashboard' }}" class="btn btn-outline" style="font-size:0.85rem;">Back to Dashboard</a>
+  {% else %}
+  <a href="/login" class="btn btn-gold" style="font-size:0.85rem;">Login / Register</a>
+  {% endif %}
+</div>
+
+<p style="color:var(--muted); margin-bottom:2rem; font-size:1rem; max-width:700px;">
+  QuesterLedger is a D&amp;D 5e campaign manager with a built-in AI Dungeon Master.
+  Play through the web app, Discord, or SMS &mdash; all channels stay in sync.
+</p>
+
+<!-- Quick nav -->
+<div style="display:flex; gap:0.75rem; flex-wrap:wrap; margin-bottom:2rem;">
+  <a href="#dm-setup" class="btn btn-outline" style="font-size:0.85rem;">DM Setup</a>
+  <a href="#player-join" class="btn btn-outline" style="font-size:0.85rem;">Player Join</a>
+  <a href="#discord" class="btn btn-outline" style="font-size:0.85rem;">Discord</a>
+  <a href="#sms" class="btn btn-outline" style="font-size:0.85rem;">SMS</a>
+  <a href="#ai-dm" class="btn btn-outline" style="font-size:0.85rem;">AI DM</a>
+  <a href="#commands" class="btn btn-outline" style="font-size:0.85rem;">Commands</a>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="card" id="dm-setup">
+  <h2>1. DM Setup (5 minutes)</h2>
+
+  <h3 style="margin-top:1rem;">Create your account</h3>
+  <ol class="guide-list">
+    <li>Go to <strong>/register</strong> and create an account</li>
+    <li>Choose the <strong>DM</strong> role</li>
+    <li>You'll land on the DM Dashboard</li>
+  </ol>
+
+  <h3>Create a campaign</h3>
+  <ol class="guide-list">
+    <li>Click <strong>"+ New Campaign"</strong> on the DM Dashboard</li>
+    <li>Give it a name and description (or use the AI to generate one)</li>
+    <li>You'll get a <strong>Join Code</strong> &mdash; this is what players use to join</li>
+  </ol>
+
+  <div class="example-box">
+    <div class="example-label">Example</div>
+    <p>You create a campaign called <em>"The Lost Mines of Phandelver"</em>.</p>
+    <p>Your join code is <code>XK7M</code>. Share this with your players.</p>
+  </div>
+
+  <h3>Create characters for your players</h3>
+  <ol class="guide-list">
+    <li>Go to <strong>Characters &rarr; + New Character</strong></li>
+    <li>Use the guided creator: pick race, class, abilities, skills, equipment</li>
+    <li>On the campaign page, assign characters to players using <strong>"Assign Characters"</strong></li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="card" id="player-join">
+  <h2>2. Players Joining</h2>
+
+  <h3>Via the web app</h3>
+  <ol class="guide-list">
+    <li>Register at <strong>/register</strong> with the <strong>Player</strong> role</li>
+    <li>On your Player Dashboard, enter the <strong>Join Code</strong> your DM gave you</li>
+    <li>You'll see the campaign and your assigned character</li>
+  </ol>
+
+  <h3>Via Discord</h3>
+  <ol class="guide-list">
+    <li>The DM runs <code>/setup XK7M</code> in their Discord server</li>
+    <li>The bot creates campaign channels automatically</li>
+    <li>Players type <code>/join your_username</code> to link their Discord account</li>
+    <li>Then <code>/verify XK7M</code> to confirm</li>
+  </ol>
+
+  <div class="example-box">
+    <div class="example-label">Example &mdash; Discord join</div>
+    <p><code>/join sarah_the_bold</code> &rarr; Links your Discord to your web account "sarah_the_bold"</p>
+    <p><code>/verify XK7M</code> &rarr; Confirms you're in the campaign, shows your character</p>
+  </div>
+
+  <h3>Via SMS</h3>
+  <ol class="guide-list">
+    <li>The DM links your phone number to your account on the campaign page</li>
+    <li>Text anything to the campaign's Twilio number to start playing</li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="card" id="discord">
+  <h2>3. Playing on Discord</h2>
+
+  <p style="color:var(--muted); margin-bottom:1rem;">
+    When the DM runs <code>/setup</code>, the bot creates these channels:
+  </p>
+
+  <table class="guide-table">
+    <thead>
+      <tr><th>Channel</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>#tavern</code></td><td>Main play channel &mdash; player actions happen here</td></tr>
+      <tr><td><code>#quests</code></td><td>Quest log and objectives</td></tr>
+      <tr><td><code>#combat</code></td><td>Combat encounters with initiative and HP tracking</td></tr>
+      <tr><td><code>#lore</code></td><td>World lore, history, and discoveries</td></tr>
+      <tr><td><code>#dm-notes</code></td><td>DM-only channel for private notes</td></tr>
+      <tr><td><code>#bot-log</code></td><td>Bot activity log</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:1.5rem;">Player commands</h3>
+  <table class="guide-table">
+    <thead>
+      <tr><th>Command</th><th>What it does</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>/action</code></td>
+        <td>Do anything &mdash; the AI DM interprets your intent</td>
+        <td><code>/action I search the chest for traps</code></td>
+      </tr>
+      <tr>
+        <td><code>/roll</code></td>
+        <td>Roll dice</td>
+        <td><code>/roll 2d6+3</code></td>
+      </tr>
+      <tr>
+        <td><code>/attack</code></td>
+        <td>Attack a target</td>
+        <td><code>/attack Goblin</code></td>
+      </tr>
+      <tr>
+        <td><code>/check</code></td>
+        <td>Make a skill check</td>
+        <td><code>/check Perception</code></td>
+      </tr>
+      <tr>
+        <td><code>/cast</code></td>
+        <td>Cast a spell</td>
+        <td><code>/cast Fireball</code></td>
+      </tr>
+      <tr>
+        <td><code>/save</code></td>
+        <td>Make a saving throw</td>
+        <td><code>/save Dexterity</code></td>
+      </tr>
+      <tr>
+        <td><code>/stats</code></td>
+        <td>View your character sheet</td>
+        <td><code>/stats</code></td>
+      </tr>
+      <tr>
+        <td><code>/inventory</code></td>
+        <td>Check your gear</td>
+        <td><code>/inventory</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:1.5rem;">DM commands</h3>
+  <table class="guide-table">
+    <thead>
+      <tr><th>Command</th><th>What it does</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>/scene</code></td>
+        <td>Set the scene with narration</td>
+        <td><code>/scene The cave entrance yawns before you, cold air rushing out</code></td>
+      </tr>
+      <tr>
+        <td><code>/npc add</code></td>
+        <td>Add an NPC to the scene</td>
+        <td><code>/npc add Gundren Rockseeker</code></td>
+      </tr>
+      <tr>
+        <td><code>/npc say</code></td>
+        <td>Have an NPC speak</td>
+        <td><code>/npc say Gundren "Well met, adventurers!"</code></td>
+      </tr>
+      <tr>
+        <td><code>/combat start</code></td>
+        <td>Start combat and roll initiative</td>
+        <td><code>/combat start</code></td>
+      </tr>
+      <tr>
+        <td><code>/combat next</code></td>
+        <td>Advance to next turn</td>
+        <td><code>/combat next</code></td>
+      </tr>
+      <tr>
+        <td><code>/combat end</code></td>
+        <td>End combat</td>
+        <td><code>/combat end</code></td>
+      </tr>
+      <tr>
+        <td><code>/damage</code></td>
+        <td>Deal damage to a creature</td>
+        <td><code>/damage Goblin 8</code></td>
+      </tr>
+      <tr>
+        <td><code>/heal</code></td>
+        <td>Heal a creature</td>
+        <td><code>/heal Thorin 10</code></td>
+      </tr>
+      <tr>
+        <td><code>/loot</code></td>
+        <td>Announce loot</td>
+        <td><code>/loot 50 gold and a Potion of Healing</code></td>
+      </tr>
+      <tr>
+        <td><code>/whisper</code></td>
+        <td>Send a private message to a player</td>
+        <td><code>/whisper @Sarah You notice poison on the goblin's blade</code></td>
+      </tr>
+      <tr>
+        <td><code>/condition add</code></td>
+        <td>Apply a condition</td>
+        <td><code>/condition add Goblin Poisoned</code></td>
+      </tr>
+      <tr>
+        <td><code>/condition remove</code></td>
+        <td>Remove a condition</td>
+        <td><code>/condition remove Goblin Poisoned</code></td>
+      </tr>
+      <tr>
+        <td><code>/recap</code></td>
+        <td>AI-generated session recap</td>
+        <td><code>/recap</code></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="card" id="sms">
+  <h2>4. Playing via SMS</h2>
+
+  <p style="color:var(--muted); margin-bottom:1rem;">
+    Players can text their actions to the AI DM using plain English. No commands to memorize.
+  </p>
+
+  <h3>Setup</h3>
+  <ol class="guide-list">
+    <li>The DM enables <strong>SMS Play Mode</strong> on the campaign page</li>
+    <li>The DM enters each player's phone number next to their character</li>
+    <li>Players text the Twilio number to start playing</li>
+  </ol>
+
+  <h3>How it works</h3>
+  <p style="color:var(--text); margin-bottom:1rem;">
+    Just text what your character does. The AI DM figures out the rest.
+  </p>
+
+  <div class="example-box">
+    <div class="example-label">Example &mdash; Skill check</div>
+    <p style="margin-bottom:0.5rem;"><strong>You text:</strong> <code>I search the room for traps</code></p>
+    <p><strong>AI DM replies:</strong></p>
+    <p style="background:var(--card); padding:10px 14px; border-radius:var(--radius); border-left:3px solid var(--gold); font-size:0.9rem;">
+      [Perception 18] Your trained eyes catch a glint of wire stretched across the doorframe. A tripwire &mdash; connected to a crossbow bolt mechanism in the wall. (DC 15 &mdash; Pass)
+    </p>
+  </div>
+
+  <div class="example-box">
+    <div class="example-label">Example &mdash; Combat</div>
+    <p style="margin-bottom:0.5rem;"><strong>You text:</strong> <code>I swing my sword at the goblin</code></p>
+    <p><strong>AI DM replies:</strong></p>
+    <p style="background:var(--card); padding:10px 14px; border-radius:var(--radius); border-left:3px solid var(--accent); font-size:0.9rem;">
+      [Attack vs Goblin: 17 HIT, 8 dmg] Your blade arcs through the torchlight and bites deep into the goblin's shoulder. It screeches and stumbles backward. (HP: 2/7)
+    </p>
+  </div>
+
+  <div class="example-box">
+    <div class="example-label">Example &mdash; Roleplay</div>
+    <p style="margin-bottom:0.5rem;"><strong>You text:</strong> <code>I ask the innkeeper what he knows about the missing miners</code></p>
+    <p><strong>AI DM replies:</strong></p>
+    <p style="background:var(--card); padding:10px 14px; border-radius:var(--radius); border-left:3px solid var(--success); font-size:0.9rem;">
+      The innkeeper leans close, voice dropping. "Ain't seen Gundren in a tenday. Last I heard, he was headed to Cragmaw Hideout with that sellsword Sildar. Folks say goblins got 'em." He wipes down a glass nervously.
+    </p>
+  </div>
+
+  <p style="color:var(--muted); font-size:0.88rem; margin-top:1rem;">
+    SMS actions automatically appear in Discord (if connected) and in the campaign's combat log on the web.
+  </p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="card" id="ai-dm">
+  <h2>5. The AI Dungeon Master</h2>
+
+  <p style="color:var(--text); margin-bottom:1rem;">
+    The AI DM is powered by xAI's Grok model. It handles two things:
+  </p>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+    <div style="background:var(--card); padding:1rem; border-radius:var(--radius); border-top:3px solid var(--gold);">
+      <h3 style="margin-bottom:0.5rem;">Intent Recognition</h3>
+      <p style="font-size:0.88rem; color:var(--muted);">
+        Reads the player's natural language and determines: is this an attack? A skill check? A spell? Pure roleplay?
+        It extracts the target, ability, and skill automatically.
+      </p>
+    </div>
+    <div style="background:var(--card); padding:1rem; border-radius:var(--radius); border-top:3px solid var(--accent);">
+      <h3 style="margin-bottom:0.5rem;">Narration</h3>
+      <p style="font-size:0.88rem; color:var(--muted);">
+        After the game engine resolves the mechanics (dice rolls, AC checks, damage), the AI narrates the result
+        in atmospheric, in-character prose. For SMS, it keeps responses under 300 characters.
+      </p>
+    </div>
+  </div>
+
+  <p style="color:var(--muted); font-size:0.88rem;">
+    The AI DM never fudges dice or invents rules. All mechanics go through the same engine that powers
+    the web app &mdash; real d20 rolls, real AC calculations, real skill modifiers from your character sheet.
+  </p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="card" id="commands">
+  <h2>6. Quick Reference</h2>
+
+  <h3>For the DM</h3>
+  <table class="guide-table">
+    <tbody>
+      <tr><td style="width:200px;">Create a campaign</td><td>Web app &rarr; DM Dashboard &rarr; + New Campaign</td></tr>
+      <tr><td>Connect to Discord</td><td>Invite bot &rarr; type <code>/setup JOIN_CODE</code> in your server</td></tr>
+      <tr><td>Enable SMS</td><td>Campaign page &rarr; SMS Play Mode &rarr; Enable &rarr; add player phones</td></tr>
+      <tr><td>Run diagnostics</td><td>Web app &rarr; sidebar &rarr; Diagnostics</td></tr>
+      <tr><td>Set a scene</td><td>Discord: <code>/scene</code> &nbsp;|&nbsp; Web: campaign narration panel</td></tr>
+      <tr><td>Start combat</td><td>Discord: <code>/combat start</code> &nbsp;|&nbsp; Web: combat panel</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:1.5rem;">For players</h3>
+  <table class="guide-table">
+    <tbody>
+      <tr><td style="width:200px;">Join a campaign</td><td>Web: enter join code &nbsp;|&nbsp; Discord: <code>/join</code> + <code>/verify</code></td></tr>
+      <tr><td>Do something</td><td>Discord: <code>/action</code> &nbsp;|&nbsp; SMS: just text it</td></tr>
+      <tr><td>Roll dice</td><td>Discord: <code>/roll 2d6+3</code> &nbsp;|&nbsp; SMS: "I roll perception"</td></tr>
+      <tr><td>Attack</td><td>Discord: <code>/attack Goblin</code> &nbsp;|&nbsp; SMS: "I attack the goblin"</td></tr>
+      <tr><td>Check your stats</td><td>Discord: <code>/stats</code> &nbsp;|&nbsp; Web: character sheet</td></tr>
+      <tr><td>Stop SMS</td><td>Text <code>STOP</code> to unsubscribe</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="card">
+  <h2>7. Everything Stays in Sync</h2>
+  <p style="color:var(--text); margin-bottom:1rem;">
+    No matter how a player takes an action &mdash; web, Discord, or SMS &mdash; the result shows up everywhere:
+  </p>
+  <ul class="guide-list" style="margin-bottom:1rem;">
+    <li>SMS actions post to the Discord <code>#tavern</code> channel</li>
+    <li>Discord actions update the web campaign's combat log</li>
+    <li>HP, conditions, and inventory stay consistent across all channels</li>
+    <li>The DM sees everything in one place on the campaign page</li>
+  </ul>
+
+  <div style="background:var(--card); padding:1rem; border-radius:var(--radius); text-align:center; color:var(--muted); font-size:0.9rem;">
+    <code style="font-size:0.85rem;">
+      Player Phone &rarr; Twilio &rarr; AI DM &rarr; Game Engine &rarr; Narration &rarr; SMS + Discord + Web
+    </code>
+  </div>
+</div>
+
+<style>
+  .guide-list {
+    list-style: none;
+    margin: 0.75rem 0;
+    padding: 0;
+  }
+  .guide-list li {
+    padding: 6px 0 6px 1.5rem;
+    position: relative;
+    font-size: 0.93rem;
+    line-height: 1.6;
+  }
+  .guide-list li::before {
+    content: attr(data-num, "");
+    position: absolute;
+    left: 0;
+    color: var(--gold);
+    font-weight: 600;
+  }
+  ol.guide-list { counter-reset: guide; }
+  ol.guide-list li { counter-increment: guide; }
+  ol.guide-list li::before { content: counter(guide) "."; }
+  ul.guide-list li::before { content: "—"; }
+
+  .guide-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    margin-bottom: 0.5rem;
+  }
+  .guide-table th {
+    background: var(--card);
+    color: var(--gold);
+    font-weight: 600;
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid var(--border);
+  }
+  .guide-table td {
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .guide-table tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .guide-table code {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 0.83rem;
+    color: var(--accent);
+  }
+
+  .example-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+  }
+  .example-box .example-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--gold);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .example-box p {
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+    color: var(--text);
+  }
+  .example-box code {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 0.85rem;
+    color: var(--accent);
+  }
+
+  @media (max-width: 700px) {
+    div[style*="grid-template-columns:1fr 1fr"] {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>
+{% endblock %}

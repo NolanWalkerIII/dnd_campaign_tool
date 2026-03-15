@@ -1863,6 +1863,13 @@ def dm_guide_section(slug):
                            section='dm_guide')
 
 
+# ── HOW TO PLAY GUIDE ───────────────────────────────────────
+
+@app.route('/guide')
+def how_to_play():
+    return render_template('guide.html')
+
+
 # ── LEGAL PAGES ─────────────────────────────────────────────
 
 @app.route('/privacy')
