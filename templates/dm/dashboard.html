@@ -141,6 +141,14 @@
             <span style="font-size:0.82rem; color:var(--muted); margin-left:8px;">
               Lv{{ char.level }} {{ char.race }} {{ char.class_name }}
             </span>
+            <span style="font-size:0.75rem; margin-left:8px;
+                         color:{{ 'var(--text)' if char.user_id else 'var(--accent)' }};">
+              {% if char.user_id and users_by_id.get(char.user_id) %}
+                👤 {{ users_by_id[char.user_id].username }}
+              {% else %}
+                ⚠ Unassigned
+              {% endif %}
+            </span>
           </div>
           <span style="font-size:0.82rem; color:var(--muted);">
             HP {{ char.hp_current }}/{{ char.hp_max }} · AC {{ char.ac }}

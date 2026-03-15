@@ -504,10 +504,15 @@ def character_sheet(char_id):
         spell_dc  = 8 + char.proficiency_bonus + sc_mod
         spell_atk = char.proficiency_bonus + sc_mod
 
-    # Campaigns this character's owner is in (for DM HP adjustment redirect)
+    # DM-only extras
     owner_campaigns = []
+    all_users = []
+    char_owner = None
     if session.get('role') == 'dm':
         owner_campaigns = Campaign.query.filter_by(dm_id=session['user_id']).all()
+        all_users = User.query.order_by(User.username).all()
+        if char.user_id:
+            char_owner = User.query.get(char.user_id)
 
     return render_template(
         'character_sheet.html',
@@ -523,6 +528,8 @@ def character_sheet(char_id):
         spell_dc=spell_dc,
         spell_atk=spell_atk,
         owner_campaigns=owner_campaigns,
+        all_users=all_users,
+        char_owner=char_owner,
     )
 
 
@@ -539,6 +546,25 @@ def character_delete(char_id):
     db.session.commit()
     flash(f'{name} has been deleted.', 'success')
     return redirect(url_for('character_list'))
+
+
+@app.route('/dm/characters/<int:char_id>/assign', methods=['POST'])
+@dm_required
+def dm_character_assign(char_id):
+    char = Character.query.get_or_404(char_id)
+    raw = request.form.get('user_id', '').strip()
+    if raw:
+        new_owner = User.query.get(int(raw))
+        if not new_owner:
+            flash('User not found.', 'error')
+            return redirect(url_for('character_sheet', char_id=char_id))
+        char.user_id = new_owner.id
+        flash(f'{char.name} assigned to {new_owner.username}.', 'success')
+    else:
+        char.user_id = None
+        flash(f'{char.name} is now unassigned.', 'success')
+    db.session.commit()
+    return redirect(url_for('character_sheet', char_id=char_id))
 
 
 # ── DM routes ─────────────────────────────────────────────────────────────────
@@ -559,9 +585,14 @@ def dm_dashboard():
     for p in online_players:
         p._recent_char = Character.query.filter_by(user_id=p.id).order_by(Character.id.desc()).first()
 
+    # Build user lookup for ownership display
+    all_users = User.query.all()
+    users_by_id = {u.id: u for u in all_users}
+
     return render_template('dm/dashboard.html',
                            campaigns=campaigns, all_chars=all_chars,
-                           online_players=online_players)
+                           online_players=online_players,
+                           users_by_id=users_by_id)
 
 
 @app.route('/dm/campaigns/new', methods=['POST'])

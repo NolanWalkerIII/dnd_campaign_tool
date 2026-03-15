@@ -208,7 +208,17 @@ From the documentation analysis, the essential features to implement:
 - **Validation**: All pages render correctly with sidebar; DM can trigger impersonation from the campaign page; mobile view collapses gracefully.
 - **Status**: Complete ✓ (top nav bar restored; left sidebar added alongside top nav with role-based sections — DM gets Campaigns, Characters, Rules, DM Guide; players get Campaigns, Characters, Rules only; sidebar hidden on <900px screens; "View As" button on DM campaign page styled gold; impersonation banner updated with clearer read-only warning)
 
-### Phase 14: Campaign Progress Tracker & Story Forks
+### Phase 14: Character Assignment (DM Tool)
+- **Objectives**: Allow the DM to reassign any character to any registered user — useful when a character is abandoned, pre-built by the DM, or needs to transfer between players.
+- **Tasks**:
+  1. Add `POST /dm/characters/<id>/assign` route — accepts `user_id` form field (empty = unassigned); DM-only; flashes confirmation.
+  2. **Character sheet** — when viewed by a DM, show an "Ownership" card at the bottom: displays current owner, dropdown of all users, and an Assign button.
+  3. **DM Dashboard** — in the "All Characters" list, show the current owner's username next to each character.
+- **Deliverables**: Assign route; DM ownership panel on character sheet; owner label on DM dashboard character list.
+- **Validation**: DM can reassign a character to any player; unassigned characters show "Unassigned"; owner label updates on dashboard.
+- **Status**: Complete ✓ (POST /dm/characters/<id>/assign route; Ownership card on character sheet with dropdown of all users; owner label with ⚠ Unassigned indicator on DM dashboard All Characters list)
+
+### Phase 15: Campaign Progress Tracker & Story Forks
 - **Objectives**: Let the DM track where the party is in a structured campaign and model story branches/forks.
 - **Tasks**:
   1. **Campaign Progress / Chapter Tracker**: Add a `chapters` list to `current_state`. Each chapter has a title, a description/summary, a status (`upcoming` / `active` / `completed`), and optional notes. DM can add, reorder, mark complete, and add notes to chapters from the campaign page.

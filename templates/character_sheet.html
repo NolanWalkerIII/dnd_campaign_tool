@@ -355,4 +355,45 @@
     </div>
   </div>
 </div>
+
+{% if session.role == 'dm' and all_users %}
+<!-- ── DM: CHARACTER OWNERSHIP ── -->
+<div class="card" style="border-color:var(--gold); margin-top:1.5rem;">
+  <h2 style="margin-bottom:1rem;">🔑 Ownership</h2>
+  <div style="display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">
+    <div>
+      <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                  letter-spacing:0.5px; margin-bottom:4px;">Current Owner</div>
+      <span style="font-size:1rem; font-weight:600;
+                   color:{{ 'var(--gold)' if char_owner else 'var(--muted)' }};">
+        {{ char_owner.username if char_owner else 'Unassigned' }}
+      </span>
+      {% if char_owner %}
+      <span style="font-size:0.78rem; color:var(--muted); margin-left:6px;">
+        [{{ char_owner.role|upper }}]
+      </span>
+      {% endif %}
+    </div>
+    <form method="POST" action="/dm/characters/{{ character.id }}/assign"
+          style="display:flex; gap:0.6rem; align-items:flex-end; flex-wrap:wrap;">
+      <div class="form-group">
+        <label>Reassign to</label>
+        <select name="user_id" style="min-width:160px;">
+          <option value="">— Unassigned —</option>
+          {% for u in all_users %}
+          <option value="{{ u.id }}"
+                  {{ 'selected' if char_owner and u.id == char_owner.id else '' }}>
+            {{ u.username }} [{{ u.role|upper }}]
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-gold" style="padding:8px 20px;">
+        Assign
+      </button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}

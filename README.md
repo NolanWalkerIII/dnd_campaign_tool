@@ -138,6 +138,12 @@ Character template sections: `## Basic Info`, `## Ability Scores`, `## Skill Pro
 
 Campaign template sections: `## Campaign Info`, `## Opening Narration`, `## NPCs` (each NPC as a `### Name` block with `HP:`, `AC:`, `Initiative Bonus:`, `Notes:` fields)
 
+### Character Assignment (DM Tool)
+
+- **DM Dashboard** — the "All Characters" list now shows each character's current owner (👤 username) or ⚠ Unassigned in red if unclaimed
+- **Character sheet** — when a DM views any character, an **🔑 Ownership** card appears at the bottom: shows the current owner and a dropdown to reassign the character to any registered user (or set to Unassigned)
+- Useful when a player creates a character the DM wants to claim, a character is abandoned, or the DM pre-builds characters to hand off
+
 ### DM Visibility & Player Impersonation
 
 - **Who's Online** panel on the DM dashboard shows every player active in the last 5 minutes, with their character name and current HP
@@ -187,11 +193,15 @@ Any dice expression accepted at any time: `1d20`, `2d6+3`, `d8`, `4d6kh3`, etc.
 ├── app.py                  # Flask application, routes, game logic
 ├── models.py               # SQLAlchemy models (User, Character, Campaign)
 ├── parsers.py              # Markdown parsers + template strings for import/export
+├── services/
+│   └── ai.py               # xAI Grok API wrapper (narration cleanup + generation)
 ├── seed.py                 # Sample data for demo/playtesting
-├── test_suite.py           # 38-test automated test suite
+├── tests/
+│   └── test_suite.py       # 38-test automated test suite
 ├── requirements.txt        # Python dependencies
 ├── Dockerfile
 ├── docker-compose.yml
+├── DOCKER.md               # Docker operations reference
 ├── instance/
 │   └── dnd.db              # SQLite database (created at runtime)
 ├── templates/
@@ -200,11 +210,11 @@ Any dice expression accepted at any time: `1d20`, `2d6+3`, `d8`, `4d6kh3`, etc.
 │   ├── login.html
 │   ├── register.html
 │   ├── character_sheet.html
-│   ├── character_new.html
+│   ├── character_create.html
+│   ├── rules.html
 │   ├── dm/
 │   │   ├── dashboard.html
-│   │   ├── campaign.html
-│   │   └── campaign_new.html
+│   │   └── campaign.html
 │   └── player/
 │       ├── dashboard.html
 │       └── campaign.html
@@ -243,6 +253,7 @@ Any dice expression accepted at any time: `1d20`, `2d6+3`, `d8`, `4d6kh3`, etc.
 | `/characters/import` | Any | Import a character from an uploaded `.md` file |
 | `/dm/campaigns/template` | DM | Download `campaign_template.md` |
 | `/dm/campaigns/import` | DM | Import a campaign from an uploaded `.md` file |
+| `/dm/characters/<id>/assign` | DM | Reassign character ownership to a different user |
 | `/dm/impersonate/<uid>/campaign/<id>` | DM | Enter read-only player view for a campaign |
 | `/dm/impersonate/exit` | DM | Exit impersonation and return to DM view |
 | `/player/dashboard` | Player | See joined campaigns, manage characters |
