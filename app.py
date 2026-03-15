@@ -34,6 +34,10 @@ db.init_app(app)
 from sms_routes import sms_bp
 app.register_blueprint(sms_bp)
 
+# Register API blueprint
+from api_routes import api_bp
+app.register_blueprint(api_bp)
+
 with app.app_context():
     db.create_all()
     # Phase 7 migration: add last_seen column if the DB predates it
@@ -1861,6 +1865,120 @@ def dm_guide_section(slug):
                            active_title=entry[2],
                            content_html=content_html,
                            section='dm_guide')
+
+
+# ── SETTINGS ────────────────────────────────────────────────
+
+def _read_env_file():
+    """Read .env file into a dict."""
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    pairs = {}
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    k, v = line.split('=', 1)
+                    pairs[k.strip()] = v.strip()
+    return pairs
+
+
+def _write_env_file(pairs):
+    """Write a dict back to .env file, preserving comments."""
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            lines = f.readlines()
+
+    # Update existing keys, track which ones we've written
+    written = set()
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith('#') and '=' in stripped:
+            key = stripped.split('=', 1)[0].strip()
+            if key in pairs:
+                new_lines.append(f"{key}={pairs[key]}\n")
+                written.add(key)
+                continue
+        new_lines.append(line)
+
+    # Append any new keys
+    for k, v in pairs.items():
+        if k not in written and v:
+            new_lines.append(f"\n{k}={v}\n")
+
+    with open(env_path, 'w') as f:
+        f.writelines(new_lines)
+
+    # Also update os.environ so changes are live
+    for k, v in pairs.items():
+        if v:
+            os.environ[k] = v
+
+
+@app.route('/dm/settings', methods=['GET', 'POST'])
+@dm_required
+def dm_settings():
+    saved = False
+    if request.method == 'POST':
+        updates = {}
+        xai = request.form.get('xai_key', '').strip()
+        if xai:
+            updates['XAI_API_KEY'] = xai
+
+        twilio_sid = request.form.get('twilio_sid', '').strip()
+        if twilio_sid:
+            updates['TWILIO_ACCOUNT_SID'] = twilio_sid
+        twilio_token = request.form.get('twilio_token', '').strip()
+        if twilio_token:
+            updates['TWILIO_AUTH_TOKEN'] = twilio_token
+        twilio_phone = request.form.get('twilio_phone', '').strip()
+        if twilio_phone:
+            updates['TWILIO_PHONE_NUMBER'] = twilio_phone
+
+        discord_token = request.form.get('discord_token', '').strip()
+        if discord_token:
+            updates['DISCORD_BOT_TOKEN'] = discord_token
+        discord_cid = request.form.get('discord_client_id', '').strip()
+        if discord_cid:
+            updates['DISCORD_CLIENT_ID'] = discord_cid
+
+        claude_key = request.form.get('claude_key', '').strip()
+        if claude_key:
+            updates['CLAUDE_API_KEY'] = claude_key
+
+        if updates:
+            _write_env_file(updates)
+            saved = True
+
+    # Read current values
+    env = _read_env_file()
+    keys = {
+        'xai_key': env.get('XAI_API_KEY', ''),
+        'twilio_sid': env.get('TWILIO_ACCOUNT_SID', ''),
+        'twilio_token': env.get('TWILIO_AUTH_TOKEN', ''),
+        'twilio_phone': env.get('TWILIO_PHONE_NUMBER', ''),
+        'discord_token': env.get('DISCORD_BOT_TOKEN', ''),
+        'discord_client_id': env.get('DISCORD_CLIENT_ID', ''),
+        'claude_key': env.get('CLAUDE_API_KEY', ''),
+    }
+
+    # Discord status
+    discord_status = None
+    try:
+        from services.discord_bot import bot, _bot_loop
+        if _bot_loop and bot.is_ready():
+            discord_status = f"Connected as {bot.user} ({len(bot.guilds)} servers)"
+    except Exception:
+        pass
+
+    base_url = request.host_url.rstrip('/')
+    return render_template('dm/settings.html',
+                           keys=keys, saved=saved,
+                           discord_status=discord_status,
+                           base_url=base_url)
 
 
 # ── HOW TO PLAY GUIDE ───────────────────────────────────────

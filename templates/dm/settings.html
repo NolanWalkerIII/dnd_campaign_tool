@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Settings — D&D Manager{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Settings</h1>
+  <a href="/dm/dashboard" class="btn btn-outline" style="padding:4px 14px; font-size:0.85rem;">Back to Dashboard</a>
+</div>
+
+<p style="color:var(--muted); margin-bottom:1.5rem;">
+  Manage API keys and integrations. Changes take effect on next restart (or container recreate for Docker).
+</p>
+
+{% if saved %}
+<div class="flash flash-success" style="margin-bottom:1.5rem;">Settings saved. Restart the app for changes to take effect.</div>
+{% endif %}
+
+<form method="POST" action="/dm/settings" autocomplete="off">
+
+  <!-- xAI / Grok -->
+  <div class="card">
+    <h2>xAI Grok API</h2>
+    <p style="color:var(--muted); font-size:0.85rem; margin-bottom:1rem;">
+      Powers the AI DM &mdash; intent recognition and narration.
+      Get a key at <a href="https://console.x.ai/" style="color:var(--gold);" target="_blank">console.x.ai</a>.
+    </p>
+    <div class="form-group">
+      <label for="xai_key">API Key</label>
+      <input type="password" id="xai_key" name="xai_key" value="{{ keys.xai_key }}"
+             placeholder="xai-..." style="max-width:600px; font-family:monospace;"
+             autocomplete="new-password">
+      <button type="button" class="btn btn-outline" style="margin-top:4px; padding:2px 10px; font-size:0.8rem;"
+              onclick="toggleVis('xai_key')">Show/Hide</button>
+    </div>
+    <div class="key-status" style="margin-top:0.5rem;">
+      {% if keys.xai_key %}
+        <span style="color:var(--success);">&#10003; Configured</span>
+      {% else %}
+        <span style="color:var(--accent);">&#10007; Not set</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Twilio -->
+  <div class="card">
+    <h2>Twilio SMS</h2>
+    <p style="color:var(--muted); font-size:0.85rem; margin-bottom:1rem;">
+      Enables SMS Play Mode. Get credentials at
+      <a href="https://console.twilio.com/" style="color:var(--gold);" target="_blank">console.twilio.com</a>.
+    </p>
+    <div class="form-grid" style="margin-bottom:1rem;">
+      <div class="form-group">
+        <label for="twilio_sid">Account SID</label>
+        <input type="password" id="twilio_sid" name="twilio_sid" value="{{ keys.twilio_sid }}"
+               placeholder="AC..." style="font-family:monospace;" autocomplete="new-password">
+        <button type="button" class="btn btn-outline" style="margin-top:4px; padding:2px 10px; font-size:0.8rem;"
+                onclick="toggleVis('twilio_sid')">Show/Hide</button>
+      </div>
+      <div class="form-group">
+        <label for="twilio_token">Auth Token</label>
+        <input type="password" id="twilio_token" name="twilio_token" value="{{ keys.twilio_token }}"
+               placeholder="Auth token" style="font-family:monospace;" autocomplete="new-password">
+        <button type="button" class="btn btn-outline" style="margin-top:4px; padding:2px 10px; font-size:0.8rem;"
+                onclick="toggleVis('twilio_token')">Show/Hide</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="twilio_phone">Phone Number</label>
+      <input type="text" id="twilio_phone" name="twilio_phone" value="{{ keys.twilio_phone }}"
+             placeholder="+15551234567" style="max-width:250px;">
+    </div>
+    <div class="key-status" style="margin-top:0.5rem;">
+      {% if keys.twilio_sid %}
+        <span style="color:var(--success);">&#10003; Configured</span>
+      {% else %}
+        <span style="color:var(--muted);">&#8212; Optional</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Discord -->
+  <div class="card">
+    <h2>Discord Bot</h2>
+    <p style="color:var(--muted); font-size:0.85rem; margin-bottom:1rem;">
+      Enables Discord integration. Set up at
+      <a href="https://discord.com/developers/applications" style="color:var(--gold);" target="_blank">Discord Developer Portal</a>.
+    </p>
+    <div class="form-grid" style="margin-bottom:1rem;">
+      <div class="form-group">
+        <label for="discord_token">Bot Token</label>
+        <input type="password" id="discord_token" name="discord_token" value="{{ keys.discord_token }}"
+               placeholder="Bot token" style="font-family:monospace;" autocomplete="new-password">
+        <button type="button" class="btn btn-outline" style="margin-top:4px; padding:2px 10px; font-size:0.8rem;"
+                onclick="toggleVis('discord_token')">Show/Hide</button>
+      </div>
+      <div class="form-group">
+        <label for="discord_client_id">Client ID</label>
+        <input type="text" id="discord_client_id" name="discord_client_id" value="{{ keys.discord_client_id }}"
+               placeholder="Application ID" style="font-family:monospace;">
+      </div>
+    </div>
+    <div class="key-status" style="margin-top:0.5rem;">
+      {% if keys.discord_token %}
+        <span style="color:var(--success);">&#10003; Configured</span>
+        {% if discord_status %}
+          &mdash; <span style="color:var(--gold);">{{ discord_status }}</span>
+        {% endif %}
+      {% else %}
+        <span style="color:var(--muted);">&#8212; Optional</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Claude API -->
+  <div class="card">
+    <h2>Claude API Key</h2>
+    <p style="color:var(--muted); font-size:0.85rem; margin-bottom:1rem;">
+      Authenticates external API access (e.g., Claude controlling the game, diagnostics, automation).
+      This key is auto-generated &mdash; share it only with trusted integrations.
+    </p>
+    <div class="form-group">
+      <label for="claude_key">API Key</label>
+      <div style="display:flex; gap:0.5rem; align-items:center;">
+        <input type="password" id="claude_key" name="claude_key" value="{{ keys.claude_key }}"
+               style="max-width:500px; font-family:monospace; flex:1;" autocomplete="new-password" readonly>
+        <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:0.8rem;"
+                onclick="toggleVis('claude_key')">Show/Hide</button>
+        <button type="button" class="btn btn-gold" style="padding:4px 12px; font-size:0.8rem;"
+                onclick="regenerateKey()">Regenerate</button>
+      </div>
+      <input type="hidden" id="claude_key_regen" name="claude_key_regen" value="">
+    </div>
+    <div class="key-status" style="margin-top:0.5rem;">
+      {% if keys.claude_key %}
+        <span style="color:var(--success);">&#10003; Active</span>
+      {% else %}
+        <span style="color:var(--accent);">&#10007; Not generated &mdash; click Regenerate</span>
+      {% endif %}
+    </div>
+    {% if keys.claude_key %}
+    <div style="margin-top:1rem; padding:0.75rem; background:var(--card); border-radius:var(--radius); font-size:0.83rem;">
+      <strong style="color:var(--gold);">API Base URL:</strong>
+      <code style="color:var(--accent);">{{ base_url }}/api</code><br>
+      <strong style="color:var(--gold);">Auth Header:</strong>
+      <code style="color:var(--accent);">Authorization: Bearer &lt;key&gt;</code><br>
+      <strong style="color:var(--gold);">Test:</strong>
+      <code style="color:var(--accent);">curl -H "Authorization: Bearer &lt;key&gt;" {{ base_url }}/api/diagnostics</code>
+    </div>
+    {% endif %}
+  </div>
+
+  <div style="display:flex; gap:1rem; margin-top:1.5rem;">
+    <button type="submit" class="btn btn-gold" style="padding:10px 30px;">Save Settings</button>
+    <a href="/dm/dashboard" class="btn btn-outline" style="padding:10px 20px;">Cancel</a>
+  </div>
+
+</form>
+
+<script>
+function toggleVis(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function regenerateKey() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let key = 'ql_';
+  for (let i = 0; i < 40; i++) key += chars[Math.floor(Math.random() * chars.length)];
+  document.getElementById('claude_key').value = key;
+  document.getElementById('claude_key').removeAttribute('readonly');
+  document.getElementById('claude_key_regen').value = '1';
+}
+</script>
+{% endblock %}

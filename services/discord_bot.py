@@ -373,6 +373,12 @@ async def setup_campaign_channels(guild, campaign, dm_discord_user):
         topic="DM-only notes and controls"
     )
 
+    # Debug channel (DM only — API activity, errors, diagnostics)
+    debug_channel = await guild.create_text_channel(
+        "debug", category=category, overwrites=dm_overwrites,
+        topic="API activity log, errors, and diagnostics"
+    )
+
     channels = {
         'category': str(category.id),
         'quest_board': str(quest_board.id),
@@ -381,6 +387,7 @@ async def setup_campaign_channels(guild, campaign, dm_discord_user):
         'dice_log': str(dice_log.id),
         'character_sheets': str(char_sheets.id),
         'dm_screen': str(dm_screen.id),
+        'debug': str(debug_channel.id),
     }
 
     # Post welcome message to quest board
