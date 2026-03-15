@@ -1,11 +1,11 @@
 """
 test_suite.py - Comprehensive test suite for D&D Campaign Manager
 Covers: dice mechanics, game logic, auth, characters, combat, Phase 5 features
-Run: python test_suite.py
+Run: python tests/test_suite.py
 """
 import sys
 import os
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app import app as flask_app, db, ability_modifier, calculate_ac, calculate_hp, apply_racial_asi
 from models import DiceRoller, Character, Campaign, User
