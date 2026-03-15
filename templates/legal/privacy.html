@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Privacy Policy — QuesterLedger{% endblock %}
+{% block content %}
+<div style="max-width:720px;">
+  <h1>Privacy Policy</h1>
+  <p style="color:var(--muted); margin-bottom:1.5rem;">Last updated: March 15, 2026</p>
+
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h2>What We Collect</h2>
+    <p>QuesterLedger ("we", "us") collects the following information when you use our service:</p>
+    <ul style="margin:0.75rem 0 0 1.5rem; color:var(--text);">
+      <li><strong>Account information:</strong> Username and password (hashed)</li>
+      <li><strong>Phone number:</strong> If you opt in to SMS Play Mode, your mobile phone number</li>
+      <li><strong>Game data:</strong> Character sheets, campaign data, and in-game messages</li>
+    </ul>
+  </div>
+
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h2>How We Use Your Information</h2>
+    <ul style="margin:0.75rem 0 0 1.5rem; color:var(--text);">
+      <li>To provide the D&D campaign management and SMS play service</li>
+      <li>To send game-related SMS messages (actions, narration, notifications) when you opt in</li>
+      <li>To process your in-game actions through our AI Dungeon Master</li>
+    </ul>
+  </div>
+
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h2>SMS Messaging</h2>
+    <p>When a Dungeon Master registers your phone number for SMS Play Mode:</p>
+    <ul style="margin:0.75rem 0 0 1.5rem; color:var(--text);">
+      <li>You will receive a verification SMS asking you to reply with the campaign join code</li>
+      <li>By replying with the code, you consent to receive game-related messages</li>
+      <li>Message frequency varies based on gameplay (typically 1-20 messages per session)</li>
+      <li>Message and data rates may apply</li>
+      <li><strong>Text STOP at any time to opt out of SMS messages</strong></li>
+      <li><strong>Text HELP for support information</strong></li>
+    </ul>
+  </div>
+
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h2>Data Sharing</h2>
+    <p>We do not sell, rent, or share your personal information with third parties for marketing purposes. Your data is shared only with:</p>
+    <ul style="margin:0.75rem 0 0 1.5rem; color:var(--text);">
+      <li><strong>Twilio:</strong> To deliver SMS messages (phone number and message content)</li>
+      <li><strong>xAI:</strong> To process game actions through our AI Dungeon Master (game context only, no personal data)</li>
+    </ul>
+  </div>
+
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h2>Data Retention & Deletion</h2>
+    <p>Game data is retained for the duration of your account. A Dungeon Master can unlink your phone number at any time, and you can text STOP to immediately opt out of SMS messages. Contact us to request account deletion.</p>
+  </div>
+
+  <div class="card">
+    <h2>Contact</h2>
+    <p>For privacy questions or data deletion requests, contact: <strong>john@jsbjr.digital</strong></p>
+  </div>
+</div>
+{% endblock %}

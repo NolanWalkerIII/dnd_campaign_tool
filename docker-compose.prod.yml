@@ -1,0 +1,16 @@
+services:
+  dnd:
+    build: .
+    expose:
+      - "5000"
+    volumes:
+      - ./instance:/app/instance
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=production
+      - VIRTUAL_HOST=questerledger.johnbest.ai
+      - VIRTUAL_PORT=5000
+      - LETSENCRYPT_HOST=questerledger.johnbest.ai
+      - LETSENCRYPT_EMAIL=john@jsbjr.digital
+    restart: unless-stopped

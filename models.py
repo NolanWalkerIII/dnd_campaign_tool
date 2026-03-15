@@ -12,6 +12,8 @@ class User(db.Model):
     password_hash = Column(String(200), nullable=False)
     role = Column(String(10), default='player')  # 'dm' or 'player'
     last_seen = Column(DateTime, nullable=True)
+    phone_number = Column(String(20), unique=True, nullable=True)
+    discord_id = Column(String(30), unique=True, nullable=True)
 
 
 class Character(db.Model):

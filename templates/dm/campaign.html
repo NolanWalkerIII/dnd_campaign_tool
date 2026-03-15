@@ -207,6 +207,255 @@
 })();
 </script>
 
+<!-- ══ SMS PLAY MODE ══════════════════════════════════════════════════════ -->
+{% set sms_enabled = state.get('sms_enabled', false) %}
+{% set sms_log = state.get('sms_log', []) %}
+{% set twilio_num = twilio_number or '' %}
+<div class="card" style="border-color:{{ 'var(--success)' if sms_enabled else 'var(--border)' }};
+            margin-bottom:1.5rem;
+            {% if sms_enabled %}background:linear-gradient(135deg, rgba(15,42,26,0.3), rgba(10,26,46,0.3));{% endif %}">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+    <h2 style="margin:0; color:{{ 'var(--success)' if sms_enabled else 'var(--gold)' }};">
+      📱 SMS Play Mode
+    </h2>
+    <form method="POST" action="/sms/toggle">
+      <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+      <button type="submit" class="btn {{ 'btn-primary' if not sms_enabled else 'btn-outline' }}"
+              style="font-size:0.85rem; padding:6px 16px;">
+        {{ 'Disable SMS' if sms_enabled else 'Enable SMS' }}
+      </button>
+    </form>
+  </div>
+
+  {% if sms_enabled %}
+  <div style="background:var(--card); border-radius:var(--radius); padding:12px 16px; margin-bottom:1rem;">
+    <div style="display:flex; gap:2rem; flex-wrap:wrap;">
+      <div>
+        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">
+          Twilio Number</div>
+        <div style="color:var(--text); font-size:1.1rem; font-family:monospace; margin-top:4px;">
+          {{ twilio_num or 'Not configured' }}
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">
+          AI DM Status</div>
+        <div style="color:var(--success); font-size:0.9rem; margin-top:6px;">
+          ● Active — Listening for player texts
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p style="color:var(--muted); font-size:0.84rem; margin-bottom:1rem;">
+    Players text the Twilio number to play. The AI DM interprets actions, rolls dice, and narrates results.
+  </p>
+
+  <h3 style="color:var(--text); font-size:0.9rem; margin-bottom:0.5rem;">Player Phone Numbers</h3>
+  {% set pending = (campaign.current_state or {}).get('pending_verifications', {}) %}
+  {% set pending_user_ids = [] %}
+  {% for _ph, _info in pending.items() %}{% if pending_user_ids.append(_info.get('user_id')) %}{% endif %}{% endfor %}
+  {% set agent_players = (campaign.current_state or {}).get('agent_mode_players', []) %}
+  {% for player in players %}
+  {% set chars = player_chars.get(player.id, []) %}
+  {% set is_pending = player.id in pending_user_ids %}
+  {% set is_agent = player.id in agent_players %}
+  <div style="background:var(--card); padding:10px 12px; border-radius:var(--radius); margin-bottom:6px;
+              {% if is_agent %}border-left:3px solid var(--accent);{% endif %}">
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="color:var(--text);">{{ player.username }}</span>
+        <span style="color:var(--muted);">—</span>
+        <span style="color:var(--gold);">
+          {{ chars[0].name if chars else 'No character' }}
+        </span>
+        {% if is_agent %}
+        <span style="font-size:0.75rem; padding:2px 8px; border-radius:12px;
+                      background:var(--accent); color:#fff;">AI Agent</span>
+        {% endif %}
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+        {% if player.phone_number %}
+          <!-- Verified & linked -->
+          <span style="color:var(--success); font-size:0.8rem;">✓ Verified</span>
+          <span style="color:var(--muted); font-size:0.8rem;">{{ player.phone_number }}</span>
+          <form method="POST" action="/sms/unlink" style="display:inline;"
+                onsubmit="return confirm('Unlink {{ player.username }}? They will be notified via SMS.')">
+            <input type="hidden" name="user_id" value="{{ player.id }}">
+            <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+            <button type="submit" class="btn btn-outline"
+                    style="padding:3px 8px; font-size:0.75rem; color:var(--accent); border-color:var(--accent);">Unlink</button>
+          </form>
+        {% elif is_pending %}
+          <!-- Waiting for verification -->
+          <span style="color:var(--gold); font-size:0.8rem;">⏳ Awaiting verification</span>
+          <form method="POST" action="/sms/unlink" style="display:inline;">
+            <input type="hidden" name="user_id" value="{{ player.id }}">
+            <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+            <button type="submit" class="btn btn-outline"
+                    style="padding:3px 8px; font-size:0.75rem;">Cancel</button>
+          </form>
+        {% else %}
+          <!-- Not linked — show phone input -->
+          <form method="POST" action="/sms/register"
+                style="display:flex; align-items:center; gap:6px;">
+            <input type="hidden" name="user_id" value="{{ player.id }}">
+            <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+            <input type="tel" name="phone_number" placeholder="(___) ___-____"
+                   style="background:var(--surface); border:1px solid var(--border); color:var(--text);
+                          padding:5px 10px; border-radius:6px; font-size:0.82rem; width:140px;">
+            <button type="submit" class="btn btn-outline"
+                    style="padding:4px 10px; font-size:0.78rem;">Send Invite</button>
+          </form>
+        {% endif %}
+        <!-- Agent mode toggle -->
+        <form method="POST" action="/sms/agent/toggle" style="display:inline;">
+          <input type="hidden" name="user_id" value="{{ player.id }}">
+          <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+          <button type="submit" class="btn btn-outline"
+                  style="padding:3px 8px; font-size:0.75rem;
+                  {% if is_agent %}color:var(--accent); border-color:var(--accent);{% endif %}"
+                  title="{{ 'Disable' if is_agent else 'Enable' }} AI agent for {{ chars[0].name if chars else player.username }}">
+            {{ '🤖 Disable AI' if is_agent else '🤖 Agent' }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <!-- SMS Activity Log -->
+  {% if sms_log %}
+  <details style="margin-top:1rem;">
+    <summary style="cursor:pointer; color:var(--success); font-size:0.9rem; user-select:none;">
+      📜 Recent SMS Activity ({{ sms_log|length // 2 }} exchanges)
+    </summary>
+    <div style="background:var(--card); border-radius:var(--radius); padding:10px 14px;
+                margin-top:8px; font-size:0.82rem; font-family:monospace; max-height:300px; overflow-y:auto;">
+      {% for entry in sms_log %}
+      <div style="margin-bottom:6px;">
+        <span style="color:var(--muted);">{{ entry.timestamp }}</span>
+        {% if entry.player == 'AI DM' %}
+        <span style="color:var(--success);"> AI DM:</span>
+        {% else %}
+        <span style="color:var(--accent-blue, #60a5fa);"> {{ entry.player }}:</span>
+        {% endif %}
+        <span style="color:var(--text);">{{ entry.message }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+
+  {% else %}
+  <p style="color:var(--muted); font-size:0.85rem;">
+    Enable SMS mode to let players interact via text message with an AI Dungeon Master.
+    Requires Twilio credentials in your <code>.env</code> file.
+  </p>
+  {% endif %}
+</div>
+
+<!-- ══ DISCORD INTEGRATION ═══════════════════════════════════════════════ -->
+{% set discord_cfg = state.get('discord', {}) %}
+{% set discord_enabled = discord_cfg.get('enabled', false) %}
+<div class="card" style="border-color:{{ 'var(--success)' if discord_enabled else 'var(--border)' }};
+            margin-bottom:1.5rem;
+            {% if discord_enabled %}background:linear-gradient(135deg, rgba(88,101,242,0.1), rgba(10,26,46,0.3));{% endif %}">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+    <h2 style="margin:0; color:{{ 'var(--success)' if discord_enabled else 'var(--gold)' }};">
+      🎮 Discord Integration
+    </h2>
+    {% if discord_enabled %}
+    <span style="font-size:0.85rem; color:var(--success);">● Connected</span>
+    {% endif %}
+  </div>
+
+  {% if discord_enabled %}
+  <div style="background:var(--card); border-radius:var(--radius); padding:12px 16px; margin-bottom:1rem;">
+    <div style="display:flex; gap:2rem; flex-wrap:wrap;">
+      <div>
+        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">
+          Server ID</div>
+        <div style="color:var(--text); font-size:0.9rem; font-family:monospace; margin-top:4px;">
+          {{ discord_cfg.get('guild_id', '—') }}
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">
+          Channels</div>
+        <div style="color:var(--text); font-size:0.85rem; margin-top:4px;">
+          {% set ch = discord_cfg.get('channels', {}) %}
+          {{ ch|length }} channels created
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">
+          Bot Status</div>
+        <div style="color:var(--success); font-size:0.9rem; margin-top:4px;">
+          ● Active — Listening for commands
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p style="color:var(--muted); font-size:0.84rem; margin-bottom:0.75rem;">
+    Players can use <code>/action</code>, <code>/roll</code>, <code>/attack</code>, <code>/check</code> in #tavern.
+    {% if sms_enabled %}SMS ↔ Discord bridge is active — both channels see the same game.{% endif %}
+  </p>
+
+  <!-- Discord-linked players -->
+  <h3 style="color:var(--text); font-size:0.9rem; margin-bottom:0.5rem;">Discord-Linked Players</h3>
+  {% for player in players %}
+  {% set chars = player_chars.get(player.id, []) %}
+  <div style="background:var(--card); padding:8px 12px; border-radius:var(--radius); margin-bottom:4px;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span style="color:var(--text);">{{ player.username }}</span>
+      <span style="color:var(--muted);">—</span>
+      <span style="color:var(--gold);">{{ chars[0].name if chars else 'No character' }}</span>
+      {% if player.discord_id %}
+      <span style="color:var(--success); font-size:0.8rem;">✓ Discord linked</span>
+      <span style="color:var(--muted); font-size:0.75rem;">({{ player.discord_id }})</span>
+      {% else %}
+      <span style="color:var(--muted); font-size:0.8rem;">Not linked — player needs to use /join in Discord</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+  {% else %}
+  <!-- Not connected — show setup instructions -->
+  <p style="color:var(--muted); font-size:0.85rem; margin-bottom:1rem;">
+    Connect a Discord server to let players use slash commands, see rich embeds, and bridge SMS + Discord.
+  </p>
+
+  <div style="background:var(--card); border-radius:var(--radius); padding:1rem; margin-bottom:1rem;">
+    <h3 style="color:var(--text); font-size:0.9rem; margin-bottom:0.75rem;">Setup Instructions</h3>
+    <ol style="margin:0 0 0 1.25rem; color:var(--text); font-size:0.85rem; line-height:1.8;">
+      <li>
+        {% if discord_invite %}
+        <a href="{{ discord_invite }}" target="_blank"
+           style="color:var(--gold); text-decoration:underline;">
+          Add the bot to your Discord server →
+        </a>
+        {% else %}
+        Set <code>DISCORD_BOT_TOKEN</code> and <code>DISCORD_CLIENT_ID</code> in your <code>.env</code> file
+        {% endif %}
+      </li>
+      <li>In your Discord server, type: <code style="background:var(--surface); padding:2px 6px; border-radius:3px;">/setup {{ campaign.join_code }}</code></li>
+      <li>The bot will create game channels automatically</li>
+      <li>Players link with: <code style="background:var(--surface); padding:2px 6px; border-radius:3px;">/join username</code> then <code>/verify {{ campaign.join_code }}</code></li>
+    </ol>
+  </div>
+
+  <div style="display:flex; gap:1rem; flex-wrap:wrap; font-size:0.84rem; color:var(--muted);">
+    <div>
+      <strong style="color:var(--text);">Channels created:</strong>
+      #quest-board, #tavern, #combat, #dice-log, #character-sheets, #dm-screen
+    </div>
+  </div>
+  {% endif %}
+</div>
+
 <!-- ══ COMBAT SECTION ══════════════════════════════════════════════════════ -->
 <div class="card" style="border-color:{{ 'var(--accent)' if combat_active else 'var(--border)' }};">
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">

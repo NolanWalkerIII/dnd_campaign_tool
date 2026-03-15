@@ -1,0 +1,11 @@
+.env
+keys
+venv/
+.venv/
+__pycache__/
+*.pyc
+instance/
+.git/
+.DS_Store
+.claude/
+tests/

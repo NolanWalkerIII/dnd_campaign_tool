@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}System Diagnostics — D&D Manager{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>System Diagnostics</h1>
+  <a href="/dm/dashboard" class="btn btn-outline" style="padding:4px 14px; font-size:0.85rem;">Back to Dashboard</a>
+</div>
+
+<p style="color:var(--muted); margin-bottom:1.5rem;">
+  Run checks on each component of the SMS AI DM pipeline. Tests run live when you click each button.
+</p>
+
+<!-- Environment Check -->
+<div class="card" id="env-card">
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <h2 style="margin:0;">1. Environment Variables</h2>
+    <button class="btn btn-gold" onclick="runTest('env')" id="env-btn">Check</button>
+  </div>
+  <div id="env-result" style="margin-top:1rem;"></div>
+</div>
+
+<!-- Grok API Test -->
+<div class="card" id="grok-card">
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <h2 style="margin:0;">2. xAI Grok API</h2>
+    <button class="btn btn-gold" onclick="runTest('grok')" id="grok-btn">Test Grok</button>
+  </div>
+  <p style="color:var(--muted); font-size:0.85rem; margin-top:0.5rem;">
+    Sends a minimal prompt to Grok and checks for a valid response.
+  </p>
+  <div id="grok-result" style="margin-top:1rem;"></div>
+</div>
+
+<!-- Twilio Test -->
+<div class="card" id="twilio-card">
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <h2 style="margin:0;">3. Twilio SMS</h2>
+    <button class="btn btn-gold" onclick="runTest('twilio')" id="twilio-btn">Test Twilio</button>
+  </div>
+  <div style="margin-top:0.75rem; display:flex; gap:0.75rem; align-items:flex-end; flex-wrap:wrap;">
+    <div class="form-group" style="flex:1; min-width:200px;">
+      <label>Send test SMS to:</label>
+      <input type="text" id="twilio-phone" placeholder="+1 (555) 123-4567" style="max-width:280px;">
+    </div>
+  </div>
+  <p style="color:var(--muted); font-size:0.85rem; margin-top:0.5rem;">
+    Sends a test SMS from your Twilio number. Leave blank to just verify credentials.
+  </p>
+  <div id="twilio-result" style="margin-top:1rem;"></div>
+</div>
+
+<!-- Game Engine Test -->
+<div class="card" id="engine-card">
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <h2 style="margin:0;">4. Game Engine</h2>
+    <button class="btn btn-gold" onclick="runTest('engine')" id="engine-btn">Test Engine</button>
+  </div>
+  <p style="color:var(--muted); font-size:0.85rem; margin-top:0.5rem;">
+    Rolls dice, runs a skill check, and resolves an attack through the engine.
+  </p>
+  <div id="engine-result" style="margin-top:1rem;"></div>
+</div>
+
+<!-- Full Pipeline Test -->
+<div class="card" id="pipeline-card">
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <h2 style="margin:0;">5. Full AI DM Pipeline</h2>
+    <button class="btn btn-gold" onclick="runTest('pipeline')" id="pipeline-btn">Test Pipeline</button>
+  </div>
+  <div style="margin-top:0.75rem;">
+    <div class="form-group">
+      <label>Simulated player message:</label>
+      <input type="text" id="pipeline-msg" value="I search the room for traps" style="max-width:500px;">
+    </div>
+  </div>
+  <p style="color:var(--muted); font-size:0.85rem; margin-top:0.5rem;">
+    Interprets a player message through Grok, resolves mechanics, and generates narration.
+    Uses a test character and campaign.
+  </p>
+  <div id="pipeline-result" style="margin-top:1rem;"></div>
+</div>
+
+<!-- Discord Bot Test -->
+<div class="card" id="discord-card">
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <h2 style="margin:0;">6. Discord Bot</h2>
+    <button class="btn btn-gold" onclick="runTest('discord')" id="discord-btn">Test Discord</button>
+  </div>
+  <p style="color:var(--muted); font-size:0.85rem; margin-top:0.5rem;">
+    Checks Discord bot token, connection status, and linked servers.
+  </p>
+  <div id="discord-result" style="margin-top:1rem;"></div>
+</div>
+
+<!-- Run All -->
+<div style="text-align:center; margin:2rem 0;">
+  <button class="btn btn-primary" onclick="runAll()" style="padding:12px 40px; font-size:1rem;">
+    Run All Tests
+  </button>
+</div>
+
+<style>
+  .test-row {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 8px 12px; border-radius: var(--radius);
+    margin-bottom: 4px; font-size: 0.9rem;
+  }
+  .test-pass { background: #1a3a2a; border: 1px solid var(--success); }
+  .test-fail { background: #3a1a1a; border: 1px solid var(--accent); }
+  .test-info { background: var(--card); border: 1px solid var(--border); }
+  .test-icon { font-size: 1.1rem; flex-shrink: 0; }
+  .test-label { font-weight: 600; min-width: 120px; }
+  .test-detail { color: var(--muted); word-break: break-word; }
+  .test-spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border);
+    border-top-color: var(--gold); border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<script>
+function runTest(test) {
+  const btn = document.getElementById(test + '-btn');
+  const result = document.getElementById(test + '-result');
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+  result.innerHTML = '<div class="test-row test-info"><span class="test-spinner"></span> Running...</div>';
+
+  let body = {};
+  if (test === 'twilio') {
+    body.phone = document.getElementById('twilio-phone').value;
+  }
+  if (test === 'pipeline') {
+    body.message = document.getElementById('pipeline-msg').value;
+  }
+
+  fetch('/dm/diagnostics/run', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({test: test, ...body})
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    result.innerHTML = '';
+    data.results.forEach(r => {
+      const cls = r.status === 'pass' ? 'test-pass' : (r.status === 'fail' ? 'test-fail' : 'test-info');
+      const icon = r.status === 'pass' ? '&#10003;' : (r.status === 'fail' ? '&#10007;' : '&#8505;');
+      result.innerHTML += `<div class="test-row ${cls}">
+        <span class="test-icon">${icon}</span>
+        <span class="test-label">${r.label}</span>
+        <span class="test-detail">${r.detail || ''}</span>
+      </div>`;
+    });
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    result.innerHTML = `<div class="test-row test-fail">
+      <span class="test-icon">&#10007;</span>
+      <span class="test-detail">Request failed: ${err.message}</span>
+    </div>`;
+  });
+}
+
+function runAll() {
+  ['env', 'grok', 'twilio', 'engine', 'pipeline', 'discord'].forEach(t => runTest(t));
+}
+</script>
+{% endblock %}

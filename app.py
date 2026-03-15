@@ -30,6 +30,10 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'dnd-dev-secret-change-in-prod'
 db.init_app(app)
 
+# Register SMS blueprint
+from sms_routes import sms_bp
+app.register_blueprint(sms_bp)
+
 with app.app_context():
     db.create_all()
     # Phase 7 migration: add last_seen column if the DB predates it
@@ -38,6 +42,24 @@ with app.app_context():
         if 'last_seen' not in _cols:
             _conn.execute(db.text("ALTER TABLE user ADD COLUMN last_seen DATETIME"))
             _conn.commit()
+        if 'discord_id' not in _cols:
+            _conn.execute(db.text("ALTER TABLE user ADD COLUMN discord_id VARCHAR(30)"))
+            _conn.commit()
+
+# Start Discord bot in background thread
+# In debug mode with reloader, only start in the child process
+if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or os.environ.get('FLASK_ENV') == 'production':
+    from services.discord_bot import start_discord_bot
+    start_discord_bot(app)
+
+
+def _get_discord_invite():
+    try:
+        from services.discord_bot import invite_url
+        url = invite_url()
+        return url if url.startswith('http') else None
+    except Exception:
+        return None
 
 
 @app.before_request
@@ -710,7 +732,9 @@ def dm_campaign_detail(campaign_id):
                            narration_log=narration_log,
                            combatant_chars=combatant_chars,
                            conditions=CONDITIONS,
-                           skills_sorted=sorted(SKILLS.keys()))
+                           skills_sorted=sorted(SKILLS.keys()),
+                           twilio_number=os.environ.get('TWILIO_PHONE_NUMBER', ''),
+                           discord_invite=_get_discord_invite())
 
 
 @app.route('/dm/campaigns/<int:campaign_id>/narrate', methods=['POST'])
@@ -1756,6 +1780,9 @@ def _migrate():
         if 'last_seen' not in cols:
             conn.execute(db.text("ALTER TABLE user ADD COLUMN last_seen DATETIME"))
             conn.commit()
+        if 'phone_number' not in cols:
+            conn.execute(db.text("ALTER TABLE user ADD COLUMN phone_number VARCHAR(20) UNIQUE"))
+            conn.commit()
 
 
 # ── Rules reference routes ────────────────────────────────────────────────────
@@ -1836,8 +1863,298 @@ def dm_guide_section(slug):
                            section='dm_guide')
 
 
+# ── LEGAL PAGES ─────────────────────────────────────────────
+
+@app.route('/privacy')
+def privacy_policy():
+    return render_template('legal/privacy.html')
+
+
+@app.route('/terms')
+def terms_of_service():
+    return render_template('legal/terms.html')
+
+
+# ── DIAGNOSTICS ──────────────────────────────────────────────
+@app.route('/dm/diagnostics')
+@dm_required
+def dm_diagnostics():
+    return render_template('dm/diagnostics.html')
+
+
+@app.route('/dm/diagnostics/run', methods=['POST'])
+@dm_required
+def dm_diagnostics_run():
+    import json as _json
+    data = request.get_json(force=True)
+    test = data.get('test', '')
+
+    if test == 'env':
+        return jsonify(results=_diag_env())
+    elif test == 'grok':
+        return jsonify(results=_diag_grok())
+    elif test == 'twilio':
+        return jsonify(results=_diag_twilio(data.get('phone', '')))
+    elif test == 'engine':
+        return jsonify(results=_diag_engine())
+    elif test == 'pipeline':
+        return jsonify(results=_diag_pipeline(data.get('message', 'I search the room')))
+    elif test == 'discord':
+        return jsonify(results=_diag_discord())
+    else:
+        return jsonify(results=[{'status': 'fail', 'label': 'Unknown', 'detail': f'Unknown test: {test}'}])
+
+
+def _diag_env():
+    results = []
+    checks = [
+        ('XAI_API_KEY', 'xAI / Grok API key'),
+        ('TWILIO_ACCOUNT_SID', 'Twilio Account SID'),
+        ('TWILIO_AUTH_TOKEN', 'Twilio Auth Token'),
+        ('TWILIO_PHONE_NUMBER', 'Twilio Phone Number'),
+        ('DISCORD_BOT_TOKEN', 'Discord Bot Token'),
+        ('DISCORD_CLIENT_ID', 'Discord Client ID'),
+    ]
+    for var, label in checks:
+        val = os.environ.get(var, '')
+        if val:
+            masked = val[:4] + '...' + val[-4:] if len(val) > 10 else '(set)'
+            results.append({'status': 'pass', 'label': label, 'detail': masked})
+        else:
+            results.append({'status': 'fail', 'label': label, 'detail': 'Not set'})
+    return results
+
+
+def _diag_grok():
+    results = []
+    key = os.environ.get('XAI_API_KEY', '')
+    if not key:
+        return [{'status': 'fail', 'label': 'Grok API', 'detail': 'XAI_API_KEY not set'}]
+
+    try:
+        import requests as req
+        resp = req.post(
+            'https://api.x.ai/v1/chat/completions',
+            headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'},
+            json={
+                'model': 'grok-3-latest',
+                'messages': [
+                    {'role': 'system', 'content': 'You are a friendly D&D dungeon master assistant.'},
+                    {'role': 'user', 'content': 'Greet an adventurer entering a tavern in one sentence.'},
+                ],
+                'max_tokens': 20,
+                'temperature': 0,
+            },
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            text = resp.json()['choices'][0]['message']['content'].strip()
+            results.append({'status': 'pass', 'label': 'API Call', 'detail': f'Status 200'})
+            results.append({'status': 'pass', 'label': 'Response', 'detail': text[:120]})
+            model = resp.json().get('model', '?')
+            results.append({'status': 'info', 'label': 'Model', 'detail': model})
+        else:
+            results.append({'status': 'fail', 'label': 'API Call', 'detail': f'Status {resp.status_code}: {resp.text[:200]}'})
+    except Exception as e:
+        results.append({'status': 'fail', 'label': 'API Call', 'detail': str(e)[:200]})
+    return results
+
+
+def _diag_twilio(phone=''):
+    results = []
+    sid = os.environ.get('TWILIO_ACCOUNT_SID', '')
+    token = os.environ.get('TWILIO_AUTH_TOKEN', '')
+    from_num = os.environ.get('TWILIO_PHONE_NUMBER', '')
+
+    if not sid or not token:
+        return [{'status': 'fail', 'label': 'Credentials', 'detail': 'TWILIO_ACCOUNT_SID or AUTH_TOKEN not set'}]
+
+    try:
+        from twilio.rest import Client
+        client = Client(sid, token)
+        # Verify credentials by fetching account info
+        account = client.api.accounts(sid).fetch()
+        results.append({'status': 'pass', 'label': 'Auth', 'detail': f'Account: {account.friendly_name}'})
+        results.append({'status': 'pass', 'label': 'Status', 'detail': account.status})
+        results.append({'status': 'info', 'label': 'From Number', 'detail': from_num or 'Not set'})
+    except Exception as e:
+        results.append({'status': 'fail', 'label': 'Auth', 'detail': str(e)[:200]})
+        return results
+
+    # Send test SMS if phone provided
+    phone = phone.strip()
+    if phone:
+        if not phone.startswith('+'):
+            phone = '+1' + phone.replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
+        try:
+            msg = client.messages.create(
+                body='[QuesterLedger] Diagnostic test - SMS is working!',
+                from_=from_num,
+                to=phone,
+            )
+            results.append({'status': 'pass', 'label': 'Send SMS', 'detail': f'SID: {msg.sid}, To: {phone}'})
+        except Exception as e:
+            results.append({'status': 'fail', 'label': 'Send SMS', 'detail': str(e)[:200]})
+    else:
+        results.append({'status': 'info', 'label': 'Send SMS', 'detail': 'Skipped — no phone number entered'})
+
+    return results
+
+
+def _diag_engine():
+    from services.engine import resolve_roll, resolve_skill_check, resolve_attack
+    results = []
+
+    # Dice roll
+    roll = resolve_roll('1d20')
+    if roll.get('error'):
+        results.append({'status': 'fail', 'label': 'Dice Roll', 'detail': roll['error']})
+    else:
+        results.append({'status': 'pass', 'label': 'Dice Roll', 'detail': roll['text']})
+
+    roll2 = resolve_roll('2d6+3')
+    if roll2.get('error'):
+        results.append({'status': 'fail', 'label': 'Damage Roll', 'detail': roll2['error']})
+    else:
+        results.append({'status': 'pass', 'label': 'Damage Roll', 'detail': roll2['text']})
+
+    # Skill check with a mock character
+    try:
+        mock_char = type('C', (), {
+            'ability_scores': {'STR': 16, 'DEX': 14, 'CON': 12, 'INT': 10, 'WIS': 13, 'CHA': 8},
+            'proficiency_bonus': 2, 'skills': ['Perception', 'Athletics'],
+            'name': 'TestHero', 'level': 3, 'race': 'Human', 'class_name': 'Fighter',
+            'hp_current': 28, 'hp_max': 28, 'ac': 16, 'id': 999,
+            'spells': {}, 'equipment': ['Longsword', 'Shield'],
+        })()
+        mock_campaign = type('Camp', (), {
+            'current_state': {}, 'name': 'Test Campaign',
+        })()
+        sk = resolve_skill_check(mock_char, mock_campaign, 'Perception')
+        if sk.get('error'):
+            results.append({'status': 'fail', 'label': 'Skill Check', 'detail': sk['error']})
+        else:
+            results.append({'status': 'pass', 'label': 'Skill Check', 'detail': sk['text']})
+
+        atk = resolve_attack(mock_char, mock_campaign, target_name='Goblin', ability='STR',
+                             damage_dice='1d8', target_ac=13)
+        if atk.get('error'):
+            results.append({'status': 'fail', 'label': 'Attack Roll', 'detail': atk['error']})
+        else:
+            results.append({'status': 'pass', 'label': 'Attack Roll', 'detail': atk['text']})
+    except Exception as e:
+        results.append({'status': 'fail', 'label': 'Engine Error', 'detail': str(e)[:200]})
+
+    return results
+
+
+def _diag_pipeline(message):
+    results = []
+    key = os.environ.get('XAI_API_KEY', '')
+    if not key:
+        return [{'status': 'fail', 'label': 'Pipeline', 'detail': 'XAI_API_KEY not set — cannot test AI DM'}]
+
+    from services.ai_dm import interpret_action, narrate_result
+    from services.engine import resolve_skill_check, resolve_attack
+
+    # Mock character + campaign
+    mock_char = type('C', (), {
+        'ability_scores': {'STR': 16, 'DEX': 14, 'CON': 12, 'INT': 10, 'WIS': 13, 'CHA': 8},
+        'proficiency_bonus': 2, 'skills': ['Perception', 'Athletics', 'Stealth'],
+        'name': 'Theron', 'level': 5, 'race': 'Human', 'class_name': 'Fighter',
+        'hp_current': 42, 'hp_max': 42, 'ac': 18, 'id': 999,
+        'spells': {}, 'equipment': ['Longsword', 'Shield', 'Chain Mail'],
+    })()
+    mock_campaign = type('Camp', (), {
+        'current_state': {'narration_log': [{'text': 'You enter a dimly lit dungeon corridor.'}]},
+        'name': 'Test Dungeon',
+    })()
+
+    # Step 1: Interpret
+    results.append({'status': 'info', 'label': 'Input', 'detail': f'"{message}"'})
+    action, err = interpret_action(message, mock_char, mock_campaign)
+    if err:
+        results.append({'status': 'fail', 'label': 'Interpret', 'detail': err})
+        return results
+
+    results.append({'status': 'pass', 'label': 'Interpret',
+                    'detail': f'action={action["action_type"]}, params={action.get("params", {})}'})
+
+    # Step 2: Resolve
+    action_type = action['action_type']
+    params = action.get('params', {})
+    engine_result = {'text': ''}
+
+    if action_type == 'skill_check':
+        engine_result = resolve_skill_check(mock_char, mock_campaign, params.get('skill', 'Perception'))
+    elif action_type == 'attack':
+        engine_result = resolve_attack(mock_char, mock_campaign,
+                                       target_name=params.get('target', 'target'),
+                                       ability=params.get('ability', 'STR'),
+                                       damage_dice=params.get('damage_dice'))
+
+    if engine_result.get('error'):
+        results.append({'status': 'fail', 'label': 'Engine', 'detail': engine_result['error']})
+    elif engine_result.get('text'):
+        results.append({'status': 'pass', 'label': 'Engine', 'detail': engine_result['text']})
+    else:
+        results.append({'status': 'info', 'label': 'Engine', 'detail': 'No mechanic (roleplay/question)'})
+
+    # Step 3: Narrate
+    narration, err = narrate_result(action_type, params, engine_result, mock_char, mock_campaign)
+    if err:
+        results.append({'status': 'fail', 'label': 'Narrate', 'detail': err})
+    else:
+        results.append({'status': 'pass', 'label': 'Narrate', 'detail': narration[:280]})
+
+    # Final composed response
+    mech = engine_result.get('text', '')
+    if mech:
+        final = f'[{mech}] {narration}'
+    else:
+        final = narration
+    results.append({'status': 'info', 'label': 'SMS Output', 'detail': final[:400]})
+
+    return results
+
+
+def _diag_discord():
+    results = []
+    token = os.environ.get('DISCORD_BOT_TOKEN', '')
+    client_id = os.environ.get('DISCORD_CLIENT_ID', '')
+
+    if not token:
+        results.append({'status': 'fail', 'label': 'Bot Token', 'detail': 'DISCORD_BOT_TOKEN not set'})
+    else:
+        results.append({'status': 'pass', 'label': 'Bot Token', 'detail': 'Set'})
+
+    if not client_id:
+        results.append({'status': 'fail', 'label': 'Client ID', 'detail': 'DISCORD_CLIENT_ID not set'})
+    else:
+        results.append({'status': 'pass', 'label': 'Client ID', 'detail': client_id})
+
+    from services.discord_bot import bot, invite_url
+    if bot.user:
+        results.append({'status': 'pass', 'label': 'Bot Status', 'detail': f'Connected as {bot.user}'})
+        results.append({'status': 'info', 'label': 'Guilds', 'detail': f'{len(bot.guilds)} server(s)'})
+        for g in bot.guilds:
+            results.append({'status': 'info', 'label': f'Server', 'detail': f'{g.name} ({g.member_count} members)'})
+    else:
+        results.append({'status': 'info', 'label': 'Bot Status', 'detail': 'Not connected (token may be missing)'})
+
+    results.append({'status': 'info', 'label': 'Invite URL', 'detail': invite_url()})
+    return results
+
+
+@app.route('/dm/discord/invite')
+@dm_required
+def discord_invite():
+    from services.discord_bot import invite_url
+    return redirect(invite_url())
+
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         _migrate()
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
