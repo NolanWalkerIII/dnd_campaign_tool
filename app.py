@@ -47,6 +47,9 @@ def update_last_seen():
         if user:
             user.last_seen = datetime.utcnow()
             db.session.commit()
+        else:
+            # User no longer exists (e.g. DB was reset) — clear stale session
+            session.clear()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -730,6 +733,21 @@ def dm_ai_generate(campaign_id):
     if error:
         return jsonify({'error': error}), 502
     return jsonify({'text': text})
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/onboarding_dismiss', methods=['POST'])
+@dm_required
+def dm_onboarding_dismiss(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        return '', 403
+    state = campaign.current_state or {}
+    state['onboarding_dismissed'] = True
+    campaign.current_state = state
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(campaign, 'current_state')
+    db.session.commit()
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
 
 
 @app.route('/dm/campaigns/<int:campaign_id>/save')
@@ -1707,6 +1725,84 @@ def _migrate():
         if 'last_seen' not in cols:
             conn.execute(db.text("ALTER TABLE user ADD COLUMN last_seen DATETIME"))
             conn.commit()
+
+
+# ── Rules reference routes ────────────────────────────────────────────────────
+
+import markdown as _md
+
+_DOC_DIR = os.path.join(os.path.dirname(__file__), 'Documentation')
+
+PLAYER_DOCS = [
+    ('core-mechanics',     '01_CORE_MECHANICS.md',     'Core Mechanics'),
+    ('character-creation', '02_CHARACTER_CREATION.md', 'Character Creation'),
+    ('classes',            '03_CLASSES_REFERENCE.md',  'Classes'),
+    ('races',              '04_RACES_REFERENCE.md',    'Races'),
+    ('combat',             '05_COMBAT.md',             'Combat'),
+    ('spellcasting',       '06_SPELLCASTING.md',       'Spellcasting'),
+    ('conditions',         '08_CONDITIONS.md',         'Conditions'),
+    ('equipment',          '09_EQUIPMENT.md',          'Equipment'),
+    ('adventuring',        '10_ADVENTURING.md',        'Adventuring'),
+]
+
+DM_DOCS = [
+    ('dm-guide',           '13_DM_GUIDE.md',           'DM Guide'),
+    ('monsters',           '11_MONSTER_GUIDE.md',      'Monster Guide'),
+    ('magic-items',        '12_MAGIC_ITEMS.md',        'Magic Items'),
+    ('npc-template',       '15_NPC_TEMPLATE.md',       'NPC Template'),
+    ('encounter-template', '16_ENCOUNTER_TEMPLATE.md', 'Encounter Template'),
+    ('campaign-template',  '14_CAMPAIGN_TEMPLATE.md',  'Campaign Template'),
+]
+
+def _render_doc(filename):
+    path = os.path.join(_DOC_DIR, filename)
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return _md.markdown(f.read(), extensions=['tables', 'fenced_code'])
+    except FileNotFoundError:
+        return '<p>Document not found.</p>'
+
+
+@app.route('/rules')
+@login_required
+def rules_index():
+    return redirect(url_for('rules_section', slug='core-mechanics'))
+
+
+@app.route('/rules/<slug>')
+@login_required
+def rules_section(slug):
+    entry = next((e for e in PLAYER_DOCS if e[0] == slug), None)
+    if not entry:
+        return redirect(url_for('rules_section', slug='core-mechanics'))
+    content_html = _render_doc(entry[1])
+    return render_template('rules.html',
+                           docs=PLAYER_DOCS,
+                           active_slug=slug,
+                           active_title=entry[2],
+                           content_html=content_html,
+                           section='rules')
+
+
+@app.route('/dm/guide')
+@dm_required
+def dm_guide_index():
+    return redirect(url_for('dm_guide_section', slug='dm-guide'))
+
+
+@app.route('/dm/guide/<slug>')
+@dm_required
+def dm_guide_section(slug):
+    entry = next((e for e in DM_DOCS if e[0] == slug), None)
+    if not entry:
+        return redirect(url_for('dm_guide_section', slug='dm-guide'))
+    content_html = _render_doc(entry[1])
+    return render_template('rules.html',
+                           docs=DM_DOCS,
+                           active_slug=slug,
+                           active_title=entry[2],
+                           content_html=content_html,
+                           section='dm_guide')
 
 
 if __name__ == '__main__':

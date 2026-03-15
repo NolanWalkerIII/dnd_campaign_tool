@@ -50,45 +50,85 @@
 
   <!-- ── MY CAMPAIGNS ── -->
   <div>
+    {% if not my_campaigns %}
+    <!-- Join Walkthrough (shown when player has no campaigns) -->
+    <div style="background:linear-gradient(135deg,#0f2a1a,#0a1a2e); border:2px solid var(--gold);
+                border-radius:var(--radius); padding:1.25rem 1.5rem; margin-bottom:1.5rem;">
+      <h2 style="margin-bottom:0.5rem;">🎲 Join a Campaign</h2>
+      <p style="color:var(--muted); font-size:0.88rem; margin-bottom:1.25rem;">
+        Ask your Dungeon Master for the join code, then enter it below to get started.
+      </p>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+                  gap:0.75rem; margin-bottom:1.25rem;">
+        <div style="background:rgba(201,168,76,0.08); border:1px solid var(--gold);
+                    border-radius:var(--radius); padding:0.85rem; font-size:0.85rem;">
+          <div style="font-size:1.3rem; margin-bottom:0.3rem;">1️⃣</div>
+          <div style="color:var(--gold); font-weight:600; margin-bottom:0.2rem;">Get the code</div>
+          <div style="color:var(--muted);">Ask your DM for the campaign join code.</div>
+        </div>
+        <div style="background:rgba(201,168,76,0.04); border:1px solid var(--border);
+                    border-radius:var(--radius); padding:0.85rem; font-size:0.85rem;">
+          <div style="font-size:1.3rem; margin-bottom:0.3rem;">2️⃣</div>
+          <div style="color:var(--gold); font-weight:600; margin-bottom:0.2rem;">Enter it below</div>
+          <div style="color:var(--muted);">Type the code and click Join.</div>
+        </div>
+        <div style="background:rgba(201,168,76,0.04); border:1px solid var(--border);
+                    border-radius:var(--radius); padding:0.85rem; font-size:0.85rem;">
+          <div style="font-size:1.3rem; margin-bottom:0.3rem;">3️⃣</div>
+          <div style="color:var(--gold); font-weight:600; margin-bottom:0.2rem;">Create a character</div>
+          <div style="color:var(--muted);">Head to Characters → + New to build your hero.</div>
+        </div>
+      </div>
+      <form method="POST" action="/player/campaigns/join"
+            style="display:flex; gap:0.75rem; align-items:flex-end;">
+        <div class="form-group" style="flex:1;">
+          <label>Join Code</label>
+          <input type="text" name="join_code" placeholder="e.g. ABCD1234"
+                 maxlength="10"
+                 style="text-transform:uppercase; letter-spacing:4px; font-size:1.1rem;
+                        font-family:monospace; text-align:center;"
+                 autofocus>
+        </div>
+        <button type="submit" class="btn btn-gold" style="padding:9px 24px; font-size:1rem;">
+          Join →
+        </button>
+      </form>
+    </div>
+    {% else %}
     <div class="card">
-      <h2>My Campaigns</h2>
-
-      <!-- Join form -->
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+        <h2 style="margin:0;">My Campaigns</h2>
+      </div>
+      <!-- Compact join form -->
       <form method="POST" action="/player/campaigns/join"
             style="display:flex; gap:0.75rem; margin-bottom:1.25rem;">
         <input type="text" name="join_code" placeholder="Enter join code…"
                maxlength="10" style="flex:1; text-transform:uppercase; letter-spacing:2px;">
         <button type="submit" class="btn btn-gold">Join</button>
       </form>
-
-      {% if my_campaigns %}
-        {% for c in my_campaigns %}
-        <a href="/player/campaigns/{{ c.id }}"
-           style="display:flex; align-items:center; justify-content:space-between;
-                  padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius);
-                  margin-bottom:8px; text-decoration:none; color:var(--text);
-                  transition:border-color 0.15s;"
-           onmouseover="this.style.borderColor='var(--gold)'"
-           onmouseout="this.style.borderColor='var(--border)'">
-          <div>
-            <div style="font-weight:600; color:var(--gold);">{{ c.name }}</div>
-            <div style="font-size:0.82rem; color:var(--muted);">
-              {{ (c.players or [])|length }} player(s)
-            </div>
+      {% for c in my_campaigns %}
+      <a href="/player/campaigns/{{ c.id }}"
+         style="display:flex; align-items:center; justify-content:space-between;
+                padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius);
+                margin-bottom:8px; text-decoration:none; color:var(--text);
+                transition:border-color 0.15s;"
+         onmouseover="this.style.borderColor='var(--gold)'"
+         onmouseout="this.style.borderColor='var(--border)'">
+        <div>
+          <div style="font-weight:600; color:var(--gold);">{{ c.name }}</div>
+          <div style="font-size:0.82rem; color:var(--muted);">
+            {{ (c.players or [])|length }} player(s)
           </div>
-          <span style="font-size:0.78rem; padding:3px 10px; border-radius:12px;
-                background:{{ 'var(--success)' if c.is_active else 'var(--border)' }};
-                color:{{ '#1a1a2e' if c.is_active else 'var(--muted)' }};">
-            {{ 'Active' if c.is_active else 'Inactive' }}
-          </span>
-        </a>
-        {% endfor %}
-      {% else %}
-        <p style="color:var(--muted); font-size:0.88rem;">
-          You haven't joined any campaigns yet. Ask your DM for a join code!
-        </p>
-      {% endif %}
+        </div>
+        <span style="font-size:0.78rem; padding:3px 10px; border-radius:12px;
+              background:{{ 'var(--success)' if c.is_active else 'var(--border)' }};
+              color:{{ '#1a1a2e' if c.is_active else 'var(--muted)' }};">
+          {{ 'Active' if c.is_active else 'Inactive' }}
+        </span>
+      </a>
+      {% endfor %}
     </div>
+    {% endif %}
   </div>
 
 </div>

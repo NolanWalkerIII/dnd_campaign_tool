@@ -29,7 +29,7 @@
       min-height: 100vh;
     }
 
-    /* ── NAV ── */
+    /* ── TOP NAV ── */
     nav {
       background: var(--surface);
       border-bottom: 2px solid var(--gold);
@@ -38,6 +38,9 @@
       align-items: center;
       gap: 2rem;
       height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
     nav .brand {
       font-size: 1.2rem;
@@ -57,7 +60,73 @@
     nav a:hover { background: var(--border); }
     nav .nav-right { margin-left: auto; }
 
-    /* ── LAYOUT ── */
+    /* ── IMPERSONATION BANNER ── */
+    .impersonation-bar {
+      background: #2a1a0e;
+      border-bottom: 2px solid var(--gold);
+      padding: 10px 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.88rem;
+      gap: 1rem;
+    }
+
+    /* ── BODY LAYOUT (sidebar + content) ── */
+    .page-layout {
+      display: flex;
+      min-height: calc(100vh - 56px);
+    }
+
+    /* ── LEFT SIDEBAR ── */
+    .left-nav {
+      width: 200px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 1rem 0;
+      position: sticky;
+      top: 56px;
+      height: calc(100vh - 56px);
+      overflow-y: auto;
+    }
+
+    .left-nav-section {
+      font-size: 0.67rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+      padding: 0.75rem 1rem 0.3rem;
+    }
+
+    .left-nav a {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.875rem;
+      padding: 7px 1rem;
+      margin: 1px 0.4rem;
+      border-radius: var(--radius);
+      transition: background 0.15s, color 0.15s;
+    }
+    .left-nav a:hover { background: var(--border); color: var(--gold); }
+    .left-nav a.active { background: var(--card); color: var(--gold); font-weight: 600; }
+
+    .left-nav hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0.5rem 0.75rem;
+    }
+
+    /* ── MAIN CONTENT ── */
+    .content-wrap {
+      flex: 1;
+      min-width: 0;
+    }
+
     .container {
       max-width: 1100px;
       margin: 0 auto;
@@ -95,18 +164,11 @@
       display: block;
       transition: border-color 0.2s, transform 0.15s;
     }
-    .char-card:hover {
-      border-color: var(--gold);
-      transform: translateY(-2px);
-    }
+    .char-card:hover { border-color: var(--gold); transform: translateY(-2px); }
     .char-card .char-name { font-size: 1.1rem; font-weight: 600; color: var(--gold); }
     .char-card .char-sub  { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
     .char-card .char-stats { display: flex; gap: 1rem; margin-top: 0.75rem; font-size: 0.85rem; }
-    .char-card .stat-pill {
-      background: var(--card);
-      padding: 2px 8px;
-      border-radius: 12px;
-    }
+    .char-card .stat-pill { background: var(--card); padding: 2px 8px; border-radius: 12px; }
 
     /* ── BUTTONS ── */
     .btn {
@@ -123,18 +185,10 @@
     .btn:hover { opacity: 0.85; }
     .btn-primary { background: var(--accent); color: #fff; }
     .btn-gold    { background: var(--gold); color: #1a1a2e; }
-    .btn-outline {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text);
-    }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
 
     /* ── FORMS ── */
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-    }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     .form-group { display: flex; flex-direction: column; gap: 4px; }
     .form-group.full { grid-column: 1 / -1; }
 
@@ -150,10 +204,7 @@
       width: 100%;
       transition: border-color 0.15s;
     }
-    input:focus, select:focus, textarea:focus {
-      outline: none;
-      border-color: var(--gold);
-    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--gold); }
     select option { background: var(--card); }
 
     .form-section {
@@ -164,7 +215,6 @@
     }
     .form-section h2 { margin-bottom: 1rem; }
 
-    /* Skill checkboxes */
     .skills-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -172,73 +222,38 @@
       margin-top: 0.5rem;
     }
     .skill-check {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 5px 8px;
-      border-radius: var(--radius);
-      cursor: pointer;
-      font-size: 0.88rem;
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 8px; border-radius: var(--radius);
+      cursor: pointer; font-size: 0.88rem;
     }
     .skill-check:hover { background: var(--border); }
     .skill-check.locked { opacity: 0.5; cursor: default; }
     .skill-check input[type="checkbox"] { accent-color: var(--gold); width: 15px; height: 15px; }
 
-    /* Ability score assignment */
-    .ability-grid {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 0.75rem;
-    }
+    .ability-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.75rem; }
     .ability-block {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 0.75rem 0.5rem;
-      text-align: center;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 0.75rem 0.5rem; text-align: center;
     }
     .ability-block .ability-name { font-size: 0.75rem; color: var(--muted); letter-spacing: 1px; }
     .ability-block select { text-align: center; padding: 4px 2px; font-size: 1rem; }
     .ability-block .racial-bonus { font-size: 0.75rem; color: var(--success); margin-top: 4px; min-height: 18px; }
-    .ability-block .final-score {
-      font-size: 1.4rem;
-      font-weight: 700;
-      color: var(--gold);
-      margin-top: 4px;
-    }
+    .ability-block .final-score { font-size: 1.4rem; font-weight: 700; color: var(--gold); margin-top: 4px; }
     .ability-block .modifier { font-size: 0.8rem; color: var(--muted); }
 
-    /* Stat badges on sheet */
-    .stat-grid {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 0.75rem;
-      margin-bottom: 1.5rem;
-    }
+    .stat-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.75rem; margin-bottom: 1.5rem; }
     .stat-block {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1rem 0.5rem;
-      text-align: center;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1rem 0.5rem; text-align: center;
     }
     .stat-block .stat-name  { font-size: 0.7rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
     .stat-block .stat-score { font-size: 2rem; font-weight: 700; color: var(--gold); line-height: 1; }
     .stat-block .stat-mod   { font-size: 0.9rem; color: var(--text); margin-top: 2px; }
 
-    .info-row {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-      margin-bottom: 1.5rem;
-    }
+    .info-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
     .info-pill {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 8px 16px;
-      text-align: center;
-      min-width: 90px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 8px 16px; text-align: center; min-width: 90px;
     }
     .info-pill .pill-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
     .info-pill .pill-value { font-size: 1.2rem; font-weight: 700; color: var(--gold); }
@@ -246,45 +261,24 @@
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 
     .skill-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.88rem;
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 0.88rem;
     }
     .skill-row:last-child { border-bottom: none; }
-    .prof-dot {
-      width: 10px; height: 10px;
-      border-radius: 50%;
-      border: 2px solid var(--muted);
-      flex-shrink: 0;
-    }
+    .prof-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--muted); flex-shrink: 0; }
     .prof-dot.filled { background: var(--gold); border-color: var(--gold); }
     .skill-mod { margin-left: auto; color: var(--gold); font-weight: 600; min-width: 32px; text-align: right; }
 
     .equip-list { list-style: none; }
-    .equip-list li {
-      padding: 5px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.9rem;
-    }
+    .equip-list li { padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
     .equip-list li:last-child { border-bottom: none; }
     .equip-list li::before { content: "⚔ "; color: var(--gold); font-size: 0.8rem; }
 
     .trait-list { list-style: none; }
-    .trait-list li {
-      padding: 4px 0;
-      font-size: 0.88rem;
-      color: var(--muted);
-    }
+    .trait-list li { padding: 4px 0; font-size: 0.88rem; color: var(--muted); }
     .trait-list li::before { content: "✦ "; color: var(--accent); }
 
-    .empty-state {
-      text-align: center;
-      padding: 4rem 2rem;
-      color: var(--muted);
-    }
+    .empty-state { text-align: center; padding: 4rem 2rem; color: var(--muted); }
     .empty-state p { margin-bottom: 1.5rem; font-size: 1.1rem; }
 
     .flash { padding: 10px 16px; border-radius: var(--radius); margin-bottom: 1rem; font-size: 0.9rem; }
@@ -292,12 +286,13 @@
     .flash-success { background: #1a3a2a; border: 1px solid var(--success); color: #80ffc0; }
 
     .page-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1.5rem;
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 1.5rem;
     }
 
+    @media (max-width: 900px) {
+      .left-nav { display: none; }
+    }
     @media (max-width: 700px) {
       .ability-grid, .stat-grid { grid-template-columns: repeat(3, 1fr); }
       .form-grid { grid-template-columns: 1fr; }
@@ -306,6 +301,8 @@
   </style>
 </head>
 <body>
+
+  <!-- ── TOP NAV ── -->
   <nav>
     <a class="brand" href="/">⚔ D&D Manager</a>
     {% if current_user %}
@@ -325,35 +322,75 @@
       </span>
     {% else %}
       <span class="nav-right" style="display:flex; gap:0.5rem;">
-        <a href="/login"    class="btn btn-outline"  style="padding:4px 12px;">Login</a>
-        <a href="/register" class="btn btn-primary"  style="padding:4px 12px;">Register</a>
+        <a href="/login"    class="btn btn-outline" style="padding:4px 12px;">Login</a>
+        <a href="/register" class="btn btn-primary" style="padding:4px 12px;">Register</a>
       </span>
     {% endif %}
   </nav>
 
   {% if session.impersonating_username %}
-  <div style="background:#2a1a0e; border-bottom:2px solid var(--gold); padding:8px 2rem;
-              display:flex; align-items:center; justify-content:space-between; font-size:0.88rem;">
+  <div class="impersonation-bar">
     <span>
-      👁 <strong style="color:var(--gold);">DM View:</strong>
-      Viewing campaign as <strong style="color:var(--text);">{{ session.impersonating_username }}</strong>
-      — actions are disabled.
+      👁 <strong style="color:var(--gold);">DM View Mode</strong>
+      — Viewing as <strong style="color:var(--text);">{{ session.impersonating_username }}</strong>.
+      All player actions are <em style="color:var(--accent);">read-only</em>.
     </span>
     <a href="/dm/impersonate/exit"
-       style="color:var(--accent); font-weight:600; text-decoration:none; font-size:0.85rem;">
+       style="color:var(--accent); font-weight:600; text-decoration:none; white-space:nowrap; font-size:0.85rem;">
       ✕ Exit View
     </a>
   </div>
   {% endif %}
 
-  <div class="container">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for category, message in messages %}
-        <div class="flash flash-{{ category }}">{{ message }}</div>
-      {% endfor %}
-    {% endwith %}
+  <div class="page-layout">
 
-    {% block content %}{% endblock %}
+    <!-- ── LEFT NAV SIDEBAR ── -->
+    {% if current_user %}
+    <aside class="left-nav">
+
+      {% if session.role == 'dm' %}
+        <div class="left-nav-section">Campaigns</div>
+        <a href="/dm/dashboard">🏰 DM Dashboard</a>
+
+        <div class="left-nav-section">Characters</div>
+        <a href="/characters">🧙 All Characters</a>
+        <a href="/characters/new">＋ New Character</a>
+
+        <hr>
+        <div class="left-nav-section">Reference</div>
+        <a href="/rules">📖 Rules</a>
+        <a href="/dm/guide">📜 DM Guide</a>
+
+      {% else %}
+        <div class="left-nav-section">Campaigns</div>
+        <a href="/player/dashboard">🎲 My Dashboard</a>
+
+        <div class="left-nav-section">Characters</div>
+        <a href="/characters">🧙 My Characters</a>
+        <a href="/characters/new">＋ New Character</a>
+
+        <hr>
+        <div class="left-nav-section">Reference</div>
+        <a href="/rules">📖 Rules</a>
+
+      {% endif %}
+
+    </aside>
+    {% endif %}
+
+    <!-- ── MAIN CONTENT ── -->
+    <div class="content-wrap">
+      <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+
   </div>
 </body>
 </html>

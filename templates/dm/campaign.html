@@ -77,6 +77,136 @@
   </form>
 </div>
 
+<!-- ══ ONBOARDING CARD (shown until dismissed) ══════════════════════════ -->
+{% if not state.get('onboarding_dismissed') %}
+<div style="background:linear-gradient(135deg,#0f2a1a,#0a1a2e); border:2px solid var(--gold);
+            border-radius:var(--radius); padding:1.25rem 1.5rem; margin-bottom:1.5rem;">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+    <h2 style="margin:0; font-size:1.1rem;">🚀 Getting Started</h2>
+    <form method="POST" action="/dm/campaigns/{{ campaign.id }}/onboarding_dismiss">
+      <button type="submit" class="btn btn-outline"
+              style="padding:3px 10px; font-size:0.78rem; color:var(--muted);">
+        Dismiss ✕
+      </button>
+    </form>
+  </div>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem;">
+    <div style="background:rgba(201,168,76,0.08); border:1px solid var(--gold);
+                border-radius:var(--radius); padding:1rem;">
+      <div style="font-size:1.4rem; margin-bottom:0.4rem;">1️⃣</div>
+      <div style="font-weight:600; color:var(--gold); margin-bottom:0.3rem;">Share the Join Code</div>
+      <div style="font-size:2rem; font-weight:700; letter-spacing:6px; color:var(--text);
+                  font-family:monospace; margin-bottom:0.4rem;">{{ campaign.join_code }}</div>
+      <button onclick="navigator.clipboard.writeText('{{ campaign.join_code }}');this.textContent='Copied!';setTimeout(()=>this.textContent='📋 Copy',1500);"
+              class="btn btn-outline" style="padding:3px 10px; font-size:0.8rem;">
+        📋 Copy
+      </button>
+    </div>
+    <div style="background:rgba(201,168,76,0.04); border:1px solid var(--border);
+                border-radius:var(--radius); padding:1rem;">
+      <div style="font-size:1.4rem; margin-bottom:0.4rem;">2️⃣</div>
+      <div style="font-weight:600; color:var(--gold); margin-bottom:0.3rem;">Players Register & Join</div>
+      <p style="font-size:0.84rem; color:var(--muted); margin:0;">
+        Players open <strong style="color:var(--text);">{{ request.host_url }}</strong>,
+        register an account, then enter the join code on their dashboard.
+      </p>
+    </div>
+    <div style="background:rgba(201,168,76,0.04); border:1px solid var(--border);
+                border-radius:var(--radius); padding:1rem;">
+      <div style="font-size:1.4rem; margin-bottom:0.4rem;">3️⃣</div>
+      <div style="font-weight:600; color:var(--gold); margin-bottom:0.3rem;">Start the Adventure</div>
+      <p style="font-size:0.84rem; color:var(--muted); margin:0;">
+        Once players have joined, write your opening narration below or roll initiative to begin combat.
+      </p>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══ CAMPAIGN INFO PANEL ═══════════════════════════════════════════════ -->
+<div class="card" style="margin-bottom:1.5rem;">
+  <details id="campaign-info-details">
+    <summary style="cursor:pointer; color:var(--gold); font-weight:600; font-size:0.95rem;
+                    user-select:none; padding:2px 0;">
+      📡 Campaign Info &amp; Share
+    </summary>
+    <div style="margin-top:1rem; display:grid; grid-template-columns:1fr auto; gap:1.5rem; align-items:start;">
+      <div>
+        <div style="margin-bottom:0.75rem;">
+          <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                      letter-spacing:0.5px; margin-bottom:4px;">Join URL</div>
+          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            <code id="join-url-text"
+                  style="background:var(--card); border:1px solid var(--border); border-radius:4px;
+                         padding:5px 10px; font-size:0.85rem; color:var(--accent);">
+              {{ request.host_url }}player/dashboard
+            </code>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('join-url-text').textContent.trim());this.textContent='Copied!';setTimeout(()=>this.textContent='📋 Copy URL',1500);"
+                    class="btn btn-outline" style="padding:4px 12px; font-size:0.8rem;">
+              📋 Copy URL
+            </button>
+          </div>
+        </div>
+        <div style="margin-bottom:0.75rem;">
+          <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                      letter-spacing:0.5px; margin-bottom:4px;">Join Code</div>
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <span style="font-size:1.8rem; font-weight:700; letter-spacing:8px;
+                         font-family:monospace; color:var(--gold);">{{ campaign.join_code }}</span>
+            <button onclick="navigator.clipboard.writeText('{{ campaign.join_code }}');this.textContent='Copied!';setTimeout(()=>this.textContent='📋 Copy',1500);"
+                    class="btn btn-outline" style="padding:4px 12px; font-size:0.8rem;">
+              📋 Copy
+            </button>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                      letter-spacing:0.5px; margin-bottom:4px;">Players Joined</div>
+          <span style="font-size:1rem; color:var(--text);">{{ players|length }}</span>
+          <span style="font-size:0.82rem; color:var(--muted); margin-left:4px;">
+            player{{ 's' if players|length != 1 else '' }}
+          </span>
+        </div>
+      </div>
+      <!-- QR Code -->
+      <div style="text-align:center;">
+        <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                    letter-spacing:0.5px; margin-bottom:8px;">Scan to Open</div>
+        <div id="qrcode" style="background:#fff; padding:8px; border-radius:6px; display:inline-block;"></div>
+        <div style="font-size:0.72rem; color:var(--muted); margin-top:4px;">Join page QR</div>
+      </div>
+    </div>
+  </details>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function() {
+  var generated = false;
+  function generateQR() {
+    if (generated) return;
+    var el = document.getElementById('qrcode');
+    if (!el || typeof QRCode === 'undefined') return;
+    generated = true;
+    new QRCode(el, {
+      text: '{{ request.host_url }}player/dashboard',
+      width: 120, height: 120,
+      colorDark: '#000000', colorLight: '#ffffff',
+    });
+  }
+  // Generate when the details panel is opened
+  var details = document.getElementById('campaign-info-details');
+  if (details) {
+    details.addEventListener('toggle', function() {
+      if (details.open) generateQR();
+    });
+  }
+  // Also try on load in case it's already open
+  window.addEventListener('load', function() {
+    if (details && details.open) generateQR();
+  });
+})();
+</script>
+
 <!-- ══ COMBAT SECTION ══════════════════════════════════════════════════════ -->
 <div class="card" style="border-color:{{ 'var(--accent)' if combat_active else 'var(--border)' }};">
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
@@ -315,8 +445,10 @@
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
             <span style="font-weight:600; color:var(--gold);">{{ player.username }}</span>
             <a href="/dm/impersonate/{{ player.id }}/campaign/{{ campaign.id }}"
-               class="btn btn-outline"
-               style="padding:3px 10px; font-size:0.78rem;">👁 View As</a>
+               class="btn btn-gold"
+               style="padding:4px 12px; font-size:0.8rem;" title="View this campaign from {{ player.username }}'s perspective">
+              👁 View As
+            </a>
           </div>
           {% set chars = player_chars.get(player.id, []) %}
           {% if chars %}

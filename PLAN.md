@@ -163,11 +163,72 @@ From the documentation analysis, the essential features to implement:
 
 ---
 
-## Wishlist (Future Consideration)
-*Not prioritized for active development; revisit after Phase 10.*
+## Post-Phase 10 Feature Roadmap
+*Based on feedback collected in `Testing_2.md` after Phase 10 playtesting.*
 
-- **Battle Board Integration**: Add an optional field on the campaign for an external battle board URL (e.g., Owlbear Rodeo). If set, show a "Open Battle Board" button/link that opens it in a new tab for all players. Simple to implement — just a URL field and a link render.
-- **Preloaded Campaigns**: Bundle a full "Lost Mines of Phandelver" (or other OGL-compatible) campaign as an importable `.md` bundle (using the Phase 8 format). Includes all named NPCs, location descriptions, and encounter templates. DMs can load it as a starting point and customize from there.
+### Phase 11: In-App Rules Reference & DM Guide Tabs
+- **Objectives**: Surface the existing Documentation folder as a navigable in-app reference so players and the DM can look up rules without leaving the browser.
+- **Tasks**:
+  1. Add a `/rules` route that renders a reference hub page with tabs (or a sidebar) linking to the key sections: Core Mechanics, Combat, Spellcasting, Conditions, Equipment, Classes, Races, Adventuring.
+  2. Add a `/dm/guide` route (DM-only) that renders the DM Guide and NPC/Encounter template reference.
+  3. Parse the existing `Documentation/*.md` files server-side with Python's `markdown` library and render them as styled HTML within the app's base template.
+  4. Add **Rules** and **DM Guide** links to the nav bar — Rules visible to all logged-in users, DM Guide only to DMs.
+  5. Add a **Quick Reference** card on the player campaign page listing the most common actions (Attack, Dash, Dodge, Help, Hide, Ready, Search, Disengage) with one-line descriptions.
+- **Deliverables**: `/rules` hub page; `/dm/guide` page; nav bar links; Quick Reference card on player campaign page; `markdown` added to `requirements.txt`.
+- **Validation**: All documentation sections render correctly; DM Guide is inaccessible to players; Quick Reference card is visible during a campaign.
+- **Status**: Complete ✓ (markdown library added; /rules and /dm/guide routes with sidebar nav; rules.html template; nav bar links; Quick Reference card on player campaign page)
+
+### Phase 12: Campaign Onboarding & Join Walkthrough
+- **Objectives**: Make it obvious to new DMs and players how to get a session started — eliminate the "where do I go?" confusion.
+- **Tasks**:
+  1. **DM Campaign Onboarding Card**: After a campaign is created (or on first visit with no players joined), show a step-by-step "Getting Started" card on the DM campaign page:
+     - Step 1: Share the join code with your players (display it large with a copy-to-clipboard button).
+     - Step 2: Players go to `http://<your-host>:5001`, register, and enter the code on their dashboard.
+     - Step 3: Once players have joined, click "Start Combat" or write your first narration.
+     - Dismiss button persists the dismissal in `current_state` so it doesn't reappear.
+  2. **Player Join Walkthrough**: On the player dashboard, if the player has no campaigns, show a prominent "Join a Campaign" card with clear instructions and the join code input front and center.
+  3. Add a shareable **Campaign Info** panel on the DM campaign page: hostname/port, join code (large), and QR code (generated client-side via a small JS library) that encodes the join URL.
+- **Deliverables**: DM onboarding card with dismissal; player join walkthrough card; Campaign Info panel with copy button and QR code.
+- **Validation**: A brand-new DM can get players into a session using only the in-app guidance — no external docs needed.
+- **Status**: Complete ✓ (DM onboarding card with dismiss; Campaign Info panel with join URL, large code, QR code via lazy-loaded qrcodejs on `<details>` toggle; player join walkthrough card when no campaigns joined)
+
+### Bug Fixes & Incremental Improvements (Post-Phase 12)
+- **QR code lazy render fix**: QR code in Campaign Info panel was not rendering because qrcodejs initialized against a hidden `<details>` element. Fixed by listening to the `details#campaign-info-details toggle` event and generating the QR code only when the panel is first opened.
+- **xAI API key wiring**: Documented that `docker compose restart` does not re-read `env_file`; must use `docker compose up -d` to recreate the container and inject updated environment variables. `.env` file (gitignored) must be created from `.env.example` before AI features work.
+
+### Phase 13: Sidebar Navigation & DM Impersonation Visibility
+- **Objectives**: Replace the top nav bar with a left sidebar for better layout and discoverability; surface the DM impersonation ("View As") feature directly on the campaign page so it's not hidden behind the "Who's Online" widget.
+- **Feedback source**: Playtest session — users reported a missing/hard-to-find navigation menu and DMs could not find the impersonation toggle.
+- **Tasks**:
+  1. **Sidebar Navigation** — Rework `base.html` to use a fixed left sidebar (~220px) instead of the top `<nav>` bar. Sidebar contains: brand logo, Dashboard, Characters, + Character, 📖 Rules, 📜 DM Guide (DM only), and a bottom-anchored user info + Logout block. Body layout becomes `display:flex` with the sidebar on the left and content area on the right.
+  2. **Mobile collapse** — On narrow screens (<768px) the sidebar collapses to a hamburger icon that toggles a slide-in drawer.
+  3. **DM Impersonation on Campaign Page** — Add "👁 View As" buttons next to each player listed in the Players section of the DM campaign page (not just in "Who's Online" on the dashboard). This makes the feature discoverable regardless of whether the player is currently online.
+  4. **Impersonation banner polish** — Make the amber "DM View" banner more prominent; include the campaign name and a clearer call-to-action.
+- **Deliverables**: Sidebar layout in `base.html`; mobile hamburger toggle; "View As" buttons on DM campaign page; improved impersonation banner.
+- **Validation**: All pages render correctly with sidebar; DM can trigger impersonation from the campaign page; mobile view collapses gracefully.
+- **Status**: Complete ✓ (top nav bar restored; left sidebar added alongside top nav with role-based sections — DM gets Campaigns, Characters, Rules, DM Guide; players get Campaigns, Characters, Rules only; sidebar hidden on <900px screens; "View As" button on DM campaign page styled gold; impersonation banner updated with clearer read-only warning)
+
+### Phase 14: Campaign Progress Tracker & Story Forks
+- **Objectives**: Let the DM track where the party is in a structured campaign and model story branches/forks.
+- **Tasks**:
+  1. **Campaign Progress / Chapter Tracker**: Add a `chapters` list to `current_state`. Each chapter has a title, a description/summary, a status (`upcoming` / `active` / `completed`), and optional notes. DM can add, reorder, mark complete, and add notes to chapters from the campaign page.
+  2. **Progress Panel**: Show a visual chapter timeline on the DM campaign page (and a read-only version for players) so everyone can see where they are in the story. The active chapter is highlighted; completed ones are checked off.
+  3. **Story Forks**: Each chapter can have `branches` — named alternate paths (e.g. "Players follow the merchant" vs "Players investigate the cave"). The DM can create branches, pick the one the party took, and add notes per branch. Unchosen branches are greyed out but preserved so the DM can reference or reuse them.
+  4. **AI-Assisted Chapter Summary**: An optional "Summarise this chapter" button (using xAI Grok) that reads the narration log entries since the chapter started and generates a short summary to pre-fill the chapter notes field.
+- **Deliverables**: Chapter data model in `current_state`; DM chapter management UI; player progress view; story fork UI; AI chapter summary button.
+- **Validation**: DM can create a 3-chapter adventure with a fork at chapter 2; marking chapter 1 complete updates the timeline; choosing a fork greys out the alternate branch.
+- **Status**: Not started
+
+---
+
+## Wishlist (Future Consideration)
+*Not prioritized for active development; revisit after Phase 13.*
+
+- **AI Rules Q&A (RAG over Documentation)**: Index the `Documentation/*.md` files so players and the DM can ask natural-language questions (e.g. "Can I bonus action after an Attack action?") and get answers grounded in the actual rule text via xAI Grok. Would require a vector store or simple BM25 retrieval layer feeding relevant chunks into the Grok context.
+- **D&D Beyond Import**: Allow players to paste a D&D Beyond character URL or upload a PDF export to auto-fill the character creation form. Viability depends on D&D Beyond's API/export format — treat as exploratory research first.
+- **Custom Rules & Homebrew Classes**: Let the DM define custom classes, races, and mechanics per campaign (stored in `current_state` or a separate `campaign_rules` JSON field). The character creation wizard would merge official and homebrew options for that campaign. Complex feature — design a data schema before implementing.
+- **Battle Board Integration**: Add an optional field on the campaign for an external battle board URL (e.g., Owlbear Rodeo). If set, show a "Open Battle Board" button/link that opens it in a new tab for all players.
+- **Preloaded Campaigns**: Bundle a full "Lost Mines of Phandelver" (or other OGL-compatible) campaign as an importable `.md` bundle using the Phase 8 format.
 
 ---
 

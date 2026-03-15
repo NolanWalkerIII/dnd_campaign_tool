@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}{{ active_title }} — D&D Reference{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ '📖 Rules Reference' if section == 'rules' else '📜 DM Guide' }}</h1>
+    <p style="color:var(--muted); font-size:0.9rem;">{{ active_title }}</p>
+  </div>
+  {% if section == 'dm_guide' %}
+  <a href="/rules" class="btn btn-outline" style="font-size:0.85rem;">📖 Player Rules</a>
+  {% else %}
+  {% if session.role == 'dm' %}
+  <a href="/dm/guide" class="btn btn-outline" style="font-size:0.85rem;">📜 DM Guide</a>
+  {% endif %}
+  {% endif %}
+</div>
+
+<div style="display:grid; grid-template-columns:220px 1fr; gap:1.5rem; align-items:start;">
+
+  <!-- ── Sidebar nav ── -->
+  <div class="card" style="padding:0.75rem; position:sticky; top:1rem;">
+    {% set base_url = '/rules' if section == 'rules' else '/dm/guide' %}
+    {% for slug, _, title in docs %}
+    <a href="{{ base_url }}/{{ slug }}"
+       style="display:block; padding:7px 12px; border-radius:var(--radius);
+              text-decoration:none; font-size:0.88rem; margin-bottom:2px;
+              background:{{ 'var(--card)' if slug == active_slug else 'transparent' }};
+              color:{{ 'var(--gold)' if slug == active_slug else 'var(--text)' }};
+              border-left:{{ '3px solid var(--gold)' if slug == active_slug else '3px solid transparent' }};
+              font-weight:{{ '600' if slug == active_slug else '400' }};"
+       onmouseover="if('{{ slug }}'!='{{ active_slug }}') this.style.background='var(--border)'"
+       onmouseout="if('{{ slug }}'!='{{ active_slug }}') this.style.background='transparent'">
+      {{ title }}
+    </a>
+    {% endfor %}
+  </div>
+
+  <!-- ── Content ── -->
+  <div class="card" style="min-width:0;">
+    <div class="doc-content">
+      {{ content_html | safe }}
+    </div>
+  </div>
+
+</div>
+
+<style>
+  /* Markdown content styling */
+  .doc-content h1 { font-size:1.6rem; margin-bottom:1rem; color:var(--gold); }
+  .doc-content h2 { font-size:1.2rem; margin:1.75rem 0 0.75rem; color:var(--gold);
+                    border-bottom:1px solid var(--border); padding-bottom:4px; }
+  .doc-content h3 { font-size:1rem; margin:1.25rem 0 0.5rem; color:var(--text); }
+  .doc-content h4 { font-size:0.95rem; margin:1rem 0 0.4rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
+  .doc-content p  { margin-bottom:0.85rem; line-height:1.75; color:var(--text); font-size:0.93rem; }
+  .doc-content ul, .doc-content ol { margin:0 0 0.85rem 1.4rem; }
+  .doc-content li { margin-bottom:0.35rem; line-height:1.65; font-size:0.93rem; color:var(--text); }
+  .doc-content strong { color:var(--gold); }
+  .doc-content em { color:var(--muted); }
+  .doc-content code {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:3px; padding:1px 6px; font-size:0.85rem;
+    font-family:monospace; color:var(--accent);
+  }
+  .doc-content pre {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:var(--radius); padding:1rem; overflow-x:auto;
+    margin-bottom:1rem;
+  }
+  .doc-content pre code { background:none; border:none; padding:0; color:var(--text); }
+  .doc-content table {
+    width:100%; border-collapse:collapse; margin-bottom:1rem; font-size:0.88rem;
+  }
+  .doc-content th {
+    background:var(--card); color:var(--gold); font-weight:600;
+    padding:8px 12px; text-align:left; border:1px solid var(--border);
+  }
+  .doc-content td {
+    padding:7px 12px; border:1px solid var(--border); color:var(--text);
+    vertical-align:top;
+  }
+  .doc-content tr:nth-child(even) td { background:rgba(255,255,255,0.02); }
+  .doc-content blockquote {
+    border-left:3px solid var(--gold); margin:0 0 1rem;
+    padding:0.5rem 1rem; background:var(--card); border-radius:0 var(--radius) var(--radius) 0;
+  }
+  .doc-content blockquote p { margin:0; color:var(--muted); font-style:italic; }
+  .doc-content hr { border:none; border-top:1px solid var(--border); margin:1.5rem 0; }
+
+  @media (max-width:700px) {
+    div[style*="grid-template-columns:220px"] {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>
+{% endblock %}
