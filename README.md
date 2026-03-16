@@ -157,17 +157,32 @@ Campaign template sections: `## Campaign Info`, `## Opening Narration`, `## NPCs
 - DM types scene narration; it appears in all player views under **Scene**
 - Players see the latest narration prominently, with older entries collapsible
 
+### Navigation
+
+- **Left sidebar** on every page — role-gated: DM sees Campaigns, Characters, Rules, and DM Guide; Players see Campaigns, Characters, and Rules
+- Collapses automatically on screens narrower than 900 px
+
 ### Combat
 
 - **Initiative**: DM rolls for all participants (players + NPCs); order is sorted and displayed
 - **Turn management**: Current turn highlighted with ⚡; players see a banner when it's their turn
+- **Turn guardrails**: Attack and spell-cast actions are blocked server-side when combat is active and it is not the player's turn
 - **Attack rolls**: Roll to-hit against optional target AC; damage dice resolved server-side; crits auto-double dice
+- **Target dropdown**: During combat the attack form shows a dropdown of all combatants in the initiative order; an "Other…" option reveals a free-text field for custom targets
+- **NPC combat interface**: DM can roll attacks on behalf of any NPC directly from the initiative order — pick target, set attack bonus, optional AC, and damage dice; result posts to the combat log
+- **HP bar in header**: Active character HP is always visible at the top of the player campaign page — no scrolling required
 - **Health tracking**: Damage applied to targets; death saves tracked when HP hits 0; conditions (Poisoned, Blinded, etc.) applied by DM
-- **Combat log**: Timestamped log of all actions visible to everyone
+- **Combat log**: Timestamped log of all actions visible to everyone; DM can revert the last entry with one click
+- **Party panel**: Players see all other party members (character name, class/level, HP bar) in the right column
 
 ### Skill Checks
 
 Players can roll any skill check from their campaign page; result is posted to the combat log.
+
+### Dice Roller
+
+- **Dice dropdowns**: Two dropdowns (count 1–6 and die type d4/d6/d8/d10/d12/d20) replace the free-text field for quick common rolls
+- Free-text expressions still accepted anywhere: `1d20`, `2d6+3`, `d8`, `4d6kh3`, etc.
 
 ### Spellcasting
 
@@ -180,9 +195,22 @@ Players can roll any skill check from their campaign page; result is posted to t
 - **Short Rest**: Spend hit dice to recover HP (rolls hit die + CON modifier per die)
 - **Long Rest**: Fully restores HP, resets all spell slots and hit dice
 
-### Free Dice Rolls
+### AI Features (xAI Grok)
 
-Any dice expression accepted at any time: `1d20`, `2d6+3`, `d8`, `4d6kh3`, etc.
+Requires `XAI_API_KEY` in `.env`. All keys are loaded from environment variables — never committed to source control.
+
+- **✨ Clean Up narration** — refines the DM's raw narration text for grammar, atmosphere, and flow
+- **🎲 Generate narration** — writes a new scene continuation based on the last 5 narration entries
+- **AI Chapter Summary** — generates a vivid 2–4 sentence chapter recap using notes and recent combat log entries
+
+### Story Progress & Chapter Tracker
+
+- **Chapter timeline** — DM adds chapters with a title, description, and status (`Upcoming` / `Active` / `Completed`)
+- **Status controls** — one-click buttons to set a chapter active, mark it complete, or reset it; only one chapter can be active at a time
+- **DM Notes** — per-chapter notes panel (collapsible) for clues, reminders, and session prep
+- **Story Forks** — each chapter can hold multiple named branches (e.g. "Follow the merchant" vs "Investigate the cave"); DM picks the one the party took, unchosen paths are preserved
+- **AI Chapter Summary** — "✨ AI Summary" button generates a vivid 2–4 sentence recap using xAI Grok, reading the chapter notes and recent combat log for context; saved to the chapter and visible to players
+- **Player view** — read-only progress timeline on the player campaign page shows chapter status, active fork, and any AI-generated summaries
 
 ---
 
@@ -193,8 +221,15 @@ Any dice expression accepted at any time: `1d20`, `2d6+3`, `d8`, `4d6kh3`, etc.
 ├── app.py                  # Flask application, routes, game logic
 ├── models.py               # SQLAlchemy models (User, Character, Campaign)
 ├── parsers.py              # Markdown parsers + template strings for import/export
+├── api_routes.py           # REST API Blueprint (27 endpoints, Bearer token auth)
+├── sms_routes.py           # Twilio SMS play-by-text Blueprint
+├── game_data.py            # Races, classes, backgrounds, spell slot tables
 ├── services/
-│   └── ai.py               # xAI Grok API wrapper (narration cleanup + generation)
+│   ├── ai.py               # xAI Grok API wrapper (narration, generation, chapter summary)
+│   ├── ai_dm.py            # AI DM engine layer
+│   ├── engine.py           # Pure-function game logic (extracted from routes)
+│   ├── discord_bot.py      # Discord bot with slash commands + SMS bridge
+│   └── sms.py              # Twilio SMS helpers
 ├── seed.py                 # Sample data for demo/playtesting
 ├── tests/
 │   └── test_suite.py       # 38-test automated test suite
@@ -202,10 +237,12 @@ Any dice expression accepted at any time: `1d20`, `2d6+3`, `d8`, `4d6kh3`, etc.
 ├── Dockerfile
 ├── docker-compose.yml
 ├── DOCKER.md               # Docker operations reference
+├── PLAN.md                 # Full project plan and phase history
+├── Feedback/               # Beta playtest feedback files
 ├── instance/
 │   └── dnd.db              # SQLite database (created at runtime)
 ├── templates/
-│   ├── base.html
+│   ├── base.html           # Shared layout: top nav + left sidebar
 │   ├── index.html
 │   ├── login.html
 │   ├── register.html
@@ -219,21 +256,7 @@ Any dice expression accepted at any time: `1d20`, `2d6+3`, `d8`, `4d6kh3`, etc.
 │       ├── dashboard.html
 │       └── campaign.html
 └── Documentation/          # D&D 5e reference docs used during development
-    ├── 00_INDEX.md
-    ├── 01_CORE_MECHANICS.md
-    ├── 02_CHARACTER_CREATION.md
-    ├── 03_CLASSES_REFERENCE.md
-    ├── 04_RACES_REFERENCE.md
-    ├── 05_COMBAT.md
-    ├── 06_SPELLCASTING.md
-    ├── 07_SPELLS_REFERENCE.md
-    ├── 08_CONDITIONS.md
-    ├── 09_EQUIPMENT.md
-    ├── 10_ADVENTURING.md
-    ├── 11_MONSTER_GUIDE.md
-    ├── 12_MAGIC_ITEMS.md
-    ├── 13_DM_GUIDE.md
-    └── 14_CAMPAIGN_TEMPLATE.md
+    └── *.md
 ```
 
 ---
@@ -256,8 +279,35 @@ Any dice expression accepted at any time: `1d20`, `2d6+3`, `d8`, `4d6kh3`, etc.
 | `/dm/characters/<id>/assign` | DM | Reassign character ownership to a different user |
 | `/dm/impersonate/<uid>/campaign/<id>` | DM | Enter read-only player view for a campaign |
 | `/dm/impersonate/exit` | DM | Exit impersonation and return to DM view |
+| `/dm/campaigns/<id>/chapter/add` | DM | Add a chapter to the story tracker |
+| `/dm/campaigns/<id>/chapter/<idx>/status` | DM | Set chapter status (upcoming/active/completed) |
+| `/dm/campaigns/<id>/chapter/<idx>/notes` | DM | Save DM notes for a chapter |
+| `/dm/campaigns/<id>/chapter/<idx>/delete` | DM | Delete a chapter |
+| `/dm/campaigns/<id>/chapter/<idx>/fork/add` | DM | Add a story fork to a chapter |
+| `/dm/campaigns/<id>/chapter/<idx>/fork/<i>/choose` | DM | Choose the active story fork |
+| `/dm/campaigns/<id>/chapter/<idx>/summarize` | DM | AI-generate a chapter summary (JSON) |
+| `/dm/campaigns/<id>/combat/log/revert` | DM | Remove the last combat log entry |
+| `/dm/campaigns/<id>/npc/<idx>/attack` | DM | Roll an attack for an NPC combatant |
 | `/player/dashboard` | Player | See joined campaigns, manage characters |
 | `/player/campaigns/<id>` | Player | Play in campaign (roll, attack, cast, skill check) |
+
+---
+
+## Community Contributions
+
+| Contributor | GitHub | Contribution |
+|-------------|--------|-------------|
+| BonzaiForest | [@JBEST2015](https://github.com/JBEST2015) | REST API layer (27 endpoints), Discord bot with slash commands, Twilio SMS play-by-text, AI DM engine, DM Settings page, Diagnostics page |
+
+---
+
+## Beta Playtesters
+
+Thank you to the adventurers who joined the first beta session and provided invaluable feedback:
+
+**Donut · Radster · Rolenquin · Tiodis**
+
+Their playtest feedback directly shaped Phase 16 (combat UX improvements, party visibility, turn guardrails, and more).
 
 ---
 

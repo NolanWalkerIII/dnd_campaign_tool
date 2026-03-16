@@ -587,6 +587,48 @@
           </form>
         </div>
       </details>
+
+      <!-- NPC Attack (DM rolls for NPC) -->
+      {% if entry.is_npc %}
+      <details style="margin-top:6px; margin-left:30px;">
+        <summary style="cursor:pointer; font-size:0.78rem; color:var(--accent); font-weight:600;
+                        user-select:none;">
+          ⚔ Roll Attack for {{ entry.name }}
+        </summary>
+        <form method="POST" action="/dm/campaigns/{{ campaign.id }}/npc/{{ loop.index0 }}/attack"
+              style="display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end; margin-top:6px;">
+          <div class="form-group" style="min-width:100px;">
+            <label style="font-size:0.75rem;">Target</label>
+            <select name="target" style="padding:3px 6px; font-size:0.8rem;">
+              {% for e2 in order %}
+              {% if not e2.is_npc %}
+              <option value="{{ e2.name }}">{{ e2.name }}</option>
+              {% endif %}
+              {% endfor %}
+              <option value="Party">Party (generic)</option>
+            </select>
+          </div>
+          <div class="form-group" style="width:70px;">
+            <label style="font-size:0.75rem;">Atk Bonus</label>
+            <input type="number" name="atk_bonus" value="0" style="width:65px; padding:3px 6px; font-size:0.8rem;">
+          </div>
+          <div class="form-group" style="width:80px;">
+            <label style="font-size:0.75rem;">Target AC</label>
+            <input type="number" name="target_ac" placeholder="opt" style="width:65px; padding:3px 6px; font-size:0.8rem;">
+          </div>
+          <div class="form-group" style="min-width:80px;">
+            <label style="font-size:0.75rem;">Damage Dice</label>
+            <input type="text" name="damage_dice" placeholder="e.g. 1d6"
+                   style="width:70px; padding:3px 6px; font-size:0.8rem; font-family:monospace;">
+          </div>
+          <button type="submit" class="btn btn-outline"
+                  style="padding:3px 10px; font-size:0.78rem; color:var(--accent); white-space:nowrap;">
+            Roll
+          </button>
+        </form>
+      </details>
+      {% endif %}
+
     </div>
     {% endfor %}
   </div>
@@ -651,7 +693,16 @@
     <!-- Combat Log -->
     {% if combat_log %}
     <div class="card">
-      <h2>Combat Log</h2>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+        <h2 style="margin:0;">Combat Log</h2>
+        <form method="POST" action="/dm/campaigns/{{ campaign.id }}/combat/log/revert"
+              onsubmit="return confirm('Remove the last combat log entry?');" style="margin:0;">
+          <button type="submit" class="btn btn-outline"
+                  style="padding:3px 10px; font-size:0.78rem; color:var(--accent);">
+            ↩ Revert Last
+          </button>
+        </form>
+      </div>
       <div style="max-height:300px; overflow-y:auto;">
         {% for entry in combat_log | reverse %}
         <div style="padding:5px 0; border-bottom:1px solid var(--border); font-size:0.83rem;">
@@ -790,6 +841,172 @@
     </div>
     {% endif %}
 
+    <!-- ── CHAPTER TRACKER ── -->
+    {% set chapters = state.get('chapters', []) %}
+    <div class="card" style="border-color:var(--gold);">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+        <h2 style="margin:0; color:var(--gold);">📖 Story Progress</h2>
+        <span style="font-size:0.78rem; color:var(--muted);">
+          {{ chapters|selectattr('status','eq','completed')|list|length }}/{{ chapters|length }} chapters
+        </span>
+      </div>
+
+      <!-- Chapter Timeline -->
+      {% if chapters %}
+      <div style="margin-bottom:1.25rem;">
+        {% for ch in chapters %}
+        {% set ch_idx = loop.index0 %}
+        {% set status_color = 'var(--success)' if ch.status == 'completed' else ('var(--gold)' if ch.status == 'active' else 'var(--border)') %}
+        {% set status_icon = '✓' if ch.status == 'completed' else ('⚡' if ch.status == 'active' else '○') %}
+        <div style="border:1px solid {{ status_color }}; border-radius:var(--radius);
+                    padding:10px 12px; margin-bottom:8px;
+                    background:{{ 'rgba(201,168,76,0.06)' if ch.status == 'active' else 'transparent' }};">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="color:{{ status_color }}; font-size:1rem; font-weight:700;">{{ status_icon }}</span>
+              <span style="font-weight:600; color:var(--text);">{{ ch.title }}</span>
+              <span style="font-size:0.72rem; padding:2px 7px; border-radius:10px;
+                           background:{{ status_color }}; color:{{ '#1a1a2e' if ch.status != 'upcoming' else 'var(--muted)' }};
+                           font-weight:600;">{{ ch.status|title }}</span>
+            </div>
+            <div style="display:flex; gap:4px;">
+              <!-- Status controls -->
+              {% if ch.status != 'active' %}
+              <form method="POST" action="/dm/campaigns/{{ campaign.id }}/chapter/{{ ch_idx }}/status" style="margin:0;">
+                <input type="hidden" name="status" value="active">
+                <button type="submit" class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem;"
+                        title="Set as active chapter">▶</button>
+              </form>
+              {% endif %}
+              {% if ch.status != 'completed' %}
+              <form method="POST" action="/dm/campaigns/{{ campaign.id }}/chapter/{{ ch_idx }}/status" style="margin:0;">
+                <input type="hidden" name="status" value="completed">
+                <button type="submit" class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:var(--success);"
+                        title="Mark completed">✓</button>
+              </form>
+              {% endif %}
+              {% if ch.status != 'upcoming' %}
+              <form method="POST" action="/dm/campaigns/{{ campaign.id }}/chapter/{{ ch_idx }}/status" style="margin:0;">
+                <input type="hidden" name="status" value="upcoming">
+                <button type="submit" class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem;"
+                        title="Reset to upcoming">↩</button>
+              </form>
+              {% endif %}
+              <form method="POST" action="/dm/campaigns/{{ campaign.id }}/chapter/{{ ch_idx }}/delete" style="margin:0;"
+                    onsubmit="return confirm('Delete chapter \'{{ ch.title }}\'?');">
+                <button type="submit" class="btn btn-outline" style="padding:2px 8px; font-size:0.72rem; color:var(--accent);"
+                        title="Delete chapter">✕</button>
+              </form>
+            </div>
+          </div>
+
+          {% if ch.description %}
+          <p style="font-size:0.82rem; color:var(--muted); margin:0 0 6px 24px;">{{ ch.description }}</p>
+          {% endif %}
+
+          <!-- Active-branch label -->
+          {% if ch.branches %}
+          {% set ab = ch.active_branch %}
+          <div style="font-size:0.78rem; margin:0 0 6px 24px;">
+            <span style="color:var(--muted);">Path: </span>
+            {% if ab is not none and ab < ch.branches|length %}
+            <span style="color:var(--gold); font-weight:600;">⬡ {{ ch.branches[ab].name }}</span>
+            {% else %}
+            <span style="color:var(--muted); font-style:italic;">None chosen</span>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          <!-- AI Summary display -->
+          {% if ch.summary %}
+          <div id="ch-summary-{{ ch_idx }}" style="font-size:0.82rem; color:var(--muted); font-style:italic;
+                      border-left:2px solid var(--gold); padding-left:8px; margin:6px 0 6px 24px;">
+            {{ ch.summary }}
+          </div>
+          {% else %}
+          <div id="ch-summary-{{ ch_idx }}" style="display:none; font-size:0.82rem; color:var(--muted);
+                      font-style:italic; border-left:2px solid var(--gold); padding-left:8px;
+                      margin:6px 0 6px 24px;"></div>
+          {% endif %}
+
+          <!-- Expand for notes / forks -->
+          <details style="margin-top:4px;">
+            <summary style="cursor:pointer; font-size:0.78rem; color:var(--muted); user-select:none;
+                            margin-left:24px;">Details &amp; Forks ▾</summary>
+            <div style="margin-top:8px; margin-left:24px;">
+
+              <!-- Notes -->
+              <form method="POST" action="/dm/campaigns/{{ campaign.id }}/chapter/{{ ch_idx }}/notes"
+                    style="margin-bottom:8px;">
+                <div style="font-size:0.75rem; color:var(--muted); margin-bottom:3px;">DM Notes</div>
+                <textarea name="notes" rows="2" style="font-size:0.82rem; resize:vertical; width:100%;"
+                          placeholder="Session notes, clues, reminders…">{{ ch.notes }}</textarea>
+                <div style="display:flex; gap:6px; align-items:center; margin-top:4px; flex-wrap:wrap;">
+                  <button type="submit" class="btn btn-outline"
+                          style="padding:3px 10px; font-size:0.78rem;">Save Notes</button>
+                  <button type="button" class="btn btn-outline"
+                          style="padding:3px 10px; font-size:0.78rem;"
+                          data-summarize-idx="{{ ch_idx }}"
+                          title="Ask AI to summarize this chapter">✨ AI Summary</button>
+                  <span class="ch-ai-status" data-idx="{{ ch_idx }}"
+                        style="font-size:0.75rem; color:var(--muted); display:none;"></span>
+                </div>
+              </form>
+
+              <!-- Story Forks -->
+              <div style="margin-bottom:8px;">
+                <div style="font-size:0.75rem; color:var(--muted); margin-bottom:4px;">Story Forks</div>
+                {% if ch.branches %}
+                <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px;">
+                  {% for br in ch.branches %}
+                  {% set br_idx = loop.index0 %}
+                  <form method="POST" action="/dm/campaigns/{{ campaign.id }}/chapter/{{ ch_idx }}/fork/{{ br_idx }}/choose"
+                        style="margin:0;" title="{{ br.description }}">
+                    <button type="submit" class="btn {{ 'btn-gold' if ch.active_branch == br_idx else 'btn-outline' }}"
+                            style="padding:3px 10px; font-size:0.78rem;">
+                      {{ '⬡ ' if ch.active_branch == br_idx else '○ ' }}{{ br.name }}
+                    </button>
+                  </form>
+                  {% endfor %}
+                </div>
+                {% else %}
+                <p style="font-size:0.78rem; color:var(--muted); margin:0 0 6px;">No forks yet.</p>
+                {% endif %}
+                <!-- Add fork -->
+                <form method="POST" action="/dm/campaigns/{{ campaign.id }}/chapter/{{ ch_idx }}/fork/add"
+                      style="display:flex; gap:5px; flex-wrap:wrap;">
+                  <input type="text" name="fork_name" placeholder="Fork name…"
+                         style="flex:1; min-width:100px; padding:4px 8px; font-size:0.8rem;">
+                  <input type="text" name="fork_desc" placeholder="Description (opt)"
+                         style="flex:2; min-width:120px; padding:4px 8px; font-size:0.8rem;">
+                  <button type="submit" class="btn btn-outline"
+                          style="padding:3px 10px; font-size:0.78rem;">+ Fork</button>
+                </form>
+              </div>
+
+            </div>
+          </details>
+
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="font-size:0.85rem; color:var(--muted); margin-bottom:1rem;">No chapters yet. Add your first below.</p>
+      {% endif %}
+
+      <!-- Add new chapter -->
+      <form method="POST" action="/dm/campaigns/{{ campaign.id }}/chapter/add">
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <input type="text" name="title" placeholder="Chapter title…" required
+                 style="flex:2; min-width:120px; padding:5px 8px; font-size:0.85rem;">
+          <input type="text" name="description" placeholder="Short description (opt)"
+                 style="flex:3; min-width:140px; padding:5px 8px; font-size:0.85rem;">
+          <button type="submit" class="btn btn-gold"
+                  style="padding:5px 14px; font-size:0.85rem; white-space:nowrap;">+ Add Chapter</button>
+        </div>
+      </form>
+    </div>
+
   </div>
 
 </div>
@@ -847,5 +1064,34 @@
     aiRequest('/dm/campaigns/{{ campaign.id }}/ai/generate', {});
   });
 })();
+
+// Chapter AI Summary buttons
+document.querySelectorAll('[data-summarize-idx]').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var idx = btn.getAttribute('data-summarize-idx');
+    var statusEl = document.querySelector('.ch-ai-status[data-idx="' + idx + '"]');
+    var summaryEl = document.getElementById('ch-summary-' + idx);
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    if (statusEl) { statusEl.textContent = 'Asking Grok…'; statusEl.style.display = 'inline'; }
+    fetch('/dm/campaigns/{{ campaign.id }}/chapter/' + idx + '/summarize', { method: 'POST' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) {
+          if (statusEl) { statusEl.textContent = data.error; statusEl.style.color = 'var(--accent)'; }
+        } else {
+          if (summaryEl) { summaryEl.textContent = data.text; summaryEl.style.display = 'block'; }
+          if (statusEl) { statusEl.textContent = 'Summary saved.'; statusEl.style.color = 'var(--muted)'; }
+        }
+      })
+      .catch(function() {
+        if (statusEl) { statusEl.textContent = 'Network error.'; statusEl.style.color = 'var(--accent)'; }
+      })
+      .finally(function() {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      });
+  });
+});
 </script>
 {% endblock %}

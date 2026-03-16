@@ -24,6 +24,22 @@
       &nbsp;·&nbsp; <span style="color:var(--accent); font-weight:600;">⚔ Round {{ round_num }}</span>
       {% endif %}
     </p>
+    <!-- Active character HP — always visible in header -->
+    {% if active_char %}
+    {% set hp_pct = [(active_char.hp_current / active_char.hp_max * 100)|int, 0]|max if active_char.hp_max else 0 %}
+    {% set hp_col = 'var(--success)' if hp_pct > 50 else ('var(--gold)' if hp_pct > 25 else 'var(--accent)') %}
+    <div style="display:flex; align-items:center; gap:8px; margin-top:6px; max-width:320px;">
+      <span style="font-size:0.78rem; color:var(--muted); white-space:nowrap;">
+        {{ active_char.name }}
+      </span>
+      <div style="flex:1; background:var(--border); border-radius:4px; height:7px; overflow:hidden;">
+        <div style="width:{{ hp_pct }}%; background:{{ hp_col }}; height:100%;"></div>
+      </div>
+      <span style="font-size:0.78rem; color:{{ hp_col }}; white-space:nowrap; font-weight:600;">
+        {{ active_char.hp_current }}/{{ active_char.hp_max }} HP
+      </span>
+    </div>
+    {% endif %}
   </div>
   <a href="/player/dashboard" class="btn btn-outline">← Dashboard</a>
 </div>
@@ -133,11 +149,22 @@
           🎲 Roll Dice
         </summary>
         <form method="POST" action="/player/campaigns/{{ campaign.id }}/roll"
-              style="display:flex; gap:0.5rem; align-items:flex-end;">
-          <div class="form-group" style="flex:1;">
-            <label>Dice expression</label>
-            <input type="text" name="dice" value="1d20" placeholder="1d20, 2d6+3, d8…"
-                   style="font-family:monospace;">
+              id="dice-roll-form"
+              style="display:flex; gap:0.5rem; align-items:flex-end; flex-wrap:wrap;">
+          <input type="hidden" name="dice" id="dice-expr" value="1d20">
+          <div class="form-group" style="min-width:60px;">
+            <label>Count</label>
+            <select id="dice-count" style="width:60px;">
+              {% for n in range(1,7) %}<option value="{{ n }}" {{ 'selected' if n==1 }}>{{ n }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="form-group" style="min-width:80px;">
+            <label>Die</label>
+            <select id="dice-type" style="width:80px;">
+              {% for d in ['d4','d6','d8','d10','d12','d20'] %}
+              <option value="{{ d }}" {{ 'selected' if d=='d20' }}>{{ d }}</option>
+              {% endfor %}
+            </select>
           </div>
           <button type="submit" class="btn btn-gold" style="padding:8px 16px;">Roll</button>
         </form>
@@ -178,8 +205,22 @@
         <form method="POST" action="/player/campaigns/{{ campaign.id }}/attack">
           <div class="form-grid" style="gap:0.5rem; margin-bottom:0.75rem;">
             <div class="form-group">
-              <label>Target name</label>
+              <label>Target</label>
+              {% if combat_active and order %}
+              <select name="target" id="target-select" onchange="document.getElementById('target-custom').style.display=this.value==='__other__'?'block':'none';">
+                {% for entry in order %}
+                {% if entry.get('user_id') != view_uid %}
+                <option value="{{ entry.name }}">{{ entry.name }}{% if entry.is_npc %} (NPC){% else %} (PC){% endif %}</option>
+                {% endif %}
+                {% endfor %}
+                <option value="__other__">Other…</option>
+              </select>
+              <input type="text" id="target-custom" name="target_custom"
+                     placeholder="Custom target name"
+                     style="display:none; margin-top:4px;">
+              {% else %}
               <input type="text" name="target" placeholder="e.g. Goblin">
+              {% endif %}
             </div>
             <div class="form-group">
               <label>Target AC (optional)</label>
@@ -292,6 +333,78 @@
       {% endif %}
     </div>
 
+    <!-- Party Panel -->
+    {% if party_members %}
+    <div class="card">
+      <h2>Party</h2>
+      {% for member in party_members %}
+      {% set char = member.char %}
+      <div style="display:flex; align-items:center; justify-content:space-between;
+                  padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius);
+                  margin-bottom:6px;">
+        <div>
+          <span style="font-weight:600; color:var(--gold);">{{ member.user.username }}</span>
+          {% if char %}
+          <span style="font-size:0.8rem; color:var(--muted); margin-left:6px;">
+            {{ char.name }} · Lv{{ char.level }} {{ char.race }} {{ char.class_name }}
+          </span>
+          {% endif %}
+        </div>
+        {% if char %}
+        {% set pct = [(char.hp_current / char.hp_max * 100)|int, 0]|max if char.hp_max else 0 %}
+        {% set bar_col = 'var(--success)' if pct > 50 else ('var(--gold)' if pct > 25 else 'var(--accent)') %}
+        <div style="display:flex; align-items:center; gap:6px; min-width:120px;">
+          <div style="flex:1; background:var(--border); border-radius:4px; height:6px; overflow:hidden;">
+            <div style="width:{{ pct }}%; background:{{ bar_col }}; height:100%;"></div>
+          </div>
+          <span style="font-size:0.75rem; color:{{ bar_col }}; white-space:nowrap;">
+            {{ char.hp_current }}/{{ char.hp_max }}
+          </span>
+        </div>
+        {% else %}
+        <span style="font-size:0.78rem; color:var(--muted);">No character</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Story Progress (read-only) -->
+    {% set chapters = state.get('chapters', []) %}
+    {% if chapters %}
+    <div class="card">
+      <h2 style="color:var(--gold);">📖 Story Progress</h2>
+      <div>
+        {% for ch in chapters %}
+        {% set status_color = 'var(--success)' if ch.status == 'completed' else ('var(--gold)' if ch.status == 'active' else 'var(--border)') %}
+        {% set status_icon  = '✓' if ch.status == 'completed' else ('⚡' if ch.status == 'active' else '○') %}
+        <div style="display:flex; gap:10px; align-items:flex-start; padding:8px 0;
+                    border-bottom:1px solid var(--border);">
+          <span style="font-size:1rem; color:{{ status_color }}; font-weight:700; flex-shrink:0;">{{ status_icon }}</span>
+          <div style="flex:1;">
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+              <span style="font-weight:600; color:{{ 'var(--text)' if ch.status != 'upcoming' else 'var(--muted)' }};">{{ ch.title }}</span>
+              <span style="font-size:0.7rem; padding:1px 6px; border-radius:8px;
+                           background:{{ status_color }}; color:{{ '#1a1a2e' if ch.status != 'upcoming' else 'var(--muted)' }};
+                           font-weight:600;">{{ ch.status|title }}</span>
+              {% if ch.active_branch is not none and ch.branches and ch.active_branch < ch.branches|length %}
+              <span style="font-size:0.75rem; color:var(--gold);">⬡ {{ ch.branches[ch.active_branch].name }}</span>
+              {% endif %}
+            </div>
+            {% if ch.description %}
+            <p style="font-size:0.8rem; color:var(--muted); margin:2px 0 0;">{{ ch.description }}</p>
+            {% endif %}
+            {% if ch.summary %}
+            <p style="font-size:0.8rem; color:var(--muted); font-style:italic; margin:4px 0 0;
+                      border-left:2px solid var(--gold); padding-left:6px;">{{ ch.summary }}</p>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Quick Reference -->
     <div class="card">
       <details>
@@ -328,6 +441,37 @@
 </div>
 
 <script>
+// Dice dropdowns: assemble expression before submit
+(function() {
+  var form = document.getElementById('dice-roll-form');
+  if (!form) return;
+  function updateExpr() {
+    var count = document.getElementById('dice-count').value;
+    var type  = document.getElementById('dice-type').value;
+    document.getElementById('dice-expr').value = count + type;
+  }
+  document.getElementById('dice-count').addEventListener('change', updateExpr);
+  document.getElementById('dice-type').addEventListener('change', updateExpr);
+  form.addEventListener('submit', function() { updateExpr(); });
+  updateExpr();
+})();
+
+// Target dropdown: use custom text if "Other…" selected
+(function() {
+  var sel = document.getElementById('target-select');
+  if (!sel) return;
+  sel.form && sel.form.addEventListener('submit', function(e) {
+    if (sel.value === '__other__') {
+      var custom = document.getElementById('target-custom').value.trim();
+      if (!custom) { e.preventDefault(); alert('Enter a custom target name.'); return; }
+      sel.name = '';
+      document.getElementById('target-custom').name = 'target';
+    } else {
+      document.getElementById('target-custom').name = '';
+    }
+  });
+})();
+
 // Pause auto-refresh while user is interacting with a form
 let refreshTimer;
 function scheduleRefresh() {

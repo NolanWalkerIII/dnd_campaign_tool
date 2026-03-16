@@ -1044,6 +1044,14 @@ def player_campaign_detail(campaign_id):
     active_char = _get_player_active_char(campaign_id)
     active_slots = (active_char.spells or {}).get('slots', {}) if active_char else {}
 
+    # Build party list: other players + their most recent character
+    player_ids = campaign.players or []
+    other_players = User.query.filter(User.id.in_(player_ids), User.id != uid).all() if player_ids else []
+    party_members = []
+    for p in other_players:
+        char = Character.query.filter_by(user_id=p.id).order_by(Character.id.desc()).first()
+        party_members.append({'user': p, 'char': char})
+
     return render_template('player/campaign.html',
                            campaign=campaign,
                            dm=dm,
@@ -1051,6 +1059,8 @@ def player_campaign_detail(campaign_id):
                            narration_log=narration_log,
                            skills_sorted=sorted(SKILLS.keys()),
                            active_slots=active_slots,
+                           active_char=active_char,
+                           party_members=party_members,
                            view_uid=uid)
 
 
@@ -1141,6 +1151,12 @@ def player_cast_spell(campaign_id):
     char = _get_player_active_char(campaign_id)
     if not char:
         flash('No character found.', 'error')
+        return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
+    # Turn guardrail: block casting when combat is active and it's not the player's turn
+    _cast_state = campaign.current_state or {}
+    if _cast_state.get('combat_active') and not _is_players_turn(campaign):
+        flash("It's not your turn! Wait for your initiative slot.", 'error')
         return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
 
     try:
@@ -1586,6 +1602,82 @@ def dm_set_condition(campaign_id):
     return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
 
 
+@app.route('/dm/campaigns/<int:campaign_id>/combat/log/revert', methods=['POST'])
+@dm_required
+def dm_combat_log_revert(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    state = campaign.current_state or {}
+    log = state.get('combat_log', [])
+    if log:
+        removed = log.pop()
+        state['combat_log'] = log
+        campaign.current_state = state
+        _save_state(campaign)
+        flash(f'Reverted: "{removed.get("actor","?")} — {removed.get("text","")[:60]}"', 'success')
+    else:
+        flash('Combat log is already empty.', 'error')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/npc/<int:order_idx>/attack', methods=['POST'])
+@dm_required
+def dm_npc_attack(campaign_id, order_idx):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    state = campaign.current_state or {}
+    order = state.get('initiative_order', [])
+    if order_idx < 0 or order_idx >= len(order) or not order[order_idx].get('is_npc'):
+        flash('NPC not found.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+    npc = order[order_idx]
+    target_name = request.form.get('target', 'target').strip() or 'target'
+    try:
+        atk_bonus = int(request.form.get('atk_bonus', '0') or '0')
+    except ValueError:
+        atk_bonus = 0
+    damage_dice = request.form.get('damage_dice', '').strip()
+    try:
+        target_ac = int(request.form.get('target_ac', '')) if request.form.get('target_ac') else None
+    except (ValueError, TypeError):
+        target_ac = None
+
+    atk_total, rolls, is_crit = DiceRoller.roll('1d20', modifier=atk_bonus)
+    crit_tag = ' — CRITICAL HIT!' if is_crit else ''
+    hit_tag = ''
+    if target_ac is not None:
+        hit_tag = ' — HIT!' if atk_total >= target_ac else ' — MISS!'
+    atk_text = (f'attacks {target_name}: d20({rolls[0]})'
+                f'{mod_str(atk_bonus)} = {atk_total}{hit_tag}{crit_tag}')
+
+    dmg_text = ''
+    if damage_dice and (hit_tag == ' — HIT!' or target_ac is None or is_crit):
+        try:
+            dice_str = damage_dice
+            if is_crit:
+                m = _re.match(r'^(\d+)d(\d+)([+-]\d+)?$', damage_dice.lower().strip())
+                if m:
+                    dice_str = f'{int(m.group(1))*2}d{m.group(2)}'
+                    if m.group(3):
+                        dice_str += m.group(3)
+            total_dmg, label, _, _, _ = DiceRoller.parse_and_roll(dice_str)
+            crit_label = ' (crit — doubled dice!)' if is_crit else ''
+            dmg_text = f'  Damage: {label} = {total_dmg}{crit_label}'
+        except ValueError:
+            dmg_text = '  (invalid damage dice)'
+
+    full_text = atk_text + (f'\n{dmg_text}' if dmg_text else '')
+    _add_combat_log(campaign, npc['name'], full_text, 'attack')
+    _save_state(campaign)
+    flash(f'{npc["name"]} attacks: {atk_total}{hit_tag}{crit_tag}', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
 # ── Player action routes ──────────────────────────────────────────────────────
 
 def _effective_uid():
@@ -1712,6 +1804,12 @@ def player_attack(campaign_id):
         flash('No character found.', 'error')
         return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
 
+    # Turn guardrail: block attacks when combat is active and it's not the player's turn
+    _state = campaign.current_state or {}
+    if _state.get('combat_active') and not _is_players_turn(campaign):
+        flash("It's not your turn! Wait for your initiative slot.", 'error')
+        return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
     target_name = request.form.get('target', 'target').strip() or 'target'
     ability     = request.form.get('ability', 'STR')
     damage_dice = request.form.get('damage_dice', '').strip()
@@ -1785,7 +1883,8 @@ def _migrate():
             conn.execute(db.text("ALTER TABLE user ADD COLUMN last_seen DATETIME"))
             conn.commit()
         if 'phone_number' not in cols:
-            conn.execute(db.text("ALTER TABLE user ADD COLUMN phone_number VARCHAR(20) UNIQUE"))
+            # SQLite does not support ADD COLUMN with UNIQUE; add without constraint
+            conn.execute(db.text("ALTER TABLE user ADD COLUMN phone_number VARCHAR(20)"))
             conn.commit()
 
 
@@ -2276,6 +2375,173 @@ def _diag_discord():
 def discord_invite():
     from services.discord_bot import invite_url
     return redirect(invite_url())
+
+
+# ── Phase 15: Chapter / Progress Tracker ─────────────────────────────────────
+
+@app.route('/dm/campaigns/<int:campaign_id>/chapter/add', methods=['POST'])
+@dm_required
+def dm_chapter_add(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    title = request.form.get('title', '').strip()
+    if not title:
+        flash('Chapter title is required.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    state = campaign.current_state or {}
+    chapters = state.setdefault('chapters', [])
+    chapters.append({
+        'title': title,
+        'description': request.form.get('description', '').strip(),
+        'status': 'upcoming',
+        'notes': '',
+        'summary': '',
+        'branches': [],
+        'active_branch': None,
+    })
+    state['chapters'] = chapters
+    campaign.current_state = state
+    _save_state(campaign)
+    flash(f'Chapter "{title}" added.', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/chapter/<int:idx>/status', methods=['POST'])
+@dm_required
+def dm_chapter_status(campaign_id, idx):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    state = campaign.current_state or {}
+    chapters = state.get('chapters', [])
+    if idx < 0 or idx >= len(chapters):
+        flash('Chapter not found.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    new_status = request.form.get('status', 'upcoming')
+    if new_status not in ('upcoming', 'active', 'completed'):
+        new_status = 'upcoming'
+    # Only one chapter can be active at a time
+    if new_status == 'active':
+        for i, ch in enumerate(chapters):
+            if ch.get('status') == 'active' and i != idx:
+                chapters[i]['status'] = 'upcoming'
+    chapters[idx]['status'] = new_status
+    state['chapters'] = chapters
+    campaign.current_state = state
+    _save_state(campaign)
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/chapter/<int:idx>/notes', methods=['POST'])
+@dm_required
+def dm_chapter_notes(campaign_id, idx):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    state = campaign.current_state or {}
+    chapters = state.get('chapters', [])
+    if idx < 0 or idx >= len(chapters):
+        flash('Chapter not found.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    chapters[idx]['notes'] = request.form.get('notes', '').strip()
+    state['chapters'] = chapters
+    campaign.current_state = state
+    _save_state(campaign)
+    flash('Notes saved.', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/chapter/<int:idx>/delete', methods=['POST'])
+@dm_required
+def dm_chapter_delete(campaign_id, idx):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    state = campaign.current_state or {}
+    chapters = state.get('chapters', [])
+    if 0 <= idx < len(chapters):
+        removed = chapters.pop(idx)
+        state['chapters'] = chapters
+        campaign.current_state = state
+        _save_state(campaign)
+        flash(f'Chapter "{removed["title"]}" deleted.', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/chapter/<int:idx>/fork/add', methods=['POST'])
+@dm_required
+def dm_chapter_fork_add(campaign_id, idx):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    fork_name = request.form.get('fork_name', '').strip()
+    if not fork_name:
+        flash('Fork name is required.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    state = campaign.current_state or {}
+    chapters = state.get('chapters', [])
+    if idx < 0 or idx >= len(chapters):
+        flash('Chapter not found.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    chapters[idx].setdefault('branches', []).append({'name': fork_name, 'description': request.form.get('fork_desc', '').strip()})
+    state['chapters'] = chapters
+    campaign.current_state = state
+    _save_state(campaign)
+    flash(f'Fork "{fork_name}" added.', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/chapter/<int:idx>/fork/<int:fork_i>/choose', methods=['POST'])
+@dm_required
+def dm_chapter_fork_choose(campaign_id, idx, fork_i):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    state = campaign.current_state or {}
+    chapters = state.get('chapters', [])
+    if idx < 0 or idx >= len(chapters):
+        flash('Chapter not found.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    branches = chapters[idx].get('branches', [])
+    if fork_i < 0 or fork_i >= len(branches):
+        flash('Fork not found.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    chapters[idx]['active_branch'] = fork_i
+    state['chapters'] = chapters
+    campaign.current_state = state
+    _save_state(campaign)
+    flash(f'Path "{branches[fork_i]["name"]}" chosen.', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/chapter/<int:idx>/summarize', methods=['POST'])
+@dm_required
+def dm_chapter_summarize(campaign_id, idx):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        return jsonify({'error': 'Access denied.'}), 403
+    state = campaign.current_state or {}
+    chapters = state.get('chapters', [])
+    if idx < 0 or idx >= len(chapters):
+        return jsonify({'error': 'Chapter not found.'}), 404
+    ch = chapters[idx]
+    from services.ai import summarize_chapter
+    combat_log = state.get('combat_log', [])
+    text, error = summarize_chapter(ch['title'], ch.get('notes', ''), combat_log)
+    if error:
+        return jsonify({'error': error}), 500
+    chapters[idx]['summary'] = text
+    state['chapters'] = chapters
+    campaign.current_state = state
+    _save_state(campaign)
+    return jsonify({'text': text})
 
 
 if __name__ == '__main__':

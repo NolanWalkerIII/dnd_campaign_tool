@@ -192,6 +192,89 @@ From the documentation analysis, the essential features to implement:
 - **Validation**: A brand-new DM can get players into a session using only the in-app guidance — no external docs needed.
 - **Status**: Complete ✓ (DM onboarding card with dismiss; Campaign Info panel with join URL, large code, QR code via lazy-loaded qrcodejs on `<details>` toggle; player join walkthrough card when no campaigns joined)
 
+---
+
+## Community Contributions — BonzaiForest / JBEST2015
+*Major feature expansion contributed by [BonzaiForest (JBEST2015)](https://github.com/JBEST2015), merged into `main` March 2026.*
+
+### REST API Layer (`api_routes.py` — ~1,300 lines)
+A full authenticated REST API (`/api/*`) secured with a Bearer token (`CLAUDE_API_KEY`). Enables external clients (Claude, Discord bot, SMS) to drive the game engine programmatically.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/campaigns` | GET | List all campaigns |
+| `/api/campaigns/<id>` | GET | Full campaign state + characters |
+| `/api/characters/<id>` | GET | Character sheet JSON |
+| `/api/action` | POST | Free-text action — AI interprets and resolves |
+| `/api/roll` | POST | Dice roll for a character |
+| `/api/skill-check` | POST | Skill check with proficiency |
+| `/api/attack` | POST | Attack roll + damage vs target |
+| `/api/saving-throw` | POST | Saving throw |
+| `/api/scene` | POST | Post new narration to the campaign |
+| `/api/npc/say` | POST | NPC dialogue via AI |
+| `/api/combat/start` | POST | Roll initiative and start combat |
+| `/api/combat/next` | POST | Advance turn |
+| `/api/combat/end` | POST | End combat |
+| `/api/damage` | POST | Apply damage to combatant |
+| `/api/heal` | POST | Heal a combatant |
+| `/api/condition` | POST | Apply/remove condition |
+| `/api/loot` | POST | Award loot to a player |
+| `/api/npc/add` | POST | Add NPC to initiative |
+| `/api/npc/remove` | POST | Remove NPC |
+| `/api/discord/send` | POST | Send message to Discord channel |
+| `/api/discord/embed` | POST | Send rich embed to Discord |
+| `/api/discord/status` | GET | Discord bot connection status |
+| `/api/diagnostics` | GET | Full system health check |
+| `/api/diagnostics/test/<name>` | POST | Run individual diagnostic test |
+| `/api/log/<id>` | GET | Paginated narration log |
+| `/api/play` | POST | AI DM turn — interprets free-text, resolves action, narrates |
+| `/api/play/context` | GET | Full game context for AI prompt building |
+| `/api/whisper` | POST | Private message to a player |
+
+### Discord Bot (`services/discord_bot.py`)
+Full Discord integration running in a background thread alongside Flask. Auto-creates a set of game channels on `/setup`. Players link their accounts with `/join` + `/verify`.
+
+**Slash commands available to players:**
+`/action` · `/roll` · `/attack` · `/check` · `/cast` · `/save` · `/stats` · `/inventory` · `/join` · `/verify`
+
+**DM slash commands:**
+`/start` · `/reset` · `/play` (trigger AI DM turn) · `/narrate`
+
+Bridges SMS ↔ Discord so both channels see the same game state in real time. Sends rich embeds for character sheets, combat order, and dice rolls.
+
+### SMS Play Mode (`services/sms.py`, `sms_routes.py`)
+Twilio integration allowing players to play entirely via text message. The AI DM (`services/ai_dm.py`) interprets player SMS messages, resolves game actions through the engine, and replies with narrated outcomes — no browser needed.
+
+- Players register a phone number on the DM campaign page; receive a verification text
+- Verified players text the Twilio number to perform any action
+- AI DM engine handles ambiguous input ("I attack the goblin") and maps it to game mechanics
+- DM can enable per-player **AI Agent mode** — the AI auto-plays that character's turn
+- SMS ↔ Discord bridge keeps both channels in sync
+
+### AI DM Engine (`services/engine.py`, `services/ai_dm.py`)
+Pure-function game engine (`engine.py`) extracted from Flask route handlers — no session/flash/request dependencies, fully testable. Used by both the SMS AI DM and the Claude API `/api/play` endpoint.
+
+`ai_dm.py` wraps the engine with an LLM layer: takes a player's free-text intent, constructs a rich game-context prompt, calls xAI Grok, and maps the response back to game actions (attack, skill check, narration, etc.).
+
+### DM Settings Page (`/dm/settings`, `templates/dm/settings.html`)
+In-app settings page for the DM to configure API keys without editing `.env` directly:
+- Discord Bot Token + Client ID
+- Claude API Key
+- Twilio credentials
+- Shows live Discord connection status
+
+### Diagnostics Page (`/dm/diagnostics`, `templates/dm/diagnostics.html`)
+Full system health dashboard with one-click tests for: environment variables, xAI Grok connectivity, Twilio SMS, AI engine, full pipeline (message → action → response), and Discord bot.
+
+### Other Additions
+- `/guide` — "How to Play" page for new players
+- `/privacy` and `/terms` — legal pages
+- `docker-compose.prod.yml` — production-ready compose config
+- `CLAUDE.md` — project guide for AI-assisted development
+- Sidebar nav updated: added ❓ How to Play and 🔧 Diagnostics links (DM)
+
+---
+
 ### Bug Fixes & Incremental Improvements (Post-Phase 12)
 - **QR code lazy render fix**: QR code in Campaign Info panel was not rendering because qrcodejs initialized against a hidden `<details>` element. Fixed by listening to the `details#campaign-info-details toggle` event and generating the QR code only when the panel is first opened.
 - **xAI API key wiring**: Documented that `docker compose restart` does not re-read `env_file`; must use `docker compose up -d` to recreate the container and inject updated environment variables. `.env` file (gitignored) must be created from `.env.example` before AI features work.
@@ -227,7 +310,31 @@ From the documentation analysis, the essential features to implement:
   4. **AI-Assisted Chapter Summary**: An optional "Summarise this chapter" button (using xAI Grok) that reads the narration log entries since the chapter started and generates a short summary to pre-fill the chapter notes field.
 - **Deliverables**: Chapter data model in `current_state`; DM chapter management UI; player progress view; story fork UI; AI chapter summary button.
 - **Validation**: DM can create a 3-chapter adventure with a fork at chapter 2; marking chapter 1 complete updates the timeline; choosing a fork greys out the alternate branch.
-- **Status**: Not started
+- **Status**: Complete ✓ (2026-03-15)
+- **Implementation Notes**:
+  - `chapters` list added to `current_state` JSON; each chapter has `title`, `description`, `status`, `notes`, `summary`, `branches[]`, `active_branch`
+  - Routes added: `POST /dm/campaigns/<id>/chapter/add`, `/chapter/<idx>/status`, `/chapter/<idx>/notes`, `/chapter/<idx>/delete`, `/chapter/<idx>/fork/add`, `/chapter/<idx>/fork/<i>/choose`, `/chapter/<idx>/summarize`
+  - DM campaign page: visual chapter timeline card with status badges (upcoming/active/completed), per-chapter expand panel for notes + forks, story fork choose/add buttons, AI Summary button wired to xAI Grok
+  - Player campaign page: read-only chapter timeline showing status, active fork, and AI-generated summaries
+  - `summarize_chapter()` added to `services/ai.py` — reads chapter title, DM notes, and recent combat log entries for context
+  - Fixed SQLite migration bug: `ALTER TABLE … ADD COLUMN … UNIQUE` is not supported; dropped UNIQUE constraint from `phone_number` migration
+
+---
+
+### Phase 16: Beta Playtest 1 Feedback — Combat UX & Quality of Life
+- **Source**: `Feedback/Testing_3.md` — post-phase beta playtest 1 results (2026-03-15)
+- **Note**: All AI features must continue to hide API keys in `.env` files; never commit keys to GitHub.
+- **Objectives**: Address all 7 feedback items from the first beta session.
+- **Tasks**:
+  1. **Party visibility** — Add a "Party" panel to the player campaign page listing all other players in the campaign with their character name, class/level, and HP bar.
+  2. **Attack target dropdown** — Replace the free-text "Target name" input on the player attack form with a `<select>` pre-populated from the current initiative order (when combat is active), with an "Other…" fallback option that reveals a custom text field.
+  3. **DM NPC combat interface** — Add a collapsible "Roll Attack for NPC" mini-form under each NPC in the DM initiative order. Form fields: target (dropdown of PC combatants), attack bonus, damage dice. Rolls are posted to the combat log.
+  4. **Combat turn guardrails** — Block the player attack and spell-cast actions (server-side) when combat is active and it is not that player's turn. Flash a clear error; redirect back. Free dice rolls and skill checks are not blocked.
+  5. **DM revert combat log** — Add a "↩ Revert Last Entry" button next to the DM combat log header, backed by `POST /dm/campaigns/<id>/combat/log/revert` that pops the last entry.
+  6. **HP visible without scrolling** — Show the active character's HP bar and current/max HP directly in the player campaign page header so it is always visible at the top.
+  7. **Dice picker dropdowns** — Replace the free-text dice expression input with two dropdowns: count (1–6) and die type (d4 / d6 / d8 / d10 / d12 / d20). JavaScript assembles the expression string before submit.
+- **Deliverables**: Updated `app.py` (routes + guards), updated `player/campaign.html`, updated `dm/campaign.html`.
+- **Status**: Complete ✓ (2026-03-15)
 
 ---
 

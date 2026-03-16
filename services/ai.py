@@ -79,6 +79,46 @@ def cleanup_narration(raw_text):
     return _call(messages)
 
 
+def summarize_chapter(chapter_title, chapter_notes, combat_log_entries=None):
+    """
+    Generate an AI summary for a completed chapter.
+    chapter_title: string
+    chapter_notes: string (DM's notes for the chapter)
+    combat_log_entries: optional list of recent log entries for context
+    Returns (summary_text, error).
+    """
+    context_parts = []
+    if chapter_notes:
+        context_parts.append(f"Chapter notes: {chapter_notes}")
+    if combat_log_entries:
+        recent = combat_log_entries[-10:]
+        log_text = "\n".join(
+            f"[{e.get('timestamp', '')}] {e.get('actor', '')}: {e.get('text', '')}"
+            for e in recent
+        )
+        context_parts.append(f"Recent combat log:\n{log_text}")
+    context = "\n\n".join(context_parts) if context_parts else "No additional context provided."
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a creative Dungeon Master summarizing a completed chapter of a D&D 5e campaign. "
+                "Write a vivid, atmospheric 2-4 sentence summary of what transpired, suitable to read "
+                "aloud to players as a chapter recap. Use past tense, third-person perspective. "
+                "Return only the summary text, no title or commentary."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f'Summarize Chapter: "{chapter_title}"\n\n{context}'
+            ),
+        },
+    ]
+    return _call(messages)
+
+
 def generate_narration(narration_log):
     """
     Generate a new narration entry based on the recent narration log.
