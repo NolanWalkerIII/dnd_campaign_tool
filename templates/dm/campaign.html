@@ -77,145 +77,165 @@
   </form>
 </div>
 
-<!-- ══ ONBOARDING CARD (shown until dismissed) ══════════════════════════ -->
-{% if not state.get('onboarding_dismissed') %}
-<div style="background:linear-gradient(135deg,#0f2a1a,#0a1a2e); border:2px solid var(--gold);
-            border-radius:var(--radius); padding:1.25rem 1.5rem; margin-bottom:1.5rem;">
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
-    <h2 style="margin:0; font-size:1.1rem;">🚀 Getting Started</h2>
-    <form method="POST" action="/dm/campaigns/{{ campaign.id }}/onboarding_dismiss">
-      <button type="submit" class="btn btn-outline"
-              style="padding:3px 10px; font-size:0.78rem; color:var(--muted);">
-        Dismiss ✕
-      </button>
-    </form>
-  </div>
-  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem;">
-    <div style="background:rgba(201,168,76,0.08); border:1px solid var(--gold);
-                border-radius:var(--radius); padding:1rem;">
-      <div style="font-size:1.4rem; margin-bottom:0.4rem;">1️⃣</div>
-      <div style="font-weight:600; color:var(--gold); margin-bottom:0.3rem;">Share the Join Code</div>
-      <div style="font-size:2rem; font-weight:700; letter-spacing:6px; color:var(--text);
-                  font-family:monospace; margin-bottom:0.4rem;">{{ campaign.join_code }}</div>
-      <button onclick="navigator.clipboard.writeText('{{ campaign.join_code }}');this.textContent='Copied!';setTimeout(()=>this.textContent='📋 Copy',1500);"
-              class="btn btn-outline" style="padding:3px 10px; font-size:0.8rem;">
-        📋 Copy
-      </button>
-    </div>
-    <div style="background:rgba(201,168,76,0.04); border:1px solid var(--border);
-                border-radius:var(--radius); padding:1rem;">
-      <div style="font-size:1.4rem; margin-bottom:0.4rem;">2️⃣</div>
-      <div style="font-weight:600; color:var(--gold); margin-bottom:0.3rem;">Players Register & Join</div>
-      <p style="font-size:0.84rem; color:var(--muted); margin:0;">
-        Players open <strong style="color:var(--text);">{{ request.host_url }}</strong>,
-        register an account, then enter the join code on their dashboard.
-      </p>
-    </div>
-    <div style="background:rgba(201,168,76,0.04); border:1px solid var(--border);
-                border-radius:var(--radius); padding:1rem;">
-      <div style="font-size:1.4rem; margin-bottom:0.4rem;">3️⃣</div>
-      <div style="font-weight:600; color:var(--gold); margin-bottom:0.3rem;">Start the Adventure</div>
-      <p style="font-size:0.84rem; color:var(--muted); margin:0;">
-        Once players have joined, write your opening narration below or roll initiative to begin combat.
-      </p>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<!-- ══ CAMPAIGN INFO PANEL ═══════════════════════════════════════════════ -->
-<div class="card" style="margin-bottom:1.5rem;">
-  <details id="campaign-info-details">
-    <summary style="cursor:pointer; color:var(--gold); font-weight:600; font-size:0.95rem;
-                    user-select:none; padding:2px 0;">
-      📡 Campaign Info &amp; Share
-    </summary>
-    <div style="margin-top:1rem; display:grid; grid-template-columns:1fr auto; gap:1.5rem; align-items:start;">
-      <div>
-        <div style="margin-bottom:0.75rem;">
-          <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
-                      letter-spacing:0.5px; margin-bottom:4px;">Join URL</div>
-          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-            <code id="join-url-text"
-                  style="background:var(--card); border:1px solid var(--border); border-radius:4px;
-                         padding:5px 10px; font-size:0.85rem; color:var(--accent);">
-              {{ request.host_url }}player/dashboard
-            </code>
-            <button onclick="navigator.clipboard.writeText(document.getElementById('join-url-text').textContent.trim());this.textContent='Copied!';setTimeout(()=>this.textContent='📋 Copy URL',1500);"
-                    class="btn btn-outline" style="padding:4px 12px; font-size:0.8rem;">
-              📋 Copy URL
-            </button>
-          </div>
-        </div>
-        <div style="margin-bottom:0.75rem;">
-          <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
-                      letter-spacing:0.5px; margin-bottom:4px;">Join Code</div>
-          <div style="display:flex; gap:0.5rem; align-items:center;">
-            <span style="font-size:1.8rem; font-weight:700; letter-spacing:8px;
-                         font-family:monospace; color:var(--gold);">{{ campaign.join_code }}</span>
-            <button onclick="navigator.clipboard.writeText('{{ campaign.join_code }}');this.textContent='Copied!';setTimeout(()=>this.textContent='📋 Copy',1500);"
-                    class="btn btn-outline" style="padding:4px 12px; font-size:0.8rem;">
-              📋 Copy
-            </button>
-          </div>
-        </div>
-        <div>
-          <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
-                      letter-spacing:0.5px; margin-bottom:4px;">Players Joined</div>
-          <span style="font-size:1rem; color:var(--text);">{{ players|length }}</span>
-          <span style="font-size:0.82rem; color:var(--muted); margin-left:4px;">
-            player{{ 's' if players|length != 1 else '' }}
-          </span>
-        </div>
-      </div>
-      <!-- QR Code -->
-      <div style="text-align:center;">
-        <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
-                    letter-spacing:0.5px; margin-bottom:8px;">Scan to Open</div>
-        <div id="qrcode" style="background:#fff; padding:8px; border-radius:6px; display:inline-block;"></div>
-        <div style="font-size:0.72rem; color:var(--muted); margin-top:4px;">Join page QR</div>
-      </div>
-    </div>
-  </details>
-</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script>
-(function() {
-  var generated = false;
-  function generateQR() {
-    if (generated) return;
-    var el = document.getElementById('qrcode');
-    if (!el || typeof QRCode === 'undefined') return;
-    generated = true;
-    new QRCode(el, {
-      text: '{{ request.host_url }}player/dashboard',
-      width: 120, height: 120,
-      colorDark: '#000000', colorLight: '#ffffff',
-    });
-  }
-  // Generate when the details panel is opened
-  var details = document.getElementById('campaign-info-details');
-  if (details) {
-    details.addEventListener('toggle', function() {
-      if (details.open) generateQR();
-    });
-  }
-  // Also try on load in case it's already open
-  window.addEventListener('load', function() {
-    if (details && details.open) generateQR();
-  });
-})();
-</script>
-
-<!-- ══ SMS PLAY MODE ══════════════════════════════════════════════════════ -->
+<!-- ══ THREE-BUTTON ACCORDION ═════════════════════════════════════════════ -->
 {% set sms_enabled = state.get('sms_enabled', false) %}
 {% set sms_log = state.get('sms_log', []) %}
 {% set twilio_num = twilio_number or '' %}
-<div class="card" style="border-color:{{ 'var(--success)' if sms_enabled else 'var(--border)' }};
-            margin-bottom:1.5rem;
-            {% if sms_enabled %}background:linear-gradient(135deg, rgba(15,42,26,0.3), rgba(10,26,46,0.3));{% endif %}">
+{% set discord_cfg = state.get('discord', {}) %}
+{% set discord_enabled = discord_cfg.get('enabled', false) %}
+
+<style>
+.top-btn {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:4px; padding:0.7rem 1rem; border-radius:var(--radius);
+  border:1px solid var(--border); background:var(--card);
+  color:var(--text); cursor:pointer; font-family:inherit;
+  transition:border-color 0.15s, background 0.15s; text-align:center;
+  width:100%;
+}
+.top-btn:hover { border-color:var(--gold); }
+.top-btn.active {
+  border-color:var(--gold); border-bottom-left-radius:0; border-bottom-right-radius:0;
+  background:rgba(201,168,76,0.08);
+}
+.top-btn .btn-title { font-weight:600; font-size:0.9rem; }
+.top-btn .btn-status { font-size:0.75rem; }
+.top-panel {
+  display:none; border-top-left-radius:0; border-top-right-radius:0;
+  border-top:none; margin-bottom:1.5rem;
+}
+.top-panel.open { display:block; }
+</style>
+
+<!-- Button row -->
+<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:0; margin-bottom:0;">
+  <button class="top-btn" id="btn-info" onclick="toggleTopPanel('info')"
+          style="border-right:none; border-top-right-radius:0; border-bottom-right-radius:0;">
+    <span class="btn-title">📡 Campaign Info &amp; Share</span>
+    <span class="btn-status" style="color:var(--gold);">
+      {{ players|length }} player{{ 's' if players|length != 1 else '' }}
+    </span>
+  </button>
+  <button class="top-btn" id="btn-sms" onclick="toggleTopPanel('sms')"
+          style="border-radius:0;">
+    <span class="btn-title">📱 SMS Play Mode</span>
+    <span class="btn-status" style="color:{{ 'var(--success)' if sms_enabled else 'var(--muted)' }};">
+      {{ '● Active' if sms_enabled else '○ Off' }}
+    </span>
+  </button>
+  <button class="top-btn" id="btn-discord" onclick="toggleTopPanel('discord')"
+          style="border-left:none; border-top-left-radius:0; border-bottom-left-radius:0;">
+    <span class="btn-title">🎮 Discord Integration</span>
+    <span class="btn-status" style="color:{{ 'var(--success)' if discord_enabled else 'var(--muted)' }};">
+      {{ '● Connected' if discord_enabled else '○ Not connected' }}
+    </span>
+  </button>
+</div>
+
+<!-- ── Panel: Campaign Info ──────────────────────────────────────────────── -->
+<div id="panel-info" class="card top-panel"
+     style="border-color:var(--gold);">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+    <h2 style="margin:0; font-size:1rem; color:var(--gold);">📡 Campaign Info &amp; Share</h2>
+    <button id="gs-toggle-btn" onclick="toggleGettingStarted()"
+            class="btn btn-outline" style="font-size:0.8rem; padding:4px 12px;">
+      🚀 Tell them how to get started
+    </button>
+  </div>
+  <div style="display:grid; grid-template-columns:1fr auto; gap:1.5rem; align-items:start;">
+    <div>
+      <div style="margin-bottom:0.75rem;">
+        <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                    letter-spacing:0.5px; margin-bottom:4px;">Join URL</div>
+        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+          <code id="join-url-text"
+                style="background:var(--card); border:1px solid var(--border); border-radius:4px;
+                       padding:5px 10px; font-size:0.85rem; color:var(--accent);">
+            {{ request.host_url }}player/dashboard
+          </code>
+          <button onclick="navigator.clipboard.writeText(document.getElementById('join-url-text').textContent.trim());this.textContent='Copied!';setTimeout(()=>this.textContent='📋 Copy URL',1500);"
+                  class="btn btn-outline" style="padding:4px 12px; font-size:0.8rem;">
+            📋 Copy URL
+          </button>
+        </div>
+      </div>
+      <div style="margin-bottom:0.75rem;">
+        <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                    letter-spacing:0.5px; margin-bottom:4px;">Join Code</div>
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+          <span style="font-size:1.8rem; font-weight:700; letter-spacing:8px;
+                       font-family:monospace; color:var(--gold);">{{ campaign.join_code }}</span>
+          <button onclick="navigator.clipboard.writeText('{{ campaign.join_code }}');this.textContent='Copied!';setTimeout(()=>this.textContent='📋 Copy',1500);"
+                  class="btn btn-outline" style="padding:4px 12px; font-size:0.8rem;">
+            📋 Copy
+          </button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                    letter-spacing:0.5px; margin-bottom:4px;">Players Joined</div>
+        <span style="font-size:1rem; color:var(--text);">{{ players|length }}</span>
+        <span style="font-size:0.82rem; color:var(--muted); margin-left:4px;">
+          player{{ 's' if players|length != 1 else '' }}
+        </span>
+      </div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                  letter-spacing:0.5px; margin-bottom:8px;">Scan to Open</div>
+      <div id="qrcode" style="background:#fff; padding:8px; border-radius:6px; display:inline-block;"></div>
+      <div style="font-size:0.72rem; color:var(--muted); margin-top:4px;">Join page QR</div>
+    </div>
+  </div>
+  <!-- Getting Started walkthrough -->
+  <div id="getting-started-panel" style="display:none; margin-top:1.25rem;
+       border-top:1px solid var(--border); padding-top:1.25rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+      <span style="font-weight:600; font-size:0.9rem; color:var(--gold);">🚀 Getting Started</span>
+      {% if not state.get('onboarding_dismissed') %}
+      <form method="POST" action="/dm/campaigns/{{ campaign.id }}/onboarding_dismiss" style="display:inline;">
+        <button type="submit" class="btn btn-outline"
+                style="padding:3px 10px; font-size:0.75rem; color:var(--muted);">Dismiss ✕</button>
+      </form>
+      {% endif %}
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem;">
+      <div style="background:rgba(201,168,76,0.08); border:1px solid var(--gold);
+                  border-radius:var(--radius); padding:1rem;">
+        <div style="font-size:1.4rem; margin-bottom:0.4rem;">1️⃣</div>
+        <div style="font-weight:600; color:var(--gold); margin-bottom:0.3rem;">Share the Join Code</div>
+        <div style="font-size:2rem; font-weight:700; letter-spacing:6px; color:var(--text);
+                    font-family:monospace; margin-bottom:0.4rem;">{{ campaign.join_code }}</div>
+        <button onclick="navigator.clipboard.writeText('{{ campaign.join_code }}');this.textContent='Copied!';setTimeout(()=>this.textContent='📋 Copy',1500);"
+                class="btn btn-outline" style="padding:3px 10px; font-size:0.8rem;">📋 Copy</button>
+      </div>
+      <div style="background:rgba(201,168,76,0.04); border:1px solid var(--border);
+                  border-radius:var(--radius); padding:1rem;">
+        <div style="font-size:1.4rem; margin-bottom:0.4rem;">2️⃣</div>
+        <div style="font-weight:600; color:var(--gold); margin-bottom:0.3rem;">Players Register &amp; Join</div>
+        <p style="font-size:0.84rem; color:var(--muted); margin:0;">
+          Players open <strong style="color:var(--text);">{{ request.host_url }}</strong>,
+          register an account, then enter the join code on their dashboard.
+        </p>
+      </div>
+      <div style="background:rgba(201,168,76,0.04); border:1px solid var(--border);
+                  border-radius:var(--radius); padding:1rem;">
+        <div style="font-size:1.4rem; margin-bottom:0.4rem;">3️⃣</div>
+        <div style="font-weight:600; color:var(--gold); margin-bottom:0.3rem;">Start the Adventure</div>
+        <p style="font-size:0.84rem; color:var(--muted); margin:0;">
+          Once players have joined, write your opening narration below or roll initiative to begin combat.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Panel: SMS Play Mode ──────────────────────────────────────────────── -->
+<div id="panel-sms" class="card top-panel"
+     style="border-color:{{ 'var(--success)' if sms_enabled else 'var(--border)' }};
+            {% if sms_enabled %}background:linear-gradient(135deg,rgba(15,42,26,0.3),rgba(10,26,46,0.3));{% endif %}">
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
-    <h2 style="margin:0; color:{{ 'var(--success)' if sms_enabled else 'var(--gold)' }};">
+    <h2 style="margin:0; font-size:1rem; color:{{ 'var(--success)' if sms_enabled else 'var(--gold)' }};">
       📱 SMS Play Mode
     </h2>
     <form method="POST" action="/sms/toggle">
@@ -226,31 +246,24 @@
       </button>
     </form>
   </div>
-
   {% if sms_enabled %}
   <div style="background:var(--card); border-radius:var(--radius); padding:12px 16px; margin-bottom:1rem;">
     <div style="display:flex; gap:2rem; flex-wrap:wrap;">
       <div>
-        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">
-          Twilio Number</div>
+        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">Twilio Number</div>
         <div style="color:var(--text); font-size:1.1rem; font-family:monospace; margin-top:4px;">
           {{ twilio_num or 'Not configured' }}
         </div>
       </div>
       <div>
-        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">
-          AI DM Status</div>
-        <div style="color:var(--success); font-size:0.9rem; margin-top:6px;">
-          ● Active — Listening for player texts
-        </div>
+        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">AI DM Status</div>
+        <div style="color:var(--success); font-size:0.9rem; margin-top:6px;">● Active — Listening for player texts</div>
       </div>
     </div>
   </div>
-
   <p style="color:var(--muted); font-size:0.84rem; margin-bottom:1rem;">
     Players text the Twilio number to play. The AI DM interprets actions, rolls dice, and narrates results.
   </p>
-
   <h3 style="color:var(--text); font-size:0.9rem; margin-bottom:0.5rem;">Player Phone Numbers</h3>
   {% set pending = (campaign.current_state or {}).get('pending_verifications', {}) %}
   {% set pending_user_ids = [] %}
@@ -266,9 +279,7 @@
       <div style="display:flex; align-items:center; gap:10px;">
         <span style="color:var(--text);">{{ player.username }}</span>
         <span style="color:var(--muted);">—</span>
-        <span style="color:var(--gold);">
-          {{ chars[0].name if chars else 'No character' }}
-        </span>
+        <span style="color:var(--gold);">{{ chars[0].name if chars else 'No character' }}</span>
         {% if is_agent %}
         <span style="font-size:0.75rem; padding:2px 8px; border-radius:12px;
                       background:var(--accent); color:#fff;">AI Agent</span>
@@ -276,7 +287,6 @@
       </div>
       <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
         {% if player.phone_number %}
-          <!-- Verified & linked -->
           <span style="color:var(--success); font-size:0.8rem;">✓ Verified</span>
           <span style="color:var(--muted); font-size:0.8rem;">{{ player.phone_number }}</span>
           <form method="POST" action="/sms/unlink" style="display:inline;"
@@ -287,28 +297,22 @@
                     style="padding:3px 8px; font-size:0.75rem; color:var(--accent); border-color:var(--accent);">Unlink</button>
           </form>
         {% elif is_pending %}
-          <!-- Waiting for verification -->
           <span style="color:var(--gold); font-size:0.8rem;">⏳ Awaiting verification</span>
           <form method="POST" action="/sms/unlink" style="display:inline;">
             <input type="hidden" name="user_id" value="{{ player.id }}">
             <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
-            <button type="submit" class="btn btn-outline"
-                    style="padding:3px 8px; font-size:0.75rem;">Cancel</button>
+            <button type="submit" class="btn btn-outline" style="padding:3px 8px; font-size:0.75rem;">Cancel</button>
           </form>
         {% else %}
-          <!-- Not linked — show phone input -->
-          <form method="POST" action="/sms/register"
-                style="display:flex; align-items:center; gap:6px;">
+          <form method="POST" action="/sms/register" style="display:flex; align-items:center; gap:6px;">
             <input type="hidden" name="user_id" value="{{ player.id }}">
             <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
             <input type="tel" name="phone_number" placeholder="(___) ___-____"
                    style="background:var(--surface); border:1px solid var(--border); color:var(--text);
                           padding:5px 10px; border-radius:6px; font-size:0.82rem; width:140px;">
-            <button type="submit" class="btn btn-outline"
-                    style="padding:4px 10px; font-size:0.78rem;">Send Invite</button>
+            <button type="submit" class="btn btn-outline" style="padding:4px 10px; font-size:0.78rem;">Send Invite</button>
           </form>
         {% endif %}
-        <!-- Agent mode toggle -->
         <form method="POST" action="/sms/agent/toggle" style="display:inline;">
           <input type="hidden" name="user_id" value="{{ player.id }}">
           <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
@@ -323,8 +327,6 @@
     </div>
   </div>
   {% endfor %}
-
-  <!-- SMS Activity Log -->
   {% if sms_log %}
   <details style="margin-top:1rem;">
     <summary style="cursor:pointer; color:var(--success); font-size:0.9rem; user-select:none;">
@@ -346,7 +348,6 @@
     </div>
   </details>
   {% endif %}
-
   {% else %}
   <p style="color:var(--muted); font-size:0.85rem;">
     Enable SMS mode to let players interact via text message with an AI Dungeon Master.
@@ -355,55 +356,43 @@
   {% endif %}
 </div>
 
-<!-- ══ DISCORD INTEGRATION ═══════════════════════════════════════════════ -->
-{% set discord_cfg = state.get('discord', {}) %}
-{% set discord_enabled = discord_cfg.get('enabled', false) %}
-<div class="card" style="border-color:{{ 'var(--success)' if discord_enabled else 'var(--border)' }};
-            margin-bottom:1.5rem;
-            {% if discord_enabled %}background:linear-gradient(135deg, rgba(88,101,242,0.1), rgba(10,26,46,0.3));{% endif %}">
+<!-- ── Panel: Discord Integration ───────────────────────────────────────── -->
+<div id="panel-discord" class="card top-panel"
+     style="border-color:{{ 'var(--success)' if discord_enabled else 'var(--border)' }};
+            {% if discord_enabled %}background:linear-gradient(135deg,rgba(88,101,242,0.1),rgba(10,26,46,0.3));{% endif %}">
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
-    <h2 style="margin:0; color:{{ 'var(--success)' if discord_enabled else 'var(--gold)' }};">
+    <h2 style="margin:0; font-size:1rem; color:{{ 'var(--success)' if discord_enabled else 'var(--gold)' }};">
       🎮 Discord Integration
     </h2>
     {% if discord_enabled %}
     <span style="font-size:0.85rem; color:var(--success);">● Connected</span>
     {% endif %}
   </div>
-
   {% if discord_enabled %}
   <div style="background:var(--card); border-radius:var(--radius); padding:12px 16px; margin-bottom:1rem;">
     <div style="display:flex; gap:2rem; flex-wrap:wrap;">
       <div>
-        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">
-          Server ID</div>
+        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">Server ID</div>
         <div style="color:var(--text); font-size:0.9rem; font-family:monospace; margin-top:4px;">
           {{ discord_cfg.get('guild_id', '—') }}
         </div>
       </div>
       <div>
-        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">
-          Channels</div>
+        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">Channels</div>
         <div style="color:var(--text); font-size:0.85rem; margin-top:4px;">
-          {% set ch = discord_cfg.get('channels', {}) %}
-          {{ ch|length }} channels created
+          {% set ch = discord_cfg.get('channels', {}) %}{{ ch|length }} channels created
         </div>
       </div>
       <div>
-        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">
-          Bot Status</div>
-        <div style="color:var(--success); font-size:0.9rem; margin-top:4px;">
-          ● Active — Listening for commands
-        </div>
+        <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">Bot Status</div>
+        <div style="color:var(--success); font-size:0.9rem; margin-top:4px;">● Active — Listening for commands</div>
       </div>
     </div>
   </div>
-
   <p style="color:var(--muted); font-size:0.84rem; margin-bottom:0.75rem;">
     Players can use <code>/action</code>, <code>/roll</code>, <code>/attack</code>, <code>/check</code> in #tavern.
     {% if sms_enabled %}SMS ↔ Discord bridge is active — both channels see the same game.{% endif %}
   </p>
-
-  <!-- Discord-linked players -->
   <h3 style="color:var(--text); font-size:0.9rem; margin-bottom:0.5rem;">Discord-Linked Players</h3>
   {% for player in players %}
   {% set chars = player_chars.get(player.id, []) %}
@@ -421,20 +410,16 @@
     </div>
   </div>
   {% endfor %}
-
   {% else %}
-  <!-- Not connected — show setup instructions -->
   <p style="color:var(--muted); font-size:0.85rem; margin-bottom:1rem;">
     Connect a Discord server to let players use slash commands, see rich embeds, and bridge SMS + Discord.
   </p>
-
   <div style="background:var(--card); border-radius:var(--radius); padding:1rem; margin-bottom:1rem;">
     <h3 style="color:var(--text); font-size:0.9rem; margin-bottom:0.75rem;">Setup Instructions</h3>
     <ol style="margin:0 0 0 1.25rem; color:var(--text); font-size:0.85rem; line-height:1.8;">
       <li>
         {% if discord_invite %}
-        <a href="{{ discord_invite }}" target="_blank"
-           style="color:var(--gold); text-decoration:underline;">
+        <a href="{{ discord_invite }}" target="_blank" style="color:var(--gold); text-decoration:underline;">
           Add the bot to your Discord server →
         </a>
         {% else %}
@@ -446,15 +431,65 @@
       <li>Players link with: <code style="background:var(--surface); padding:2px 6px; border-radius:3px;">/join username</code> then <code>/verify {{ campaign.join_code }}</code></li>
     </ol>
   </div>
-
-  <div style="display:flex; gap:1rem; flex-wrap:wrap; font-size:0.84rem; color:var(--muted);">
-    <div>
-      <strong style="color:var(--text);">Channels created:</strong>
-      #quest-board, #tavern, #combat, #dice-log, #character-sheets, #dm-screen
-    </div>
+  <div style="font-size:0.84rem; color:var(--muted);">
+    <strong style="color:var(--text);">Channels created:</strong>
+    #quest-board, #tavern, #combat, #dice-log, #character-sheets, #dm-screen
   </div>
   {% endif %}
 </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+var _qrGenerated = false;
+function generateQR() {
+  if (_qrGenerated) return;
+  var el = document.getElementById('qrcode');
+  if (!el || typeof QRCode === 'undefined') return;
+  _qrGenerated = true;
+  new QRCode(el, { text:'{{ request.host_url }}player/dashboard', width:120, height:120,
+                   colorDark:'#000000', colorLight:'#ffffff' });
+}
+
+function toggleTopPanel(name) {
+  var panels = ['info','sms','discord'];
+  panels.forEach(function(p) {
+    var panel = document.getElementById('panel-' + p);
+    var btn   = document.getElementById('btn-' + p);
+    if (p === name) {
+      var opening = !panel.classList.contains('open');
+      panel.classList.toggle('open', opening);
+      btn.classList.toggle('active', opening);
+      localStorage.setItem('top_panel', opening ? name : '');
+      if (opening && name === 'info') generateQR();
+    } else {
+      panel.classList.remove('open');
+      btn.classList.remove('active');
+    }
+  });
+}
+
+// Getting Started sub-toggle
+function toggleGettingStarted() {
+  var panel = document.getElementById('getting-started-panel');
+  var btn   = document.getElementById('gs-toggle-btn');
+  var open  = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  btn.textContent = open ? '🚀 Tell them how to get started' : '🔼 Hide walkthrough';
+  localStorage.setItem('gs_panel_open', open ? '0' : '1');
+}
+
+// Restore last open panel
+(function() {
+  var last = localStorage.getItem('top_panel');
+  if (last) toggleTopPanel(last);
+  if (localStorage.getItem('gs_panel_open') === '1') {
+    var gsPanel = document.getElementById('getting-started-panel');
+    var gsBtn   = document.getElementById('gs-toggle-btn');
+    if (gsPanel) gsPanel.style.display = 'block';
+    if (gsBtn)   gsBtn.textContent = '🔼 Hide walkthrough';
+  }
+})();
+</script>
 
 <!-- ══ COMBAT SECTION ══════════════════════════════════════════════════════ -->
 <div class="card" style="border-color:{{ 'var(--accent)' if combat_active else 'var(--border)' }};">

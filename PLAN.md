@@ -338,6 +338,26 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
+### Phase 18: DM Campaign Page — Three-Button Accordion
+- **Source**: DM UX feedback (2026-03-17) — consolidated panels still take too much vertical space; want three equal buttons that reveal content on demand.
+- **Objectives**: Replace the three stacked cards (Campaign Info, SMS, Discord) with a compact three-button row. Clicking a button expands its panel below; clicking again collapses it. Only the content for the active panel is visible. Status indicators (Active / Off, Connected / Not connected, player count) visible on each button even when collapsed. Last open panel remembered via localStorage.
+- **Deliverables**: Updated `templates/dm/campaign.html` only.
+- **Status**: Complete ✓ (2026-03-17)
+
+---
+
+### Phase 17: DM Campaign Page — Panel Consolidation & Collapsible Integrations
+- **Source**: DM UX feedback (2026-03-17) — too many always-visible sections clutter the page.
+- **Objectives**: Reduce visual noise on the DM campaign page without removing any functionality.
+- **Tasks**:
+  1. **Merge Getting Started + Campaign Info** — Permanent top card shows Join URL, large Join Code, Players Joined, QR code. A "Tell them how to get started" toggle button reveals/hides the 3-step walkthrough inline. Dismiss still persisted in state.
+  2. **SMS Play Mode collapsible** — Wrap entire section in a `<details>` block. Summary shows title + a status pill (Active / Off). localStorage remembers open/closed state.
+  3. **Discord Integration collapsible** — Same treatment: `<details>` with Connected / Not connected status pill.
+- **Deliverables**: Updated `templates/dm/campaign.html` only.
+- **Status**: Complete ✓ (2026-03-17)
+
+---
+
 ## Wishlist (Future Consideration)
 *Not prioritized for active development; revisit after Phase 13.*
 
