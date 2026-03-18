@@ -1723,50 +1723,6 @@ def dm_npc_hp(campaign_id, order_idx):
     return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
 
 
-@app.route('/dm/campaigns/<int:campaign_id>/combatant/<int:order_idx>/initiative', methods=['POST'])
-@dm_required
-def dm_set_initiative(campaign_id, order_idx):
-    campaign = Campaign.query.get_or_404(campaign_id)
-    state = campaign.current_state or {}
-    order = state.get('initiative_order', [])
-
-    if order_idx < 0 or order_idx >= len(order):
-        flash('Combatant not found.', 'error')
-        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
-
-    try:
-        new_initiative = int(request.form.get('new_initiative', 10))
-    except (ValueError, TypeError):
-        flash('Invalid initiative value.', 'error')
-        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
-
-    combatant = order[order_idx]
-    old_initiative = combatant['initiative']
-
-    # Track who is currently active so turn_index can be restored after re-sort
-    current_turn_idx = state.get('turn_index', 0)
-    current_turn_name = order[current_turn_idx]['name'] if order else None
-
-    combatant['initiative'] = new_initiative
-    order.sort(key=lambda x: x['initiative'], reverse=True)
-
-    # Restore turn_index to the same combatant
-    if current_turn_name:
-        for i, e in enumerate(order):
-            if e['name'] == current_turn_name:
-                state['turn_index'] = i
-                break
-
-    state['initiative_order'] = order
-    campaign.current_state = state
-    _add_combat_log(campaign, 'DM',
-                    f"{combatant['name']} initiative set to {new_initiative} (was {old_initiative}).",
-                    'system')
-    _save_state(campaign)
-    flash(f"Initiative updated for {combatant['name']}.", 'success')
-    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
-
-
 @app.route('/dm/campaigns/<int:campaign_id>/conditions', methods=['POST'])
 @dm_required
 def dm_set_condition(campaign_id):
