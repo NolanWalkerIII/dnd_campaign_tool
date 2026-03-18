@@ -20,3 +20,15 @@ instance/
 # OS
 .DS_Store
 Thumbs.db
+
+# Internal / non-public folders
+Feedback/
+Examples/
+Branding/
+ObsidianVault/
+
+# Claude AI project context
+.claude/
+
+# Logs
+*.log
