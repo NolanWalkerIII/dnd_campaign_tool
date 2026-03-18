@@ -338,6 +338,21 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
+### Phase 21: DM Inspiration — Grant & Spend
+- **Source**: DM request (2026-03-17) — DMs need a way to award Inspiration to players, just like adjusting HP.
+- **Objectives**: Allow the DM to grant or revoke D&D Inspiration for any player character. Players can see their inspiration status on their character sheet and spend it.
+- **D&D Rule**: Inspiration is a binary reward (have it or don't) that the DM awards for good roleplay. A player can spend it to gain advantage on any roll.
+- **Tasks**:
+  1. **Storage** — `character.spells['inspiration']` boolean. No migration needed.
+  2. **DM toggle route** — `POST /dm/characters/<id>/inspiration`: flips the boolean, flashes confirmation, redirects back to campaign.
+  3. **DM campaign page** — Add a "★ Grant Inspiration" / "★ Revoke Inspiration" toggle button below the HP adjust form for each player's character in the Players section.
+  4. **Character sheet pill** — Add an Inspiration pill in the combat-bar row. Shows "★ Inspired!" in gold when active, "☆ No Inspiration" in muted when not. If `can_edit`, shows a "Spend" button when inspired.
+  5. **Spend route** — `POST /characters/<id>/inspiration/spend`: clears inspiration (player or DM), flashes confirmation.
+- **Deliverables**: Two new routes in `app.py`; updated `templates/dm/campaign.html`; updated `templates/character_sheet.html`.
+- **Status**: Complete ✓ (2026-03-17)
+
+---
+
 ### Phase 20: Character Sheet — Official Layout + Background Tab + AI Generation
 - **Source**: Beta playtest comparison against official D&D 5e character sheet layout (2026-03-17).
 - **Objectives**: Add key missing sections so the character sheet is a complete reference during play, and empower players with AI-assisted backstory and personality generation.

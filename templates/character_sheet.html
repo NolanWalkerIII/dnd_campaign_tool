@@ -176,6 +176,23 @@
       {% endif %}
     </div>
 
+    <div class="combat-pill" style="border-color:{{ 'var(--gold)' if inspiration else 'var(--border)' }}; min-width:80px;">
+      <div class="cp-label">Inspiration</div>
+      {% if inspiration %}
+      <div class="cp-value" style="color:var(--gold); font-size:1.3rem;">★</div>
+      {% if can_edit %}
+      <form method="POST" action="/characters/{{ character.id }}/inspiration/spend">
+        <button type="submit" class="btn btn-outline"
+                style="padding:2px 7px; font-size:0.72rem; display:block; margin:2px auto 0;">
+          Spend
+        </button>
+      </form>
+      {% endif %}
+      {% else %}
+      <div class="cp-value" style="color:var(--muted); font-size:1.1rem;">☆</div>
+      {% endif %}
+    </div>
+
     <div class="combat-pill cp-ac">
       <div class="cp-label">AC</div>
       <div class="cp-value">{{ character.ac }}</div>

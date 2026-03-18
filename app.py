@@ -544,8 +544,9 @@ def character_sheet(char_id):
 
     bg_data    = BACKGROUNDS.get(char.background, {})
     languages  = race_data.get('languages', [])
-    temp_hp    = extra.get('temp_hp', 0)
-    bg_details = extra.get('background_details', {})
+    temp_hp     = extra.get('temp_hp', 0)
+    inspiration = extra.get('inspiration', False)
+    bg_details  = extra.get('background_details', {})
 
     # Passive scores (10 + skill modifier)
     scores = char.ability_scores or {}
@@ -582,6 +583,7 @@ def character_sheet(char_id):
         bg_data=bg_data,
         languages=languages,
         temp_hp=temp_hp,
+        inspiration=inspiration,
         bg_details=bg_details,
         passive_perception=passive_perception,
         passive_investigation=passive_investigation,
@@ -1105,6 +1107,45 @@ def dm_adjust_hp(char_id):
 
     if campaign_id:
         return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    return redirect(url_for('character_sheet', char_id=char_id))
+
+
+@app.route('/dm/characters/<int:char_id>/inspiration', methods=['POST'])
+@dm_required
+def dm_toggle_inspiration(char_id):
+    from sqlalchemy.orm.attributes import flag_modified
+    char = Character.query.get_or_404(char_id)
+    campaign_id = request.form.get('campaign_id', type=int)
+    extra = char.spells or {}
+    extra['inspiration'] = not extra.get('inspiration', False)
+    char.spells = extra
+    flag_modified(char, 'spells')
+    db.session.commit()
+    state = 'granted' if extra['inspiration'] else 'revoked'
+    flash(f'Inspiration {state} for {char.name}.', 'success')
+    if campaign_id:
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    return redirect(url_for('character_sheet', char_id=char_id))
+
+
+@app.route('/characters/<int:char_id>/inspiration/spend', methods=['POST'])
+@login_required
+def spend_inspiration(char_id):
+    from sqlalchemy.orm.attributes import flag_modified
+    char = Character.query.get_or_404(char_id)
+    uid = _effective_uid()
+    if char.user_id != uid and session.get('role') != 'dm':
+        flash('Access denied.', 'error')
+        return redirect(url_for('character_sheet', char_id=char_id))
+    extra = char.spells or {}
+    extra['inspiration'] = False
+    char.spells = extra
+    flag_modified(char, 'spells')
+    db.session.commit()
+    flash(f'{char.name} spent their Inspiration.', 'success')
+    campaign_id = request.form.get('campaign_id', type=int)
+    if campaign_id:
+        return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
     return redirect(url_for('character_sheet', char_id=char_id))
 
 

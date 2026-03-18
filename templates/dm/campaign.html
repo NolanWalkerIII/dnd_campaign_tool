@@ -822,6 +822,17 @@ function toggleGettingStarted() {
                 <button type="submit" class="btn btn-outline"
                         style="padding:4px 10px; font-size:0.8rem;">Apply</button>
               </form>
+              <!-- Inspiration toggle -->
+              {% set char_inspired = (char.spells or {}).get('inspiration', false) %}
+              <form method="POST" action="/dm/characters/{{ char.id }}/inspiration"
+                    style="margin-top:6px;">
+                <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+                <button type="submit" class="btn btn-outline"
+                        style="padding:3px 10px; font-size:0.8rem;
+                               color:{{ 'var(--accent)' if char_inspired else 'var(--gold)' }};">
+                  {{ '★ Revoke Inspiration' if char_inspired else '☆ Grant Inspiration' }}
+                </button>
+              </form>
             </div>
             {% endfor %}
           {% else %}
