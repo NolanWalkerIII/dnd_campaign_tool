@@ -338,6 +338,17 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
+### Phase 21: DM Initiative Override
+- **Source**: DM request (2026-03-17) — DMs need to manually set a combatant's initiative, just like they can adjust HP.
+- **Objectives**: Allow the DM to set any combatant's initiative value mid-combat, causing the order to re-sort automatically.
+- **Tasks**:
+  1. **Route** — `POST /dm/campaigns/<id>/combatant/<order_idx>/initiative`: reads `new_initiative` from form, updates the combatant in `initiative_order`, re-sorts descending, restores `turn_index` to the same active combatant, logs to combat log.
+  2. **Template** — Replace the static gold initiative badge on each combatant row with an inline number input pre-filled with the current value plus a small "✓" submit button. Applies to all combatants (PC and NPC).
+- **Deliverables**: New route in `app.py`; updated initiative badge in `templates/dm/campaign.html`.
+- **Status**: Complete ✓ (2026-03-17)
+
+---
+
 ### Phase 20: Character Sheet — Official Layout + Background Tab + AI Generation
 - **Source**: Beta playtest comparison against official D&D 5e character sheet layout (2026-03-17).
 - **Objectives**: Add key missing sections so the character sheet is a complete reference during play, and empower players with AI-assisted backstory and personality generation.

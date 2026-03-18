@@ -543,10 +543,18 @@ function toggleGettingStarted() {
           {{ '⚡' if is_current else '' }}
         </span>
         <!-- Init badge -->
-        <span style="background:var(--card); border-radius:4px; padding:2px 8px;
-                     font-size:0.8rem; color:var(--gold); min-width:32px; text-align:center;">
-          {{ entry.initiative }}
-        </span>
+        <form method="POST"
+              action="/dm/campaigns/{{ campaign.id }}/combatant/{{ loop.index0 }}/initiative"
+              style="display:flex; align-items:center; gap:3px;">
+          <input type="number" name="new_initiative" value="{{ entry.initiative }}"
+                 title="Set initiative"
+                 style="width:48px; padding:2px 5px; font-size:0.8rem; text-align:center;
+                        background:var(--card); border:1px solid var(--gold); border-radius:4px;
+                        color:var(--gold); font-weight:600;">
+          <button type="submit" class="btn btn-outline"
+                  style="padding:1px 6px; font-size:0.75rem; color:var(--gold);"
+                  title="Apply initiative">✓</button>
+        </form>
         <!-- Name + type -->
         <strong style="color:{{ 'var(--text)' if entry.is_npc else 'var(--gold)' }};">
           {{ entry.name }}
