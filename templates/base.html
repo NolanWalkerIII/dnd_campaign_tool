@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}D&D Campaign Manager{% endblock %}</title>
+  <title>{% block title %}Campaign Codex{% endblock %}</title>
+  <link rel="icon" href="/static/favicon/favicon.ico" sizes="any">
+  <link rel="icon" href="/static/favicon/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="/static/favicon/favicon-16.png" type="image/png" sizes="16x16">
+  <link rel="apple-touch-icon" href="/static/favicon/apple-touch-icon.png">
   <style>
     :root {
       --bg:        #1a1a2e;
@@ -304,7 +308,11 @@
 
   <!-- ── TOP NAV ── -->
   <nav>
-    <a class="brand" href="/">⚔ D&D Manager</a>
+    <a class="brand" href="/" style="display:flex; align-items:center; gap:8px; padding:0; text-decoration:none;">
+      <img src="/static/img/monogram/cc-monogram.png"
+           alt="" style="height:30px; width:auto; flex-shrink:0;">
+      <span style="color:var(--gold); font-weight:700; font-size:1.05rem; letter-spacing:0.5px;">Campaign Codex</span>
+    </a>
     {% if current_user %}
       {% if session.role == 'dm' %}
         <a href="/dm/dashboard">DM Dashboard</a>
@@ -349,7 +357,8 @@
     {% if current_user %}
     <aside class="left-nav">
 
-      {% if session.role == 'dm' %}
+
+{% if session.role == 'dm' %}
         <div class="left-nav-section">Campaigns</div>
         <a href="/dm/dashboard">🏰 DM Dashboard</a>
 

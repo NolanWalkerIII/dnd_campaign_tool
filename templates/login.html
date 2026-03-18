@@ -1,12 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Login — D&D Manager{% endblock %}
+{% block title %}Login — Campaign Codex{% endblock %}
 
 {% block content %}
-<div style="max-width:400px; margin:4rem auto;">
-  <h1 style="text-align:center; margin-bottom:0.25rem;">Welcome Back</h1>
-  <p style="text-align:center; color:var(--muted); margin-bottom:2rem;">Sign in to continue your adventure</p>
+<div style="max-width:420px; margin:3rem auto;">
 
-  <div class="card">
+  <!-- Logo -->
+  <div style="text-align:center; margin-bottom:2rem;">
+    <img src="/static/img/logo/campaign-codex-dark.png"
+         alt="Campaign Codex"
+         style="height:56px; width:auto; margin-bottom:1.25rem;">
+    <h1 style="font-size:1.4rem; margin-bottom:0.25rem;">Welcome Back</h1>
+    <p style="color:var(--muted); font-size:0.9rem;">Sign in to continue your adventure</p>
+  </div>
+
+  <div class="card" style="border-color:var(--gold);">
     <form method="POST" action="/login">
       <div class="form-group" style="margin-bottom:1rem;">
         <label for="username">Username</label>
@@ -24,5 +31,6 @@
     Don't have an account?
     <a href="/register" style="color:var(--gold);">Register here</a>
   </p>
+
 </div>
 {% endblock %}

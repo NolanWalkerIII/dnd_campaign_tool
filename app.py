@@ -15,7 +15,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from models import db, User, Character, Campaign, DiceRoller
 from parsers import parse_character_md, parse_campaign_md, CHARACTER_TEMPLATE, CAMPAIGN_TEMPLATE
-from services.ai import cleanup_narration, generate_narration
+from services.ai import (cleanup_narration, generate_narration,
+                         cleanup_background, generate_background,
+                         generate_trait_field, generate_appearance)
 import re as _re
 
 from game_data import (
@@ -540,6 +542,27 @@ def character_sheet(char_id):
         if char.user_id:
             char_owner = User.query.get(char.user_id)
 
+    bg_data    = BACKGROUNDS.get(char.background, {})
+    languages  = race_data.get('languages', [])
+    temp_hp    = extra.get('temp_hp', 0)
+    bg_details = extra.get('background_details', {})
+
+    # Passive scores (10 + skill modifier)
+    scores = char.ability_scores or {}
+    def _passive(skill_ab, skill_name):
+        base = ability_modifier(scores.get(skill_ab, 10))
+        prof = (char.proficiency_bonus if skill_name in (char.skills or []) else 0)
+        return 10 + base + prof
+
+    passive_perception   = _passive('WIS', 'Perception')
+    passive_investigation = _passive('INT', 'Investigation')
+    passive_insight      = _passive('WIS', 'Insight')
+
+    # Senses from race traits (lines containing "vision", "sense", "blindsight", etc.)
+    sense_keywords = ('vision', 'sense', 'blindsight', 'tremorsense', 'truesight')
+    senses = [t for t in race_data.get('traits', [])
+              if any(k in t.lower() for k in sense_keywords)]
+
     return render_template(
         'character_sheet.html',
         character=char,
@@ -556,7 +579,136 @@ def character_sheet(char_id):
         owner_campaigns=owner_campaigns,
         all_users=all_users,
         char_owner=char_owner,
+        bg_data=bg_data,
+        languages=languages,
+        temp_hp=temp_hp,
+        bg_details=bg_details,
+        passive_perception=passive_perception,
+        passive_investigation=passive_investigation,
+        passive_insight=passive_insight,
+        senses=senses,
     )
+
+
+@app.route('/characters/<int:char_id>/temp_hp', methods=['POST'])
+@login_required
+def character_temp_hp(char_id):
+    char = Character.query.get_or_404(char_id)
+    if char.user_id != session.get('user_id') and session.get('role') != 'dm':
+        flash('Not authorized.', 'error')
+        return redirect(url_for('character_sheet', char_id=char_id))
+    try:
+        val = max(0, int(request.form.get('temp_hp', 0)))
+    except (ValueError, TypeError):
+        val = 0
+    extra = char.spells or {}
+    extra['temp_hp'] = val
+    char.spells = extra
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(char, 'spells')
+    db.session.commit()
+    return redirect(url_for('character_sheet', char_id=char_id))
+
+
+@app.route('/characters/<int:char_id>/background_details', methods=['POST'])
+@login_required
+def character_background_details(char_id):
+    char = Character.query.get_or_404(char_id)
+    if char.user_id != session.get('user_id') and session.get('role') != 'dm':
+        flash('Not authorized.', 'error')
+        return redirect(url_for('character_sheet', char_id=char_id))
+    fields = [
+        'personality_traits', 'ideals', 'bonds', 'flaws',
+        'custom_background', 'appearance',
+        'gender', 'age', 'height', 'weight',
+        'eyes', 'hair', 'skin', 'faith', 'size',
+    ]
+    extra = char.spells or {}
+    bg = extra.get('background_details', {})
+    for f in fields:
+        bg[f] = request.form.get(f, '').strip()
+    extra['background_details'] = bg
+    char.spells = extra
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(char, 'spells')
+    db.session.commit()
+    flash('Background details saved.', 'success')
+    return redirect(url_for('character_sheet', char_id=char_id))
+
+
+def _char_ai_auth(char):
+    """Return True if the current user can use AI features on this character."""
+    return (char.user_id == session.get('user_id') or
+            session.get('role') == 'dm')
+
+
+@app.route('/characters/<int:char_id>/ai/background/cleanup', methods=['POST'])
+@login_required
+def char_ai_background_cleanup(char_id):
+    char = Character.query.get_or_404(char_id)
+    if not _char_ai_auth(char):
+        return jsonify({'error': 'Not authorized.'}), 403
+    data = request.get_json(silent=True) or {}
+    text = data.get('text', '').strip()
+    if not text:
+        return jsonify({'error': 'No text to clean up.'}), 400
+    result, error = cleanup_background(text, char.name, char.race, char.class_name)
+    if error:
+        return jsonify({'error': error}), 502
+    return jsonify({'text': result})
+
+
+@app.route('/characters/<int:char_id>/ai/background/generate', methods=['POST'])
+@login_required
+def char_ai_background_generate(char_id):
+    char = Character.query.get_or_404(char_id)
+    if not _char_ai_auth(char):
+        return jsonify({'error': 'Not authorized.'}), 403
+    result, error = generate_background(
+        char.name, char.race, char.class_name,
+        char.background, char.alignment
+    )
+    if error:
+        return jsonify({'error': error}), 502
+    return jsonify({'text': result})
+
+
+@app.route('/characters/<int:char_id>/ai/trait', methods=['POST'])
+@login_required
+def char_ai_trait(char_id):
+    char = Character.query.get_or_404(char_id)
+    if not _char_ai_auth(char):
+        return jsonify({'error': 'Not authorized.'}), 403
+    data = request.get_json(silent=True) or {}
+    field = data.get('field', '')
+    custom_bg = data.get('custom_background', '').strip()
+    if field not in ('personality_traits', 'ideals', 'bonds', 'flaws'):
+        return jsonify({'error': 'Invalid field.'}), 400
+    if not custom_bg:
+        return jsonify({'error': 'Custom background must be filled out first.'}), 400
+    result, error = generate_trait_field(field, custom_bg, char.name, char.race, char.class_name)
+    if error:
+        return jsonify({'error': error}), 502
+    return jsonify({'text': result})
+
+
+@app.route('/characters/<int:char_id>/ai/appearance', methods=['POST'])
+@login_required
+def char_ai_appearance(char_id):
+    char = Character.query.get_or_404(char_id)
+    if not _char_ai_auth(char):
+        return jsonify({'error': 'Not authorized.'}), 403
+    data = request.get_json(silent=True) or {}
+    custom_bg = data.get('custom_background', '').strip()
+    phys = data.get('physical_characteristics', {})
+    if not custom_bg:
+        return jsonify({'error': 'Custom background must be filled out first.'}), 400
+    if not any(phys.values()):
+        return jsonify({'error': 'Fill in at least one physical characteristic first.'}), 400
+    result, error = generate_appearance(custom_bg, phys, char.name, char.race, char.class_name)
+    if error:
+        return jsonify({'error': error}), 502
+    return jsonify({'text': result})
 
 
 @app.route('/characters/<int:char_id>/delete')

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ character.name }} — D&D Manager{% endblock %}
+{% block title %}{{ character.name }} — Campaign Codex{% endblock %}
 
 {% block content %}
 {% set spells_data = character.spells or {} %}
@@ -11,10 +11,103 @@
 {% set is_owner = character.user_id == session.get('user_id') %}
 {% set can_edit = is_owner or session.get('role') == 'dm' %}
 
+<style>
+/* ── ABILITY SCORE BOXES ── */
+.ability-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.6rem;
+}
+@media (max-width: 600px) { .ability-grid { grid-template-columns: repeat(3, 1fr); } }
+
+.ability-box {
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  text-align: center;
+  padding: 0.6rem 0.4rem;
+  position: relative;
+}
+.ability-box .ab-name  { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.ability-box .ab-mod   { font-size: 1.6rem; font-weight: 700; color: var(--gold); line-height: 1; margin: 4px 0; }
+.ability-box .ab-score { font-size: 0.78rem; color: var(--muted); }
+
+/* ── COMBAT BAR ── */
+.combat-bar {
+  display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: stretch;
+}
+.combat-pill {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 0.5rem 0.9rem;
+  text-align: center; min-width: 70px; flex: 1;
+}
+.combat-pill .cp-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 2px; }
+.combat-pill .cp-value { font-size: 1.15rem; font-weight: 700; color: var(--text); }
+.combat-pill.cp-hp  { border-color: var(--success); }
+.combat-pill.cp-ac  { border-color: var(--gold); }
+
+/* ── PASSIVES ROW ── */
+.passive-row {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+}
+.passive-box {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 5px 12px; font-size: 0.85rem;
+}
+.passive-box .pv { font-weight: 700; color: var(--gold); font-size: 1rem; min-width: 24px; text-align: right; }
+.passive-box .pl { color: var(--muted); font-size: 0.78rem; }
+
+/* ── TABS ── */
+.tab-bar {
+  display: flex; gap: 2px; border-bottom: 2px solid var(--border);
+  margin-bottom: 0; overflow-x: auto; flex-wrap: nowrap;
+}
+.tab-btn {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  margin-bottom: -2px; padding: 8px 16px; font-size: 0.82rem; font-weight: 600;
+  color: var(--muted); cursor: pointer; white-space: nowrap; font-family: inherit;
+  text-transform: uppercase; letter-spacing: 0.5px; transition: color 0.15s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+.tab-panel { display: none; padding-top: 1.25rem; }
+.tab-panel.active { display: block; }
+
+/* ── SKILL ROWS ── */
+.skill-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 0.875rem;
+}
+.skill-row:last-child { border-bottom: none; }
+.prof-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid var(--muted); background: transparent;
+}
+.prof-dot.filled { background: var(--gold); border-color: var(--gold); }
+.skill-mod { margin-left: auto; font-weight: 700; color: var(--gold); min-width: 32px; text-align: right; }
+
+/* ── MISC ── */
+.section-label {
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); font-weight: 600; margin-bottom: 0.5rem; margin-top: 0.75rem;
+}
+.section-label:first-child { margin-top: 0; }
+.equip-list { list-style: none; padding: 0; }
+.equip-list li { padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
+.equip-list li:last-child { border-bottom: none; }
+.trait-list { list-style: none; padding: 0; }
+.trait-list li { padding: 3px 0; font-size: 0.875rem; color: var(--muted); }
+.trait-list li::before { content: "▸ "; color: var(--gold); }
+</style>
+
+<!-- ── PAGE HEADER ── -->
 <div class="page-header">
   <div>
-    <h1>{{ character.name }}</h1>
-    <p style="color:var(--muted); font-size:0.9rem;">
+    <h1 style="margin-bottom:0.2rem;">{{ character.name }}</h1>
+    <p style="color:var(--muted); font-size:0.88rem;">
       Level {{ character.level }}
       {{ character.race }} {{ character.class_name }}
       {% if character.background %} · {{ character.background }}{% endif %}
@@ -24,81 +117,135 @@
   <div style="display:flex; gap:0.75rem; align-items:center;">
     <a href="/characters" class="btn btn-outline">← All Characters</a>
     {% if can_edit %}
-    <a href="/characters/{{ character.id }}/delete"
-       class="btn btn-primary"
+    <a href="/characters/{{ character.id }}/delete" class="btn btn-primary"
        onclick="return confirm('Delete {{ character.name }}?')">Delete</a>
     {% endif %}
   </div>
 </div>
 
 <!-- ── ABILITY SCORES ── -->
-<div class="card">
-  <h2>Ability Scores</h2>
-  <div class="stat-grid">
+<div class="card" style="margin-bottom:0.75rem;">
+  <div class="ability-grid">
     {% for ab in ability_order %}
     {% set score = character.ability_scores[ab] %}
     {% set m = score_mod(score) %}
-    <div class="stat-block">
-      <div class="stat-name">{{ ability_names[ab] }}</div>
-      <div class="stat-score">{{ score }}</div>
-      <div class="stat-mod">{{ mod_str(m) }}</div>
+    <div class="ability-box">
+      <div class="ab-name">{{ ability_names[ab] }}</div>
+      <div class="ab-mod">{{ mod_str(m) }}</div>
+      <div class="ab-score">{{ score }}</div>
     </div>
     {% endfor %}
   </div>
 </div>
 
-<!-- ── COMBAT STATS ── -->
-<div class="card">
-  <h2>Combat Stats</h2>
-  <div class="info-row">
-    <div class="info-pill">
-      <div class="pill-label">HP</div>
-      <div class="pill-value">{{ character.hp_current }} / {{ character.hp_max }}</div>
+<!-- ── COMBAT STATS BAR ── -->
+<div class="card" style="margin-bottom:0.75rem;">
+  <div class="combat-bar">
+    <!-- HP block with heal/damage + temp HP -->
+    <div class="combat-pill cp-hp" style="flex:2; min-width:160px;">
+      <div class="cp-label">Hit Points</div>
+      <div style="font-size:1.2rem; font-weight:700; color:var(--success);">
+        {{ character.hp_current }} <span style="color:var(--muted); font-weight:400;">/</span> {{ character.hp_max }}
+        {% if temp_hp > 0 %}
+        <span style="font-size:0.85rem; color:var(--gold); margin-left:6px;">(+{{ temp_hp }} temp)</span>
+        {% endif %}
+      </div>
+      {% if can_edit %}
+      <div style="display:flex; gap:4px; margin-top:6px; justify-content:center;">
+        <form method="POST" action="/characters/{{ character.id }}/hp" style="display:flex; gap:4px;">
+          {% if session.get('role') == 'dm' and owner_campaigns %}
+          <input type="hidden" name="campaign_id" value="">
+          {% endif %}
+          <input type="number" name="delta" placeholder="±" style="width:55px; padding:3px 6px; font-size:0.78rem; text-align:center;">
+          <button type="submit" class="btn btn-outline" style="padding:3px 10px; font-size:0.75rem;">Apply</button>
+        </form>
+      </div>
+      {% endif %}
     </div>
-    <div class="info-pill">
-      <div class="pill-label">AC</div>
-      <div class="pill-value">{{ character.ac }}</div>
+
+    <div class="combat-pill" style="min-width:60px;">
+      <div class="cp-label">Temp HP</div>
+      {% if can_edit %}
+      <form method="POST" action="/characters/{{ character.id }}/temp_hp">
+        <input type="number" name="temp_hp" value="{{ temp_hp }}" min="0"
+               style="width:60px; padding:3px 6px; font-size:0.9rem; text-align:center; background:transparent; border:none; color:var(--gold); font-weight:700;">
+        <button type="submit" class="btn btn-outline" style="padding:2px 7px; font-size:0.72rem; display:block; margin:2px auto 0;">Set</button>
+      </form>
+      {% else %}
+      <div class="cp-value" style="color:var(--gold);">{{ temp_hp }}</div>
+      {% endif %}
     </div>
-    <div class="info-pill">
-      <div class="pill-label">Initiative</div>
-      <div class="pill-value">{{ mod_str(score_mod(character.ability_scores['DEX'])) }}</div>
+
+    <div class="combat-pill cp-ac">
+      <div class="cp-label">AC</div>
+      <div class="cp-value">{{ character.ac }}</div>
     </div>
-    <div class="info-pill">
-      <div class="pill-label">Speed</div>
-      <div class="pill-value">{{ race_speed }} ft</div>
+    <div class="combat-pill">
+      <div class="cp-label">Initiative</div>
+      <div class="cp-value">{{ mod_str(score_mod(character.ability_scores['DEX'])) }}</div>
     </div>
-    <div class="info-pill">
-      <div class="pill-label">Prof. Bonus</div>
-      <div class="pill-value">+{{ character.proficiency_bonus }}</div>
+    <div class="combat-pill">
+      <div class="cp-label">Speed</div>
+      <div class="cp-value">{{ race_speed }} ft</div>
     </div>
-    <div class="info-pill">
-      <div class="pill-label">Hit Die</div>
-      <div class="pill-value">d{{ hit_die }}</div>
+    <div class="combat-pill">
+      <div class="cp-label">Prof Bonus</div>
+      <div class="cp-value">+{{ character.proficiency_bonus }}</div>
+    </div>
+    <div class="combat-pill">
+      <div class="cp-label">Hit Die</div>
+      <div class="cp-value">d{{ hit_die }}</div>
     </div>
     {% if spellcasting_ability %}
-    <div class="info-pill">
-      <div class="pill-label">Spell DC</div>
-      <div class="pill-value">{{ spell_dc }}</div>
+    <div class="combat-pill">
+      <div class="cp-label">Spell DC</div>
+      <div class="cp-value">{{ spell_dc }}</div>
     </div>
-    <div class="info-pill">
-      <div class="pill-label">Spell Atk</div>
-      <div class="pill-value">{{ mod_str(spell_atk) }}</div>
+    <div class="combat-pill">
+      <div class="cp-label">Spell Atk</div>
+      <div class="cp-value">{{ mod_str(spell_atk) }}</div>
     </div>
     {% endif %}
   </div>
 </div>
 
-<!-- DM HP Adjustment (only visible to DMs) -->
+<!-- ── PASSIVES & SENSES ── -->
+<div class="card" style="margin-bottom:0.75rem; padding:0.75rem 1.25rem;">
+  <div class="passive-row">
+    <div class="passive-box">
+      <span class="pv">{{ passive_perception }}</span>
+      <span class="pl">Passive Perception</span>
+    </div>
+    <div class="passive-box">
+      <span class="pv">{{ passive_investigation }}</span>
+      <span class="pl">Passive Investigation</span>
+    </div>
+    <div class="passive-box">
+      <span class="pv">{{ passive_insight }}</span>
+      <span class="pl">Passive Insight</span>
+    </div>
+    {% if senses %}
+    <div style="margin-left:auto; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+      <span style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted);">Senses</span>
+      {% for s in senses %}
+      <span style="font-size:0.8rem; color:var(--text); background:var(--card); padding:3px 10px; border-radius:12px; border:1px solid var(--border);">{{ s.split('(')[0].strip() }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── DM HP CONTROLS ── -->
 {% if session.get('role') == 'dm' %}
-<div class="card" style="border-color:var(--accent);">
-  <h2 style="color:var(--accent);">DM Controls</h2>
-  <div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap;">
+<div class="card" style="border-color:var(--accent); margin-bottom:0.75rem; padding:0.9rem 1.25rem;">
+  <div style="display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">
+    <span style="font-size:0.85rem; color:var(--accent); font-weight:600;">DM HP Override</span>
     <form method="POST" action="/dm/characters/{{ character.id }}/hp"
-          style="display:flex; gap:0.75rem; align-items:flex-end;">
+          style="display:flex; gap:0.5rem; align-items:flex-end; flex-wrap:wrap;">
       {% if owner_campaigns %}
-      <div class="form-group">
-        <label>Return to Campaign</label>
-        <select name="campaign_id">
+      <div class="form-group" style="margin:0;">
+        <label style="font-size:0.72rem;">Return to Campaign</label>
+        <select name="campaign_id" style="padding:4px 8px; font-size:0.82rem;">
           <option value="">— Stay on sheet —</option>
           {% for c in owner_campaigns %}
           <option value="{{ c.id }}">{{ c.name }}</option>
@@ -108,190 +255,139 @@
       {% else %}
       <input type="hidden" name="campaign_id" value="">
       {% endif %}
-      <div class="form-group">
-        <label>HP Delta (+ heal / − damage)</label>
-        <input type="number" name="delta" placeholder="e.g. -5 or +10" style="width:140px;">
+      <div class="form-group" style="margin:0;">
+        <label style="font-size:0.72rem;">HP Delta</label>
+        <input type="number" name="delta" placeholder="e.g. -5 or +10" style="width:120px; padding:4px 8px; font-size:0.85rem;">
       </div>
-      <button type="submit" class="btn btn-gold">Apply</button>
+      <button type="submit" class="btn btn-gold" style="padding:6px 14px;">Apply</button>
     </form>
   </div>
 </div>
 {% endif %}
 
-<!-- ── SPELL SLOTS (spellcasters only, owner/DM) ── -->
-{% if spellcasting_ability and can_edit and slots %}
-<div class="card">
-  <h2>Spell Slots</h2>
-
-  {% if concentration %}
-  <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;
-              background:rgba(233,69,96,0.1); border:1px solid var(--accent);
-              border-radius:var(--radius); padding:8px 12px;">
-    <span style="color:var(--accent); font-size:0.9rem;">
-      ✦ Concentrating: <strong>{{ concentration }}</strong>
-    </span>
-    <form method="POST" action="/characters/{{ character.id }}/concentration/clear" style="margin:0;">
-      <button type="submit" class="btn btn-outline"
-              style="padding:2px 10px; font-size:0.78rem; color:var(--accent);">Drop</button>
-    </form>
-  </div>
-  {% endif %}
-
-  <!-- Slot circles per level -->
-  <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1.25rem;">
-    {% for lvl in ['1','2','3','4','5','6','7','8','9'] %}
-    {% if lvl in slots %}
-    {% set slot = slots[lvl] %}
-    <div style="text-align:center;">
-      <div style="font-size:0.72rem; color:var(--muted); margin-bottom:4px; letter-spacing:1px;">
-        {{ lvl }}{% if lvl == '1' %}st{% elif lvl == '2' %}nd{% elif lvl == '3' %}rd{% else %}th{% endif %}
-      </div>
-      <div style="display:flex; gap:4px; justify-content:center; margin-bottom:3px;">
-        {% for i in range(slot.max) %}
-        {% set filled = i < slot.current %}
-        <span style="width:14px; height:14px; border-radius:50%;
-                     background:{{ 'var(--gold)' if filled else 'transparent' }};
-                     border:2px solid {{ 'var(--gold)' if filled else 'var(--muted)' }};
-                     display:inline-block;"></span>
-        {% endfor %}
-      </div>
-      <div style="font-size:0.72rem; color:var(--muted);">{{ slot.current }}/{{ slot.max }}</div>
-    </div>
+<!-- ── TAB INTERFACE ── -->
+<div class="card" style="padding:0; overflow:hidden;">
+  <div class="tab-bar" style="padding:0 1.25rem;">
+    <button class="tab-btn active" onclick="switchTab('saves')"   id="tab-saves">Saves &amp; Skills</button>
+    {% if spellcasting_ability and can_edit and slots %}
+    <button class="tab-btn"        onclick="switchTab('spells')"  id="tab-spells">Spells</button>
     {% endif %}
-    {% endfor %}
+    <button class="tab-btn"        onclick="switchTab('inventory')" id="tab-inventory">Inventory</button>
+    <button class="tab-btn"        onclick="switchTab('features')"    id="tab-features">Features</button>
+    <button class="tab-btn"        onclick="switchTab('background')"  id="tab-background">Background</button>
+    {% if can_edit %}
+    <button class="tab-btn"        onclick="switchTab('rests')"       id="tab-rests">Rests</button>
+    {% endif %}
   </div>
 
-  <!-- Cast Spell Form -->
-  <form method="POST" action="/characters/{{ character.id }}/cast"
-        style="display:flex; gap:0.5rem; align-items:flex-end; flex-wrap:wrap;">
-    <div class="form-group" style="flex:1; min-width:160px;">
-      <label>Spell name (optional)</label>
-      <input type="text" name="spell_name" placeholder="e.g. Fireball">
+  <div style="padding:0 1.25rem 1.25rem;">
+
+    <!-- ══ TAB: SAVES & SKILLS ══ -->
+    <div class="tab-panel active" id="panel-saves">
+      <div class="two-col" style="gap:1.5rem;">
+        <!-- Saving Throws -->
+        <div>
+          <div class="section-label">Saving Throws</div>
+          {% for ab in ability_order %}
+          {% set m = score_mod(character.ability_scores[ab]) %}
+          {% set prof = ab in saving_throw_profs %}
+          <div class="skill-row">
+            <span class="prof-dot {{ 'filled' if prof else '' }}"></span>
+            <span>{{ ability_names[ab] }}</span>
+            <span class="skill-mod">{{ mod_str(m + (character.proficiency_bonus if prof else 0)) }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        <!-- Skills -->
+        <div>
+          <div class="section-label">Skills</div>
+          {% for skill_name, ab in skills_sorted %}
+          {% set base_mod = score_mod(character.ability_scores[ab]) %}
+          {% set prof = skill_name in character.skills %}
+          <div class="skill-row">
+            <span class="prof-dot {{ 'filled' if prof else '' }}"></span>
+            <span>{{ skill_name }}</span>
+            <span style="font-size:0.72rem; color:var(--muted); margin-left:2px;">({{ ab }})</span>
+            <span class="skill-mod">{{ mod_str(base_mod + (character.proficiency_bonus if prof else 0)) }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
     </div>
-    <div class="form-group">
-      <label>Slot level</label>
-      <select name="slot_level" style="width:80px;">
+
+    <!-- ══ TAB: SPELLS ══ -->
+    {% if spellcasting_ability and can_edit and slots %}
+    <div class="tab-panel" id="panel-spells">
+      {% if concentration %}
+      <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;
+                  background:rgba(233,69,96,0.1); border:1px solid var(--accent);
+                  border-radius:var(--radius); padding:8px 12px;">
+        <span style="color:var(--accent); font-size:0.9rem;">
+          ✦ Concentrating: <strong>{{ concentration }}</strong>
+        </span>
+        <form method="POST" action="/characters/{{ character.id }}/concentration/clear" style="margin:0;">
+          <button type="submit" class="btn btn-outline"
+                  style="padding:2px 10px; font-size:0.78rem; color:var(--accent);">Drop</button>
+        </form>
+      </div>
+      {% endif %}
+
+      <div class="section-label">Spell Slots</div>
+      <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1.25rem;">
         {% for lvl in ['1','2','3','4','5','6','7','8','9'] %}
-        {% if lvl in slots and slots[lvl].current > 0 %}
-        <option value="{{ lvl }}">{{ lvl }}</option>
+        {% if lvl in slots %}
+        {% set slot = slots[lvl] %}
+        <div style="text-align:center;">
+          <div style="font-size:0.72rem; color:var(--muted); margin-bottom:4px; letter-spacing:1px;">
+            {{ lvl }}{% if lvl == '1' %}st{% elif lvl == '2' %}nd{% elif lvl == '3' %}rd{% else %}th{% endif %}
+          </div>
+          <div style="display:flex; gap:4px; justify-content:center; margin-bottom:3px;">
+            {% for i in range(slot.max) %}
+            {% set filled = i < slot.current %}
+            <span style="width:14px; height:14px; border-radius:50%;
+                         background:{{ 'var(--gold)' if filled else 'transparent' }};
+                         border:2px solid {{ 'var(--gold)' if filled else 'var(--muted)' }};
+                         display:inline-block;"></span>
+            {% endfor %}
+          </div>
+          <div style="font-size:0.72rem; color:var(--muted);">{{ slot.current }}/{{ slot.max }}</div>
+        </div>
         {% endif %}
         {% endfor %}
-      </select>
-    </div>
-    <div class="form-group" style="display:flex; align-items:center; gap:6px; padding-bottom:8px;">
-      <input type="checkbox" name="concentration" id="conc_check" style="width:auto;">
-      <label for="conc_check" style="margin:0; font-size:0.85rem; color:var(--muted);">Concentration</label>
-    </div>
-    <button type="submit" class="btn btn-gold" style="padding:8px 16px;">Cast</button>
-  </form>
-</div>
-{% endif %}
-
-<!-- ── HIT DICE & RESTS ── -->
-{% if can_edit %}
-<div class="card">
-  <h2>Hit Dice &amp; Rests</h2>
-  <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem; flex-wrap:wrap;">
-    <!-- Hit dice circles -->
-    <div style="display:flex; gap:5px; align-items:center;">
-      {% for i in range(hit_dice_max) %}
-      <span style="width:16px; height:16px; border-radius:3px;
-                   background:{{ 'var(--success)' if i < hit_dice_cur else 'var(--border)' }};
-                   border:1px solid {{ 'var(--success)' if i < hit_dice_cur else 'var(--muted)' }};
-                   display:inline-block;" title="Hit die {{ i+1 }}"></span>
-      {% endfor %}
-    </div>
-    <span style="font-size:0.85rem; color:var(--text);">
-      {{ hit_dice_cur }}/{{ hit_dice_max }} d{{ hit_die }} remaining
-    </span>
-  </div>
-
-  <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
-    <!-- Short Rest -->
-    <form method="POST" action="/characters/{{ character.id }}/rest/short"
-          style="display:flex; gap:0.5rem; align-items:flex-end;">
-      <div class="form-group">
-        <label>Dice to spend</label>
-        <input type="number" name="num_dice" value="1" min="1" max="{{ hit_dice_max }}"
-               style="width:65px;">
       </div>
-      <button type="submit" class="btn btn-outline"
-              style="padding:7px 14px;"
-              {% if hit_dice_cur <= 0 %}disabled title="No hit dice remaining"{% endif %}>
-        Short Rest
-      </button>
-    </form>
 
-    <!-- Long Rest -->
-    <form method="POST" action="/characters/{{ character.id }}/rest/long">
-      <button type="submit" class="btn btn-gold"
-              onclick="return confirm('Take a long rest? This fully restores HP and spell slots.')"
-              style="padding:7px 16px;">Long Rest</button>
-    </form>
-  </div>
-</div>
-{% endif %}
-
-<div class="two-col">
-  <!-- ── SAVING THROWS & SKILLS ── -->
-  <div>
-    <div class="card">
-      <h2>Saving Throws</h2>
-      {% for ab in ability_order %}
-      {% set m = score_mod(character.ability_scores[ab]) %}
-      {% set prof = ab in saving_throw_profs %}
-      <div class="skill-row">
-        <span class="prof-dot {{ 'filled' if prof else '' }}"></span>
-        <span>{{ ability_names[ab] }}</span>
-        <span class="skill-mod">{{ mod_str(m + (character.proficiency_bonus if prof else 0)) }}</span>
-      </div>
-      {% endfor %}
+      <div class="section-label">Cast a Spell</div>
+      <form method="POST" action="/characters/{{ character.id }}/cast"
+            style="display:flex; gap:0.5rem; align-items:flex-end; flex-wrap:wrap;">
+        <div class="form-group" style="flex:1; min-width:160px;">
+          <label>Spell name (optional)</label>
+          <input type="text" name="spell_name" placeholder="e.g. Fireball">
+        </div>
+        <div class="form-group">
+          <label>Slot level</label>
+          <select name="slot_level" style="width:80px;">
+            {% for lvl in ['1','2','3','4','5','6','7','8','9'] %}
+            {% if lvl in slots and slots[lvl].current > 0 %}
+            <option value="{{ lvl }}">{{ lvl }}</option>
+            {% endif %}
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" style="display:flex; align-items:center; gap:6px; padding-bottom:8px;">
+          <input type="checkbox" name="concentration" id="conc_check" style="width:auto;">
+          <label for="conc_check" style="margin:0; font-size:0.85rem; color:var(--muted);">Concentration</label>
+        </div>
+        <button type="submit" class="btn btn-gold" style="padding:8px 16px;">Cast</button>
+      </form>
     </div>
+    {% endif %}
 
-    <div class="card">
-      <h2>Skills</h2>
-      {% for skill_name, ab in skills_sorted %}
-      {% set base_mod = score_mod(character.ability_scores[ab]) %}
-      {% set prof = skill_name in character.skills %}
-      <div class="skill-row">
-        <span class="prof-dot {{ 'filled' if prof else '' }}"></span>
-        <span>{{ skill_name }}</span>
-        <span style="font-size:0.75rem; color:var(--muted); margin-left:4px;">({{ ab }})</span>
-        <span class="skill-mod">{{ mod_str(base_mod + (character.proficiency_bonus if prof else 0)) }}</span>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-
-  <!-- ── PROFICIENCIES, EQUIPMENT & RACIAL TRAITS ── -->
-  <div>
-    <div class="card">
-      <h2>Proficiencies</h2>
-      <h3 style="margin-top:0.5rem;">Armor</h3>
-      <p style="font-size:0.88rem; color:var(--muted);">
-        {{ armor_profs | join(', ') or 'None' }}
-      </p>
-      <h3 style="margin-top:0.75rem;">Weapons</h3>
-      <p style="font-size:0.88rem; color:var(--muted);">
-        {{ weapon_profs | join(', ') }}
-      </p>
-      {% if spellcasting_ability %}
-      <h3 style="margin-top:0.75rem;">Spellcasting</h3>
-      <p style="font-size:0.88rem; color:var(--muted);">
-        Ability: {{ ability_names[spellcasting_ability] }} ({{ spellcasting_ability }})
-      </p>
-      {% endif %}
-    </div>
-
-    <!-- Equipment + Gold -->
-    <div class="card">
+    <!-- ══ TAB: INVENTORY ══ -->
+    <div class="tab-panel" id="panel-inventory">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
-        <h2 style="margin:0;">Equipment</h2>
-        <!-- Gold display -->
+        <div class="section-label" style="margin:0;">Equipment</div>
         <div style="display:flex; align-items:center; gap:8px;">
-          <span style="font-size:0.82rem; color:var(--gold); font-weight:600;">
-            ◆ {{ gold }} gp
-          </span>
+          <span style="font-size:0.9rem; color:var(--gold); font-weight:600;">◆ {{ gold }} gp</span>
           {% if can_edit %}
           <form method="POST" action="/characters/{{ character.id }}/gold"
                 style="display:flex; gap:4px;">
@@ -329,49 +425,328 @@
 
       {% if can_edit %}
       <form method="POST" action="/characters/{{ character.id }}/inventory/add"
-            style="display:flex; gap:0.5rem; align-items:flex-end;">
+            style="display:flex; gap:0.5rem; align-items:flex-end; margin-top:0.5rem;">
         <div class="form-group" style="flex:1; margin:0;">
           <label style="font-size:0.78rem;">Add item</label>
-          <input type="text" name="item" placeholder="e.g. Rope (50 ft)"
-                 style="font-size:0.85rem;">
+          <input type="text" name="item" placeholder="e.g. Rope (50 ft)">
         </div>
-        <button type="submit" class="btn btn-outline"
-                style="padding:7px 12px; font-size:0.82rem;">Add</button>
+        <button type="submit" class="btn btn-outline" style="padding:7px 12px; font-size:0.82rem;">Add</button>
       </form>
       {% endif %}
     </div>
 
-    <div class="card">
-      <h2>Racial Traits</h2>
-      {% if race_traits %}
-      <ul class="trait-list">
-        {% for trait in race_traits %}
-        <li>{{ trait }}</li>
-        {% endfor %}
-      </ul>
+    <!-- ══ TAB: FEATURES ══ -->
+    <div class="tab-panel" id="panel-features">
+      <div class="two-col" style="gap:1.5rem;">
+        <div>
+          {% if bg_data.get('feature') %}
+          <div class="section-label">Background Feature</div>
+          <p style="font-size:0.88rem; color:var(--gold); font-weight:600; margin-bottom:0.25rem;">
+            {{ bg_data.feature }}
+          </p>
+          {% if bg_data.get('feature_description') %}
+          <p style="font-size:0.84rem; color:var(--muted);">{{ bg_data.feature_description }}</p>
+          {% endif %}
+          <div style="margin-bottom:0.75rem;"></div>
+          {% endif %}
+
+          <div class="section-label">Racial Traits</div>
+          {% if race_traits %}
+          <ul class="trait-list">
+            {% for trait in race_traits %}
+            <li>{{ trait }}</li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p style="color:var(--muted); font-size:0.88rem;">None listed.</p>
+          {% endif %}
+        </div>
+
+        <div>
+          <div class="section-label">Armor Proficiencies</div>
+          <p style="font-size:0.85rem; color:var(--muted); margin-bottom:0.75rem;">
+            {{ armor_profs | join(', ') or 'None' }}
+          </p>
+
+          <div class="section-label">Weapon Proficiencies</div>
+          <p style="font-size:0.85rem; color:var(--muted); margin-bottom:0.75rem;">
+            {{ weapon_profs | join(', ') }}
+          </p>
+
+          {% if languages %}
+          <div class="section-label">Languages</div>
+          <p style="font-size:0.85rem; color:var(--muted); margin-bottom:0.75rem;">
+            {{ languages | join(', ') }}
+          </p>
+          {% endif %}
+
+          {% if spellcasting_ability %}
+          <div class="section-label">Spellcasting</div>
+          <p style="font-size:0.85rem; color:var(--muted);">
+            Ability: {{ ability_names[spellcasting_ability] }} ({{ spellcasting_ability }}) ·
+            DC {{ spell_dc }} · Atk {{ mod_str(spell_atk) }}
+          </p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TAB: BACKGROUND ══ -->
+    <div class="tab-panel" id="panel-background">
+      {% if not can_edit %}
+      <!-- Read-only view -->
+      <div class="two-col" style="gap:1.5rem;">
+        <div>
+          {% if bg_details.get('custom_background') %}
+          <div class="section-label">Custom Background</div>
+          <p style="font-size:0.88rem; color:var(--muted); margin-bottom:0.75rem;">{{ bg_details.custom_background }}</p>
+          {% endif %}
+          {% for field, label in [('personality_traits','Personality Traits'),('ideals','Ideals'),('bonds','Bonds'),('flaws','Flaws'),('appearance','Appearance')] %}
+          {% if bg_details.get(field) %}
+          <div class="section-label">{{ label }}</div>
+          <p style="font-size:0.88rem; color:var(--muted); margin-bottom:0.75rem; white-space:pre-line;">{{ bg_details[field] }}</p>
+          {% endif %}
+          {% endfor %}
+        </div>
+        <div>
+          <div class="section-label">Characteristics</div>
+          <table style="width:100%; font-size:0.83rem; border-collapse:collapse;">
+            {% for field, label in [('gender','Gender'),('age','Age'),('height','Height'),('weight','Weight'),('eyes','Eyes'),('hair','Hair'),('skin','Skin'),('faith','Faith'),('size','Size')] %}
+            {% if bg_details.get(field) %}
+            <tr>
+              <td style="color:var(--muted); padding:4px 8px 4px 0; width:45%; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px;">{{ label }}</td>
+              <td style="color:var(--text); padding:4px 0;">{{ bg_details[field] }}</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </table>
+        </div>
+      </div>
+
       {% else %}
-      <p style="color:var(--muted); font-size:0.88rem;">None listed.</p>
+      <!-- Editable form -->
+      <form method="POST" action="/characters/{{ character.id }}/background_details" id="bg-form">
+        <div class="two-col" style="gap:1.5rem;">
+          <div>
+
+            <!-- Custom Background -->
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.3rem;">
+              <div class="section-label" style="margin:0;">Custom Background</div>
+              <div style="display:flex; gap:4px;">
+                <button type="button" class="btn btn-outline"
+                        style="padding:2px 9px; font-size:0.72rem;"
+                        onclick="aiBgCleanup(this)">✨ Clean Up</button>
+                <button type="button" class="btn btn-outline"
+                        style="padding:2px 9px; font-size:0.72rem;"
+                        onclick="aiBgGenerate(this)">🎲 Generate</button>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:1rem;">
+              <textarea id="custom_background" name="custom_background" rows="5"
+                        placeholder="Describe your character's unique background story…"
+                        style="font-size:0.85rem;">{{ bg_details.get('custom_background','') }}</textarea>
+            </div>
+
+            <!-- Trait fields -->
+            {% for field, label, ph, rows in [
+              ('personality_traits','Personality Traits','What are their defining traits? Quirks? Mannerisms?',3),
+              ('ideals','Ideals','What drives them? What do they believe in?',2),
+              ('bonds','Bonds','What connects them to the world? People, places, things they care about.',2),
+              ('flaws','Flaws','What are their weaknesses, vices, or compulsions?',2),
+            ] %}
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.3rem;">
+              <div class="section-label" style="margin:0;">{{ label }}</div>
+              <button type="button" class="btn btn-outline"
+                      style="padding:2px 9px; font-size:0.72rem;"
+                      onclick="aiTrait('{{ field }}', this)"
+                      title="Requires Custom Background to be filled out">🎲 Generate</button>
+            </div>
+            <div class="form-group" style="margin-bottom:0.75rem;">
+              <textarea id="{{ field }}" name="{{ field }}" rows="{{ rows }}"
+                        placeholder="{{ ph }}"
+                        style="font-size:0.85rem;">{{ bg_details.get(field,'') }}</textarea>
+            </div>
+            {% endfor %}
+
+            <!-- Appearance -->
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.3rem;">
+              <div class="section-label" style="margin:0;">Appearance</div>
+              <button type="button" class="btn btn-outline"
+                      style="padding:2px 9px; font-size:0.72rem;"
+                      onclick="aiAppearance(this)"
+                      title="Requires Custom Background + Physical Characteristics">🎲 Generate</button>
+            </div>
+            <div class="form-group" style="margin-bottom:0.75rem;">
+              <textarea id="appearance" name="appearance" rows="3"
+                        placeholder="Describe their physical appearance — scars, tattoos, distinguishing features…"
+                        style="font-size:0.85rem;">{{ bg_details.get('appearance','') }}</textarea>
+            </div>
+
+          </div>
+
+          <div>
+            <div class="section-label">Physical Characteristics</div>
+            <div class="form-grid" style="grid-template-columns:1fr 1fr; gap:0.6rem;">
+              {% set phys_fields = [
+                ('gender','Gender','Male / Female / Non-binary…'),
+                ('age','Age','e.g. 32'),
+                ('height','Height','e.g. 5\'10"'),
+                ('weight','Weight','e.g. 175 lb'),
+                ('eyes','Eyes','e.g. Green'),
+                ('hair','Hair','e.g. Brown'),
+                ('skin','Skin','e.g. Tan'),
+                ('faith','Faith','Deity or religion'),
+                ('size','Size','Medium / Small / Large'),
+              ] %}
+              {% for field, label, ph in phys_fields %}
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px;">{{ label }}</label>
+                <input type="text" id="phys_{{ field }}" name="{{ field }}"
+                       value="{{ bg_details.get(field,'') }}"
+                       placeholder="{{ ph }}"
+                       style="font-size:0.85rem; padding:5px 8px;">
+              </div>
+              {% endfor %}
+            </div>
+
+            <div style="margin-top:1.25rem; padding:1rem; background:rgba(201,168,76,0.06); border:1px solid var(--gold); border-radius:var(--radius);">
+              <p style="font-size:0.78rem; color:var(--muted); margin:0; line-height:1.6;">
+                <strong style="color:var(--gold);">AI-powered generation</strong><br>
+                Fill in your <strong style="color:var(--text);">Custom Background</strong> first — it's used to generate Traits, Ideals, Bonds, and Flaws.<br><br>
+                Fill in <strong style="color:var(--text);">Physical Characteristics</strong> too to generate your Appearance description.<br><br>
+                The DM AI will use all of this to personalise narration and in-character responses.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:1rem; display:flex; justify-content:flex-end;">
+          <button type="submit" class="btn btn-gold" style="padding:8px 24px;">Save Background</button>
+        </div>
+      </form>
+
+      <script>
+      const _charId = {{ character.id }};
+
+      function _btnBusy(btn, busy, label) {
+        btn.disabled = busy;
+        btn.textContent = busy ? '…' : label;
+      }
+
+      async function _aiPost(url, body, targetId, btn, origLabel) {
+        _btnBusy(btn, true, origLabel);
+        try {
+          const r = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+          });
+          const d = await r.json();
+          if (d.error) { alert('AI error: ' + d.error); return; }
+          document.getElementById(targetId).value = d.text;
+        } catch(e) {
+          alert('Request failed: ' + e);
+        } finally {
+          _btnBusy(btn, false, origLabel);
+        }
+      }
+
+      function aiBgCleanup(btn) {
+        const text = document.getElementById('custom_background').value.trim();
+        if (!text) { alert('Write something in the Custom Background field first.'); return; }
+        _aiPost(`/characters/${_charId}/ai/background/cleanup`,
+                {text}, 'custom_background', btn, '✨ Clean Up');
+      }
+
+      function aiBgGenerate(btn) {
+        _aiPost(`/characters/${_charId}/ai/background/generate`,
+                {}, 'custom_background', btn, '🎲 Generate');
+      }
+
+      function aiTrait(field, btn) {
+        const bg = document.getElementById('custom_background').value.trim();
+        if (!bg) { alert('Fill in your Custom Background first — it\'s used to generate this field.'); return; }
+        _aiPost(`/characters/${_charId}/ai/trait`,
+                {field, custom_background: bg}, field, btn, '🎲 Generate');
+      }
+
+      function aiAppearance(btn) {
+        const bg = document.getElementById('custom_background').value.trim();
+        if (!bg) { alert('Fill in your Custom Background first.'); return; }
+        const physFields = ['gender','age','height','weight','eyes','hair','skin','faith','size'];
+        const phys = {};
+        physFields.forEach(f => {
+          const el = document.getElementById('phys_' + f);
+          if (el && el.value.trim()) phys[f] = el.value.trim();
+        });
+        if (!Object.keys(phys).length) {
+          alert('Fill in at least one Physical Characteristic first.'); return;
+        }
+        _aiPost(`/characters/${_charId}/ai/appearance`,
+                {custom_background: bg, physical_characteristics: phys},
+                'appearance', btn, '🎲 Generate');
+      }
+      </script>
       {% endif %}
     </div>
-  </div>
-</div>
 
-{% if session.role == 'dm' and all_users %}
+    <!-- ══ TAB: RESTS ══ -->
+    {% if can_edit %}
+    <div class="tab-panel" id="panel-rests">
+      <div class="section-label">Hit Dice</div>
+      <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem; flex-wrap:wrap;">
+        <div style="display:flex; gap:5px; align-items:center;">
+          {% for i in range(hit_dice_max) %}
+          <span style="width:16px; height:16px; border-radius:3px;
+                       background:{{ 'var(--success)' if i < hit_dice_cur else 'var(--border)' }};
+                       border:1px solid {{ 'var(--success)' if i < hit_dice_cur else 'var(--muted)' }};
+                       display:inline-block;" title="Hit die {{ i+1 }}"></span>
+          {% endfor %}
+        </div>
+        <span style="font-size:0.85rem; color:var(--text);">
+          {{ hit_dice_cur }}/{{ hit_dice_max }} d{{ hit_die }} remaining
+        </span>
+      </div>
+
+      <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+        <form method="POST" action="/characters/{{ character.id }}/rest/short"
+              style="display:flex; gap:0.5rem; align-items:flex-end;">
+          <div class="form-group">
+            <label>Dice to spend</label>
+            <input type="number" name="num_dice" value="1" min="1" max="{{ hit_dice_max }}"
+                   style="width:65px;">
+          </div>
+          <button type="submit" class="btn btn-outline" style="padding:7px 14px;"
+                  {% if hit_dice_cur <= 0 %}disabled title="No hit dice remaining"{% endif %}>
+            Short Rest
+          </button>
+        </form>
+        <form method="POST" action="/characters/{{ character.id }}/rest/long">
+          <button type="submit" class="btn btn-gold" style="padding:7px 16px;"
+                  onclick="return confirm('Take a long rest? This fully restores HP and spell slots.')">
+            Long Rest
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>{# /tab content wrapper #}
+</div>{# /tab card #}
+
 <!-- ── DM: CHARACTER OWNERSHIP ── -->
-<div class="card" style="border-color:var(--gold); margin-top:1.5rem;">
-  <h2 style="margin-bottom:1rem;">🔑 Ownership</h2>
+{% if session.role == 'dm' and all_users %}
+<div class="card" style="border-color:var(--gold); margin-top:0.75rem;">
+  <h2 style="margin-bottom:1rem; font-size:1rem;">🔑 Ownership</h2>
   <div style="display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">
     <div>
-      <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
-                  letter-spacing:0.5px; margin-bottom:4px;">Current Owner</div>
+      <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Current Owner</div>
       <span style="font-size:1rem; font-weight:600;
                    color:{{ 'var(--gold)' if char_owner else 'var(--muted)' }};">
         {{ char_owner.username if char_owner else 'Unassigned' }}
       </span>
       {% if char_owner %}
-      <span style="font-size:0.78rem; color:var(--muted); margin-left:6px;">
-        [{{ char_owner.role|upper }}]
-      </span>
+      <span style="font-size:0.78rem; color:var(--muted); margin-left:6px;">[{{ char_owner.role|upper }}]</span>
       {% endif %}
     </div>
     <form method="POST" action="/dm/characters/{{ character.id }}/assign"
@@ -381,19 +756,31 @@
         <select name="user_id" style="min-width:160px;">
           <option value="">— Unassigned —</option>
           {% for u in all_users %}
-          <option value="{{ u.id }}"
-                  {{ 'selected' if char_owner and u.id == char_owner.id else '' }}>
+          <option value="{{ u.id }}" {{ 'selected' if char_owner and u.id == char_owner.id else '' }}>
             {{ u.username }} [{{ u.role|upper }}]
           </option>
           {% endfor %}
         </select>
       </div>
-      <button type="submit" class="btn btn-gold" style="padding:8px 20px;">
-        Assign
-      </button>
+      <button type="submit" class="btn btn-gold" style="padding:8px 20px;">Assign</button>
     </form>
   </div>
 </div>
 {% endif %}
 
+<script>
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+  var btn = document.getElementById('tab-' + name);
+  var panel = document.getElementById('panel-' + name);
+  if (btn) btn.classList.add('active');
+  if (panel) panel.classList.add('active');
+  localStorage.setItem('cs_tab_{{ character.id }}', name);
+}
+(function() {
+  var last = localStorage.getItem('cs_tab_{{ character.id }}');
+  if (last && document.getElementById('tab-' + last)) switchTab(last);
+})();
+</script>
 {% endblock %}

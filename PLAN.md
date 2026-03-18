@@ -338,6 +338,52 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
+### Phase 20: Character Sheet — Official Layout + Background Tab + AI Generation
+- **Source**: Beta playtest comparison against official D&D 5e character sheet layout (2026-03-17).
+- **Objectives**: Add key missing sections so the character sheet is a complete reference during play, and empower players with AI-assisted backstory and personality generation.
+- **Tasks**:
+  1. **Temp HP** — display and edit field next to Current/Max HP. Stored in `character.spells['temp_hp']`. New route `POST /characters/<id>/temp_hp`.
+  2. **Passive Scores** — show Passive Perception, Passive Investigation, Passive Insight (10 + skill modifier) as three labeled boxes. Computed server-side via inner `_passive()` helper in the character_sheet route.
+  3. **Senses** — extract darkvision/tremorsense/etc. from race traits (filtering for sense keywords) and display as pills.
+  4. **Languages** — pull from `race_data['languages']` and show in Proficiencies section.
+  5. **Background Feature** — pull feature name from `BACKGROUNDS` data and show on sheet.
+  6. **Tab interface** — reorganize bottom half into tabs: Saves & Skills | Inventory | Spells | Features | Background | Rests. All content preserved, just grouped more cleanly. Tab state persisted per-character via localStorage.
+  7. **Background Tab** — new editable tab with: Custom Background textarea, Personality Traits, Ideals, Bonds, Flaws, Physical Characteristics grid (height, weight, age, eyes, hair, skin, gender), and Appearance textarea. All stored in `character.spells['background_details']` JSON. New route `POST /characters/<id>/background_details`.
+  8. **AI Background Generation** — "✨ Clean Up" button polishes existing custom background text; "🎲 Generate" button creates a 2-4 paragraph origin story from character info. Both call xAI Grok via new routes.
+  9. **AI Trait Generation** — "🎲 Generate" buttons on Personality Traits, Ideals, Bonds, and Flaws. Requires custom background to be filled in first (client-side guard alerts user if empty).
+  10. **AI Appearance Generation** — "🎲 Generate" button on Appearance field. Requires both custom background AND at least one physical characteristic filled in.
+- **New Routes**:
+  - `POST /characters/<id>/temp_hp` — stores temp HP in `spells['temp_hp']`
+  - `POST /characters/<id>/background_details` — stores 15 background fields in `spells['background_details']`
+  - `POST /characters/<id>/ai/background/cleanup` — polish backstory via xAI Grok
+  - `POST /characters/<id>/ai/background/generate` — generate origin story via xAI Grok
+  - `POST /characters/<id>/ai/trait` — generate personality_traits / ideals / bonds / flaws (field specified in body)
+  - `POST /characters/<id>/ai/appearance` — generate appearance description
+- **New AI functions** (`services/ai.py`): `cleanup_background()`, `generate_background()`, `generate_trait_field()`, `generate_appearance()` — all return `(text, error)` tuple via `_call()`.
+- **Auth helper**: `_char_ai_auth(char)` — allows character owner or DM to call AI routes.
+- **Deliverables**: Updated `services/ai.py` (4 new functions), updated `app.py` (6 new routes + helper), updated `templates/character_sheet.html` (complete Background tab with AI buttons).
+- **Status**: Complete ✓ (2026-03-17)
+
+---
+
+### Phase 19: Branding Integration — Campaign Codex Assets
+- **Source**: New brand package uploaded 2026-03-17 (Branding/Logo/).
+- **Objectives**: Apply the Campaign Codex visual identity across the app.
+- **Tasks**:
+  1. **Static asset setup** — Created `static/img/logo/`, `static/img/monogram/`, `static/img/icon/`, and `static/favicon/` directories. All brand files served by Flask at `/static/`.
+     - `static/favicon/favicon.ico`, `favicon-16.png`, `favicon-32.png`, `apple-touch-icon.png`
+     - `static/img/logo/campaign-codex-dark.png`, `campaign-codex-light.png`
+     - `static/img/icon/codex-icon.png`, `codex-icon-1024.png`
+     - `static/img/monogram/cc-monogram.png`, `cc-monogram-inverted.png`
+  2. **Favicons** — Added `<link rel="icon">` tags in `base.html <head>` for all four favicon sizes. Updated page `<title>` to "Campaign Codex".
+  3. **Nav bar brand** — Replaced plain text `⚔ D&D Manager` with `cc-monogram.png` (30px) + "Campaign Codex" text side by side, styled in gold.
+  4. **Login page branding** — Added `campaign-codex-dark.png` logo above the login form; gold `border-color: var(--gold)` on the card; "Welcome Back / Sign in to continue your adventure" heading.
+  5. **Sidebar brand** — Sidebar brand block removed after review; nav already shows monogram + text so sidebar was redundant.
+- **Deliverables**: `static/` folder with all branding assets; updated `templates/base.html`; updated `templates/login.html`.
+- **Status**: Complete ✓ (2026-03-17)
+
+---
+
 ### Phase 18: DM Campaign Page — Three-Button Accordion
 - **Source**: DM UX feedback (2026-03-17) — consolidated panels still take too much vertical space; want three equal buttons that reveal content on demand.
 - **Objectives**: Replace the three stacked cards (Campaign Info, SMS, Discord) with a compact three-button row. Clicking a button expands its panel below; clicking again collapses it. Only the content for the active panel is visible. Status indicators (Active / Off, Connected / Not connected, player count) visible on each button even when collapsed. Last open panel remembered via localStorage.
