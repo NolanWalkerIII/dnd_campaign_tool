@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Generate a Character — Campaign Codex{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom:1.5rem;">
+  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.75rem;">
+    <div>
+      <h1 style="margin:0 0 4px;">AI Character Generator</h1>
+      <p style="color:var(--muted); font-size:0.88rem; margin:0;">
+        Give us a concept — we'll build the character. You approve before anything is saved.
+      </p>
+    </div>
+    <a href="/characters/new" class="btn btn-outline" style="font-size:0.85rem;">
+      ✏️ Create Manually Instead
+    </a>
+  </div>
+</div>
+
+<form method="POST" action="/characters/generate" id="gen-form">
+
+  <!-- ── IDENTITY ── -->
+  <div class="card" style="border-color:var(--gold); margin-bottom:1.25rem;">
+    <h2 style="margin:0 0 1rem; font-size:1.1rem; color:var(--gold);">Character Identity</h2>
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label for="race">Race <span style="color:var(--accent);">*</span></label>
+        <select id="race" name="race" required>
+          <option value="">— Choose a Race —</option>
+          {% for race_name in races %}
+            <option value="{{ race_name }}"
+              {{ 'selected' if inputs.get('race') == race_name }}>{{ race_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="class_name">Class <span style="color:var(--accent);">*</span></label>
+        <select id="class_name" name="class_name" required>
+          <option value="">— Choose a Class —</option>
+          {% for cls_name, cls in classes.items() %}
+            <option value="{{ cls_name }}"
+              {{ 'selected' if inputs.get('class_name') == cls_name }}>
+              {{ cls_name }} (d{{ cls.hit_die }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="background">Background <span style="color:var(--accent);">*</span></label>
+        <select id="background" name="background" required>
+          <option value="">— Choose a Background —</option>
+          {% for bg_name in backgrounds %}
+            <option value="{{ bg_name }}"
+              {{ 'selected' if inputs.get('background') == bg_name }}>{{ bg_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="alignment">Alignment</label>
+        <select id="alignment" name="alignment">
+          {% for al in ['True Neutral','Lawful Good','Neutral Good','Chaotic Good',
+                        'Lawful Neutral','Lawful Evil','Neutral Evil','Chaotic Evil','Chaotic Neutral'] %}
+          <option value="{{ al }}"
+            {{ 'selected' if (inputs.get('alignment') or 'True Neutral') == al }}>{{ al }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group full">
+        <label for="name_hint">Name Hint <span style="color:var(--muted); font-weight:400;">(optional — leave blank to generate)</span></label>
+        <input type="text" id="name_hint" name="name_hint"
+               placeholder="e.g. 'something dwarven', 'starts with K', 'Elara'"
+               value="{{ inputs.get('name_hint', '') }}"
+               style="max-width:420px;">
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── STORY PROMPTS ── -->
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h2 style="margin:0 0 0.5rem; font-size:1.1rem;">Character Concept
+      <span style="color:var(--muted); font-weight:400; font-size:0.88rem; margin-left:6px;">
+        (all optional — more detail = better result)
+      </span>
+    </h2>
+    <p style="color:var(--muted); font-size:0.85rem; margin-bottom:1.25rem;">
+      Answer as many or as few as you like. The AI fills in everything else.
+    </p>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+
+      <div class="form-group" style="margin:0;">
+        <label for="prompt_origin">Where are they from?</label>
+        <textarea id="prompt_origin" name="prompt_origin" rows="3"
+                  placeholder="e.g. A small fishing village on the coast, raised by a retired soldier aunt…"
+                  style="resize:vertical;">{{ (inputs.get('prompts') or {}).get('origin', '') }}</textarea>
+      </div>
+
+      <div class="form-group" style="margin:0;">
+        <label for="prompt_drive">What drives them?</label>
+        <textarea id="prompt_drive" name="prompt_drive" rows="3"
+                  placeholder="e.g. Seeking revenge for a destroyed village, or just trying to earn enough to retire…"
+                  style="resize:vertical;">{{ (inputs.get('prompts') or {}).get('drive', '') }}</textarea>
+      </div>
+
+      <div class="form-group" style="margin:0;">
+        <label for="prompt_flaw">Greatest flaw or burden?</label>
+        <textarea id="prompt_flaw" name="prompt_flaw" rows="3"
+                  placeholder="e.g. Terrible with money, haunted by a past mistake, doesn't trust anyone…"
+                  style="resize:vertical;">{{ (inputs.get('prompts') or {}).get('flaw', '') }}</textarea>
+      </div>
+
+      <div class="form-group" style="margin:0;">
+        <label for="prompt_other">Anything else?</label>
+        <textarea id="prompt_other" name="prompt_other" rows="3"
+                  placeholder="e.g. One eye, always hums to themselves, secretly noble blood, talks to their weapon…"
+                  style="resize:vertical;">{{ (inputs.get('prompts') or {}).get('other', '') }}</textarea>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── SUBMIT ── -->
+  <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+    <button type="submit" class="btn btn-gold" id="gen-btn"
+            style="padding:10px 28px; font-size:1rem;">
+      🎲 Generate Character
+    </button>
+    <a href="/characters/new" class="btn btn-outline">Cancel</a>
+    <span id="gen-status" style="color:var(--muted); font-size:0.88rem; display:none;">
+      Generating your character — this takes a few seconds…
+    </span>
+  </div>
+
+</form>
+
+<script>
+document.getElementById('gen-form').addEventListener('submit', function() {
+  const btn = document.getElementById('gen-btn');
+  btn.textContent = '✨ Generating…';
+  btn.disabled = true;
+  document.getElementById('gen-status').style.display = 'inline';
+});
+</script>
+{% endblock %}

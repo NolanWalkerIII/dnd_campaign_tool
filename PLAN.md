@@ -338,6 +338,30 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
+### Phase 24: AI Character Generator Wizard
+- **Source**: DM/player request (2026-03-19) — "New Character" should offer an AI-powered path alongside manual creation.
+- **Objectives**: Build a full AI character generation wizard with a preview/approval step so no character is created without the player's sign-off.
+- **User flow**:
+  1. `/characters/new` — two-path choice: "🎲 Generate with AI" or "✏️ Create Manually"
+  2. `/characters/generate` (GET) — wizard form: Race, Class, Background, Alignment (required); Name Hint + 4 story prompt textareas (all optional)
+  3. `/characters/generate` (POST) — validates inputs, calls xAI Grok, stores result in session, redirects to preview
+  4. `/characters/generate/preview` — full character preview: name in gold, identity pills, ability score grid (standard array assigned by AI priority), backstory, personality traits/ideals/bonds/flaws (2×2 grid), appearance; three action buttons
+  5. `/characters/generate/confirm` (POST) — creates Character in DB with `background_details` fully populated from AI output; redirects to character sheet
+  6. `/characters/generate/regenerate` (POST) — re-calls AI with same inputs from session, shows new preview; no data is lost
+- **AI function**: `generate_character(race, class_name, background, alignment, name_hint, prompts)` in `services/ai.py`
+  - System prompt instructs Grok to return ONLY valid JSON (no fences) with keys: name, backstory, personality_traits, ideals, bonds, flaws, appearance, ability_priorities (ordered list of 6 ability score abbreviations), suggested_skills
+  - `max_tokens=1400` (up from 600 via new `_call(messages, max_tokens=600)` default parameter)
+  - Response parsed with `json.loads()`; markdown fences stripped if present; ability_priorities validated/deduped/padded
+- **Ability score assignment**: AI returns priority order → standard array `[15,14,13,12,10,8]` assigned in that order → racial ASI applied on top
+- **Skill assignment**: AI's suggested_skills filtered to class options; remaining class slots filled automatically from available class skills
+- **`_call()` updated**: added `max_tokens=600` default parameter — backwards-compatible with all existing callers
+- **Session storage**: `session['char_gen']` holds `{result, inputs}` across the preview and regenerate steps; cleared on confirm
+- **New files**: `templates/character_generate.html`, `templates/character_preview.html`
+- **Updated files**: `services/ai.py`, `app.py`, `templates/character_create.html`
+- **Status**: Complete ✓ (2026-03-19)
+
+---
+
 ### Phase 23: Character & Campaign Download Templates — v2 Format
 - **Source**: Review of download templates after Phase 22 (2026-03-19) — CHARACTER_TEMPLATE was still v1
   (no background/story fields); CAMPAIGN_TEMPLATE was already updated in Phase 22.

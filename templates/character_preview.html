@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}{{ result.name }} — Character Preview{% endblock %}
+
+{% block content %}
+
+<!-- ── HEADER ── -->
+<div style="margin-bottom:1.5rem;">
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <p style="color:var(--muted); font-size:0.78rem; text-transform:uppercase; letter-spacing:1px; margin:0 0 4px;">
+        AI Generated — Review before creating
+      </p>
+      <h1 style="margin:0 0 6px; color:var(--gold); font-size:2rem;">{{ result.name }}</h1>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        <span style="background:var(--card); border:1px solid var(--border); border-radius:20px;
+                     padding:3px 12px; font-size:0.82rem;">{{ inputs.race }}</span>
+        <span style="background:var(--card); border:1px solid var(--border); border-radius:20px;
+                     padding:3px 12px; font-size:0.82rem;">{{ inputs.class_name }}</span>
+        <span style="background:var(--card); border:1px solid var(--border); border-radius:20px;
+                     padding:3px 12px; font-size:0.82rem;">{{ inputs.background }}</span>
+        <span style="background:var(--card); border:1px solid var(--border); border-radius:20px;
+                     padding:3px 12px; font-size:0.82rem; color:var(--muted);">{{ inputs.alignment }}</span>
+      </div>
+    </div>
+    <a href="/characters/generate" class="btn btn-outline" style="font-size:0.85rem; white-space:nowrap;">
+      ← Back to Wizard
+    </a>
+  </div>
+</div>
+
+<!-- ── ABILITY SCORES ── -->
+<div class="card" style="margin-bottom:1.25rem;">
+  <h2 style="margin:0 0 0.75rem; font-size:0.9rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted);">
+    Proposed Ability Scores
+    <span style="font-weight:400; text-transform:none; letter-spacing:0; margin-left:6px;">
+      (standard array assigned by AI priority)
+    </span>
+  </h2>
+  <div style="display:flex; flex-wrap:wrap; gap:0.6rem;">
+    {% set sa = [15, 14, 13, 12, 10, 8] %}
+    {% for i in range(6) %}
+    {% set ab = priorities[i] %}
+    {% set base = sa[i] %}
+    {% set final = final_scores[ab] %}
+    {% set bonus = final - base %}
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius);
+                padding:0.5rem 1rem; text-align:center; min-width:72px; flex:1;">
+      <div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin-bottom:2px;">{{ ab }}</div>
+      <div style="font-size:1.4rem; font-weight:700; color:var(--text);">{{ final }}</div>
+      <div style="font-size:0.72rem; color:var(--muted);">
+        {{ base }}{% if bonus > 0 %} <span style="color:var(--gold);">+{{ bonus }}</span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ── BACKSTORY ── -->
+{% if result.backstory %}
+<div class="card" style="margin-bottom:1.25rem; border-color:var(--gold);">
+  <h2 style="margin:0 0 0.75rem; font-size:1rem; color:var(--gold);">Backstory</h2>
+  <div style="font-size:0.92rem; line-height:1.7; color:var(--text);">
+    {% for para in result.backstory.split('\n') %}
+      {% if para.strip() %}<p style="margin:0 0 0.75rem;">{{ para.strip() }}</p>{% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ── TRAITS GRID ── -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.25rem;">
+
+  <div class="card" style="margin:0;">
+    <h3 style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin:0 0 0.5rem;">
+      Personality Traits
+    </h3>
+    <p style="font-size:0.9rem; line-height:1.6; margin:0;">
+      {{ result.personality_traits or '—' }}
+    </p>
+  </div>
+
+  <div class="card" style="margin:0;">
+    <h3 style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin:0 0 0.5rem;">
+      Ideals
+    </h3>
+    <p style="font-size:0.9rem; line-height:1.6; margin:0;">
+      {{ result.ideals or '—' }}
+    </p>
+  </div>
+
+  <div class="card" style="margin:0;">
+    <h3 style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin:0 0 0.5rem;">
+      Bonds
+    </h3>
+    <p style="font-size:0.9rem; line-height:1.6; margin:0;">
+      {{ result.bonds or '—' }}
+    </p>
+  </div>
+
+  <div class="card" style="margin:0;">
+    <h3 style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin:0 0 0.5rem;">
+      Flaws
+    </h3>
+    <p style="font-size:0.9rem; line-height:1.6; margin:0;">
+      {{ result.flaws or '—' }}
+    </p>
+  </div>
+
+</div>
+
+<!-- ── APPEARANCE ── -->
+{% if result.appearance %}
+<div class="card" style="margin-bottom:1.75rem;">
+  <h3 style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin:0 0 0.5rem;">
+    Appearance
+  </h3>
+  <p style="font-size:0.9rem; line-height:1.6; margin:0;">{{ result.appearance }}</p>
+</div>
+{% endif %}
+
+<!-- ── ACTIONS ── -->
+<div class="card" style="border-color:var(--gold);">
+  <p style="color:var(--muted); font-size:0.85rem; margin:0 0 1rem;">
+    Happy with this character? Approve to create them. Not quite right? Regenerate for a fresh take
+    using the same concept, or go back to the wizard to change the inputs.
+  </p>
+  <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+
+    <form method="POST" action="/characters/generate/confirm" style="margin:0;">
+      <button type="submit" class="btn btn-gold" style="padding:10px 24px; font-size:0.95rem;">
+        ✅ Approve &amp; Create
+      </button>
+    </form>
+
+    <form method="POST" action="/characters/generate/regenerate" id="regen-form" style="margin:0;">
+      <button type="submit" class="btn btn-outline" id="regen-btn"
+              style="padding:10px 20px; font-size:0.95rem;">
+        🔄 Regenerate
+      </button>
+    </form>
+
+    <a href="/characters/generate" class="btn btn-outline"
+       style="padding:10px 20px; font-size:0.95rem;">
+      ← Adjust Inputs
+    </a>
+
+    <a href="/characters/new" class="btn btn-outline"
+       style="padding:10px 20px; font-size:0.95rem; color:var(--muted);">
+      ✏️ Create Manually
+    </a>
+
+  </div>
+</div>
+
+<script>
+document.getElementById('regen-form').addEventListener('submit', function() {
+  const btn = document.getElementById('regen-btn');
+  btn.textContent = '✨ Regenerating…';
+  btn.disabled = true;
+});
+</script>
+
+{% endblock %}

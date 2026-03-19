@@ -1,9 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Create Character — D&D Manager{% endblock %}
+{% block title %}New Character — Campaign Codex{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h1>Create a Character</h1>
+  <h1>New Character</h1>
+</div>
+
+<!-- ── PATH CHOICE ── -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
+
+  <a href="/characters/generate" style="text-decoration:none;">
+    <div class="card" style="border-color:var(--gold); cursor:pointer; transition:background 0.15s;
+                              text-align:center; padding:1.75rem 1.25rem;"
+         onmouseover="this.style.background='rgba(201,168,76,0.06)'"
+         onmouseout="this.style.background=''">
+      <div style="font-size:2.5rem; margin-bottom:0.5rem;">🎲</div>
+      <div style="font-size:1.05rem; font-weight:700; color:var(--gold); margin-bottom:0.4rem;">
+        Generate with AI
+      </div>
+      <div style="font-size:0.85rem; color:var(--muted); line-height:1.5;">
+        Answer a few prompts about your concept.<br>
+        The AI builds your character — you approve.
+      </div>
+    </div>
+  </a>
+
+  <a href="#manual-form" style="text-decoration:none;">
+    <div class="card" style="cursor:pointer; transition:background 0.15s;
+                              text-align:center; padding:1.75rem 1.25rem;"
+         onmouseover="this.style.background='rgba(255,255,255,0.04)'"
+         onmouseout="this.style.background=''">
+      <div style="font-size:2.5rem; margin-bottom:0.5rem;">✏️</div>
+      <div style="font-size:1.05rem; font-weight:700; margin-bottom:0.4rem;">
+        Create Manually
+      </div>
+      <div style="font-size:0.85rem; color:var(--muted); line-height:1.5;">
+        Fill in race, class, ability scores,<br>
+        and skills yourself — full control.
+      </div>
+    </div>
+  </a>
+
 </div>
 
 <!-- ── IMPORT BANNER ── -->
@@ -33,7 +70,7 @@
   </form>
 </div>
 
-<p style="color:var(--muted); font-size:0.88rem; margin-bottom:1.5rem;">
+<p id="manual-form" style="color:var(--muted); font-size:0.88rem; margin-bottom:1.5rem;">
   — or fill in the form below —
 </p>
 

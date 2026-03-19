@@ -17,7 +17,7 @@ def _api_key():
     return os.environ.get("XAI_API_KEY", "")
 
 
-def _call(messages):
+def _call(messages, max_tokens=600):
     """
     Send a chat completion request to xAI Grok.
     Returns (text, error) — one of them will be None.
@@ -37,7 +37,7 @@ def _call(messages):
                 "model": XAI_MODEL,
                 "messages": messages,
                 "temperature": 0.8,
-                "max_tokens": 600,
+                "max_tokens": max_tokens,
             },
             timeout=TIMEOUT,
         )
@@ -53,6 +53,101 @@ def _call(messages):
         return None, f"xAI API error ({status}). Please try again."
     except Exception as e:
         return None, f"Unexpected error contacting xAI: {e}"
+
+
+def generate_character(race, class_name, background, alignment,
+                       name_hint='', prompts=None):
+    """
+    Generate a complete D&D 5e character concept using xAI Grok.
+
+    Returns (result_dict, error). result_dict contains:
+        name, backstory, personality_traits, ideals, bonds, flaws, appearance,
+        ability_priorities (list of 6 ability score abbreviations, highest → lowest),
+        suggested_skills (list of skill name strings)
+    """
+    import json as _json
+
+    prompts = prompts or {}
+    hint_line  = f'Name hint: "{name_hint}"' if name_hint else 'Generate a fitting name.'
+    prompt_text = '\n'.join(
+        f'- {v}' for v in prompts.values() if v and v.strip()
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a creative D&D 5e character generator. "
+                "You MUST respond with ONLY a valid JSON object — no markdown code fences, "
+                "no preamble, no explanation. The response must be pure JSON parseable directly.\n"
+                "Required keys:\n"
+                '  "name": string — a fitting D&D character name\n'
+                '  "backstory": string — origin story, 2-3 paragraphs, grounded in D&D lore\n'
+                '  "personality_traits": string — how they act day-to-day, 1-2 sentences\n'
+                '  "ideals": string — the principle they live by, 1-2 sentences\n'
+                '  "bonds": string — what ties them to the world, 1-2 sentences\n'
+                '  "flaws": string — their weakness or blind spot, 1-2 sentences\n'
+                '  "appearance": string — physical description, 2-3 sentences\n'
+                '  "ability_priorities": array of exactly 6 strings from '
+                '["STR","DEX","CON","INT","WIS","CHA"], ordered most-to-least important '
+                'for this character — the standard array [15,14,13,12,10,8] is assigned in this order\n'
+                '  "suggested_skills": array of 2-4 D&D 5e skill name strings fitting this character'
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Create a D&D 5e character:\n"
+                f"Race: {race}\nClass: {class_name}\n"
+                f"Background: {background}\nAlignment: {alignment}\n"
+                f"{hint_line}\n"
+                + (f"\nPlayer's concept notes:\n{prompt_text}\n" if prompt_text else "")
+                + "\nRespond with ONLY the JSON object."
+            ),
+        },
+    ]
+
+    text, error = _call(messages, max_tokens=1400)
+    if error:
+        return None, error
+
+    # Strip any markdown fences the model might wrap around the JSON
+    text = text.strip()
+    if text.startswith('```'):
+        lines = text.split('\n')
+        text = '\n'.join(lines[1:]).rstrip('`').strip()
+
+    try:
+        data = _json.loads(text)
+    except _json.JSONDecodeError:
+        return None, "AI returned an unexpected format. Please try again."
+
+    # Validate and normalise ability_priorities
+    valid_abs  = {'STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'}
+    priorities = [p.upper().strip() for p in data.get('ability_priorities', [])
+                  if p.upper().strip() in valid_abs]
+    seen = set()
+    deduped = []
+    for p in priorities:
+        if p not in seen:
+            seen.add(p)
+            deduped.append(p)
+    for ab in ['STR', 'CON', 'DEX', 'WIS', 'INT', 'CHA']:
+        if ab not in seen:
+            deduped.append(ab)
+    priorities = deduped[:6]
+
+    return {
+        'name':               str(data.get('name', 'Unnamed Hero')).strip(),
+        'backstory':          str(data.get('backstory', '')).strip(),
+        'personality_traits': str(data.get('personality_traits', '')).strip(),
+        'ideals':             str(data.get('ideals', '')).strip(),
+        'bonds':              str(data.get('bonds', '')).strip(),
+        'flaws':              str(data.get('flaws', '')).strip(),
+        'appearance':         str(data.get('appearance', '')).strip(),
+        'ability_priorities': priorities,
+        'suggested_skills':   [str(s).strip() for s in data.get('suggested_skills', [])],
+    }, None
 
 
 def cleanup_narration(raw_text):

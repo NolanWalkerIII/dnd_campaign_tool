@@ -17,7 +17,8 @@ from models import db, User, Character, Campaign, DiceRoller
 from parsers import parse_character_md, parse_campaign_md, CHARACTER_TEMPLATE, CAMPAIGN_TEMPLATE
 from services.ai import (cleanup_narration, generate_narration,
                          cleanup_background, generate_background,
-                         generate_trait_field, generate_appearance)
+                         generate_trait_field, generate_appearance,
+                         generate_character)
 import re as _re
 
 from game_data import (
@@ -440,6 +441,187 @@ def character_import():
     db.session.commit()
     flash(f'{name} imported successfully!', 'success')
     return redirect(url_for('character_sheet', char_id=char.id))
+
+
+# ── AI Character Generator ────────────────────────────────────────────────────
+
+def _render_generate_form(**kwargs):
+    return render_template(
+        'character_generate.html',
+        races=RACES, classes=CLASSES, backgrounds=BACKGROUNDS,
+        **kwargs
+    )
+
+
+@app.route('/characters/generate', methods=['GET', 'POST'])
+@login_required
+def character_generate():
+    if request.method == 'GET':
+        return _render_generate_form(inputs=session.get('char_gen', {}).get('inputs', {}))
+
+    race       = request.form.get('race', '')
+    class_name = request.form.get('class_name', '')
+    background = request.form.get('background', '')
+    alignment  = request.form.get('alignment', 'True Neutral')
+    name_hint  = request.form.get('name_hint', '').strip()
+    prompts    = {
+        'origin': request.form.get('prompt_origin', '').strip(),
+        'drive':  request.form.get('prompt_drive', '').strip(),
+        'flaw':   request.form.get('prompt_flaw', '').strip(),
+        'other':  request.form.get('prompt_other', '').strip(),
+    }
+
+    errors = []
+    if not race or race not in RACES:         errors.append('Please select a valid race.')
+    if not class_name or class_name not in CLASSES:    errors.append('Please select a valid class.')
+    if not background or background not in BACKGROUNDS: errors.append('Please select a valid background.')
+    if errors:
+        for e in errors: flash(e, 'error')
+        return _render_generate_form(inputs=request.form)
+
+    result, error = generate_character(race, class_name, background, alignment, name_hint, prompts)
+    if error:
+        flash(f'Generation failed: {error}', 'error')
+        return _render_generate_form(inputs=request.form)
+
+    session['char_gen'] = {
+        'result': result,
+        'inputs': {
+            'race': race, 'class_name': class_name, 'background': background,
+            'alignment': alignment, 'name_hint': name_hint, 'prompts': prompts,
+        },
+    }
+    return redirect(url_for('character_generate_preview'))
+
+
+@app.route('/characters/generate/preview')
+@login_required
+def character_generate_preview():
+    gen = session.get('char_gen')
+    if not gen:
+        flash('No generation in progress.', 'error')
+        return redirect(url_for('character_generate'))
+
+    result = gen['result']
+    inputs = gen['inputs']
+
+    # Assign standard array to AI priority order for display
+    standard_array = [15, 14, 13, 12, 10, 8]
+    priorities     = result['ability_priorities']
+    base_scores    = dict(zip(priorities, standard_array))
+    for ab in ABILITY_SCORES:
+        base_scores.setdefault(ab, 8)
+    final_scores = apply_racial_asi(base_scores, inputs['race'])
+
+    return render_template(
+        'character_preview.html',
+        result=result, inputs=inputs,
+        base_scores=base_scores, final_scores=final_scores,
+        priorities=priorities, standard_array=standard_array,
+    )
+
+
+@app.route('/characters/generate/confirm', methods=['POST'])
+@login_required
+def character_generate_confirm():
+    gen = session.get('char_gen')
+    if not gen:
+        flash('Session expired. Please generate again.', 'error')
+        return redirect(url_for('character_generate'))
+
+    result     = gen['result']
+    inputs     = gen['inputs']
+    race_name  = inputs['race']
+    class_name = inputs['class_name']
+    background = inputs['background']
+    alignment  = inputs['alignment']
+    name       = result['name']
+
+    standard_array = [15, 14, 13, 12, 10, 8]
+    priorities     = result['ability_priorities']
+    base_scores    = dict(zip(priorities, standard_array))
+    for ab in ABILITY_SCORES:
+        base_scores.setdefault(ab, 8)
+    final_scores = apply_racial_asi(base_scores, race_name)
+
+    hp_max = calculate_hp(class_name, final_scores)
+    ac     = calculate_ac(class_name, final_scores)
+
+    cls_data   = CLASSES[class_name]
+    bg_data_l  = BACKGROUNDS[background]
+    bg_skills  = bg_data_l['skills']
+    cls_opts   = cls_data['skill_options']
+    num_cls    = cls_data['num_skills']
+
+    suggested   = [s for s in result.get('suggested_skills', []) if s in SKILLS]
+    class_picks = [s for s in suggested if s in cls_opts and s not in bg_skills]
+    for s in cls_opts:
+        if len(class_picks) >= num_cls: break
+        if s not in class_picks and s not in bg_skills:
+            class_picks.append(s)
+    skills = list(dict.fromkeys(bg_skills + class_picks[:num_cls]))
+
+    raw_equipment = cls_data['starting_equipment'] + bg_data_l['equipment']
+    starting_gold = 0
+    equipment = []
+    for item in raw_equipment:
+        m = _re.match(r'^(\d+)\s*gp$', item.strip(), _re.IGNORECASE)
+        if m: starting_gold += int(m.group(1))
+        else: equipment.append(item)
+
+    sc      = cls_data.get('spellcasting')
+    hit_die = cls_data['hit_die']
+
+    char = Character(
+        name=name, race=race_name, class_name=class_name, level=1,
+        ability_scores=final_scores,
+        hp_max=hp_max, hp_current=hp_max, ac=ac, proficiency_bonus=2,
+        skills=skills, equipment=equipment,
+        spells={
+            'spellcasting': sc,
+            'slots': get_spell_slots(class_name, level=1),
+            'known': [], 'concentration': None,
+            'hit_dice_max': 1, 'hit_dice_current': 1, 'hit_die': hit_die,
+            'gold': starting_gold,
+            'background_details': {
+                'custom_background':  result.get('backstory', ''),
+                'personality_traits': result.get('personality_traits', ''),
+                'ideals':             result.get('ideals', ''),
+                'bonds':              result.get('bonds', ''),
+                'flaws':              result.get('flaws', ''),
+                'appearance':         result.get('appearance', ''),
+                'height': '', 'weight': '', 'age': '',
+                'eyes': '', 'hair': '', 'skin': '', 'gender': '',
+            },
+        },
+        background=background, alignment=alignment,
+        user_id=session.get('user_id'),
+    )
+    db.session.add(char)
+    db.session.commit()
+    session.pop('char_gen', None)
+    flash(f'{name} has been created! Welcome to the adventure.', 'success')
+    return redirect(url_for('character_sheet', char_id=char.id))
+
+
+@app.route('/characters/generate/regenerate', methods=['POST'])
+@login_required
+def character_generate_regenerate():
+    gen = session.get('char_gen')
+    if not gen:
+        return redirect(url_for('character_generate'))
+
+    inputs = gen['inputs']
+    result, error = generate_character(
+        inputs['race'], inputs['class_name'], inputs['background'],
+        inputs['alignment'], inputs.get('name_hint', ''), inputs.get('prompts', {}),
+    )
+    if error:
+        flash(f'Regeneration failed: {error}', 'error')
+        return redirect(url_for('character_generate_preview'))
+
+    session['char_gen'] = {'result': result, 'inputs': inputs}
+    return redirect(url_for('character_generate_preview'))
 
 
 def _create_character():
