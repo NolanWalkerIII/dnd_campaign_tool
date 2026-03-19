@@ -834,6 +834,7 @@ def campaign_import():
             'timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
         })
 
+    chapters  = parsed.get('chapters', [])
     campaign = Campaign(
         name=camp_name,
         dm_id=session['user_id'],
@@ -846,6 +847,7 @@ def campaign_import():
             'narration_log': narration_log,
             'combat_log': [],
             'npc_presets': parsed['npc_presets'],
+            'chapters':    chapters,
         },
         is_active=True,
     )
@@ -853,8 +855,13 @@ def campaign_import():
     db.session.commit()
 
     npc_count = len(parsed['npc_presets'])
-    npc_msg = f', {npc_count} NPC preset(s) loaded' if npc_count else ''
-    flash(f'Campaign "{camp_name}" imported! Join code: {campaign.join_code}{npc_msg}', 'success')
+    ch_count  = len(chapters)
+    parts = [f'Join code: {campaign.join_code}']
+    if npc_count:
+        parts.append(f'{npc_count} NPC preset(s)')
+    if ch_count:
+        parts.append(f'{ch_count} chapter(s)')
+    flash(f'Campaign "{camp_name}" imported! {", ".join(parts)}', 'success')
     return redirect(url_for('dm_campaign_detail', campaign_id=campaign.id))
 
 

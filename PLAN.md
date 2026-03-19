@@ -338,6 +338,36 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
+### Phase 22: Campaign Markdown v2 — Chapters, Scene & Dialogue Import
+- **Source**: Gap identified between the Example `.md` file and the saved `.json` — chapters and NPC scene/dialogue data were lost on import (2026-03-18).
+- **Objectives**: Close the round-trip between a campaign `.md` file and a fully-loaded campaign, so chapters, NPC scenes, and DM dialogue survive import.
+- **Root causes**:
+  1. `parsers.py` only read single-line `Notes:` — NPC `Scene` and `Dialogue` blocks had no parseable home
+  2. No `## Chapters` section in v1 `.md` — chapters existed only in the JSON save, not in the importable template
+  3. `campaign_import()` in `app.py` never populated `current_state['chapters']`
+- **Tasks**:
+  1. **`_multiline_field(body, key, known_fields)`** — new helper in `parsers.py` that captures field values
+     spanning multiple lines, terminating at the next known field name.
+  2. **NPC `Scene:` and `Dialogue:` fields** — each NPC block now supports separate `Scene:` and `Dialogue:`
+     fields (multiline). Parser extracts them and combines into rich `notes` with `SCENE:` and `DIALOGUE:`
+     labels, fully compatible with the existing NPC preset display.
+  3. **`_parse_chapters(text)`** — new function that reads a `## Chapters` section. Each chapter uses
+     `### Chapter: Title` with `Description:` (multiline), `Status:`, `Notes:` (multiline), and one or
+     more `Branch:` lines. Returns a list of chapter dicts matching the Phase 15 chapter tracker schema.
+  4. **`parse_campaign_md` updated** — returns `chapters` list in addition to existing fields. Backwards
+     compatible: campaigns without a `## Chapters` section return an empty list.
+  5. **v1 compatibility** — NPC parser skips `### CHAPTER X —` divider headers that appear in v1 files.
+  6. **`campaign_import()` updated** — threads `chapters` into `current_state`. Flash message now reports
+     NPC count and chapter count separately.
+  7. **`CAMPAIGN_TEMPLATE` updated** — new v2 format shows `## Chapters` section with 3 example chapters
+     plus NPCs with `Scene:` and `Dialogue:` fields.
+  8. **`Examples/LostMinesOfPhandelver_Campaign_v2.md`** — full v2 conversion: all 4 chapters with
+     descriptions, DM notes, and 2 named branches each; all NPCs with separate Scene and Dialogue fields.
+- **Deliverables**: Updated `parsers.py`; updated `app.py`; new `Examples/LostMinesOfPhandelver_Campaign_v2.md`.
+- **Status**: Complete ✓ (2026-03-18)
+
+---
+
 ### Phase 21: DM Inspiration — Grant & Spend
 - **Source**: DM request (2026-03-17) — DMs need a way to award Inspiration to players, just like adjusting HP.
 - **Objectives**: Allow the DM to grant or revoke D&D Inspiration for any player character. Players can see their inspiration status on their character sheet and spend it.
