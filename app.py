@@ -398,6 +398,25 @@ def character_import():
 
     sc      = CLASSES[class_name].get('spellcasting')
     hit_die = CLASSES[class_name]['hit_die']
+
+    # Build background_details from Phase 20 template fields (v2 template)
+    phys = parsed.get('physical', {})
+    bg_details = {
+        'custom_background':  parsed.get('custom_background', ''),
+        'personality_traits': parsed.get('personality_traits', ''),
+        'ideals':             parsed.get('ideals', ''),
+        'bonds':              parsed.get('bonds', ''),
+        'flaws':              parsed.get('flaws', ''),
+        'appearance':         parsed.get('appearance', ''),
+        'height': phys.get('height', ''),
+        'weight': phys.get('weight', ''),
+        'age':    phys.get('age', ''),
+        'eyes':   phys.get('eyes', ''),
+        'hair':   phys.get('hair', ''),
+        'skin':   phys.get('skin', ''),
+        'gender': phys.get('gender', ''),
+    }
+
     char = Character(
         name=name, race=race_name, class_name=class_name, level=1,
         ability_scores=final_scores,
@@ -412,6 +431,7 @@ def character_import():
             'hit_dice_current': 1,
             'hit_die': hit_die,
             'gold': starting_gold,
+            'background_details': bg_details,
         },
         background=background, alignment=alignment,
         user_id=session.get('user_id'),

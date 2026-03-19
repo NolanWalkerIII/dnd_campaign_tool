@@ -338,6 +338,35 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
+### Phase 23: Character & Campaign Download Templates — v2 Format
+- **Source**: Review of download templates after Phase 22 (2026-03-19) — CHARACTER_TEMPLATE was still v1
+  (no background/story fields); CAMPAIGN_TEMPLATE was already updated in Phase 22.
+- **Objectives**: Bring the character download template up to date with Phase 20 character sheet additions
+  so players can fully specify their character — including backstory, personality, and physical description
+  — in the markdown file they import. What you write in the template becomes immediately usable by the
+  AI generation features on the character sheet.
+- **Tasks**:
+  1. **`CHARACTER_TEMPLATE` v2** — add five new sections after `## Gold`:
+     - `## Physical Characteristics` — Height, Weight, Age, Eyes, Hair, Skin, Gender (key-value)
+     - `## Backstory` — freeform multi-line origin story (feeds AI generation)
+     - `## Personality Traits` — freeform (feeds AI trait generation)
+     - `## Ideals` — freeform
+     - `## Bonds` — freeform
+     - `## Flaws` — freeform
+     - `## Appearance` — freeform physical description
+     - Added comment header explaining the file format
+  2. **`parse_character_md` v2** — reads all seven new sections using `_section()` and `_kv()`.
+     Returns `physical` dict + `custom_background`, `personality_traits`, `ideals`, `bonds`, `flaws`,
+     `appearance` strings alongside existing fields. Fully backwards-compatible with v1 templates.
+  3. **`character_import()` updated** — builds `bg_details` dict from all new parsed fields and stores
+     it in `spells['background_details']` at character creation time. No migration needed — the
+     background_details key is already handled by the character sheet route.
+- **Not changed**: `CAMPAIGN_TEMPLATE` (already v2 from Phase 22). Parser for campaigns is unchanged.
+- **Deliverables**: Updated `parsers.py` (template + parser); updated `app.py` (import route).
+- **Status**: Complete ✓ (2026-03-19)
+
+---
+
 ### Phase 22: Campaign Markdown v2 — Chapters, Scene & Dialogue Import
 - **Source**: Gap identified between the Example `.md` file and the saved `.json` — chapters and NPC scene/dialogue data were lost on import (2026-03-18).
 - **Objectives**: Close the round-trip between a campaign `.md` file and a fully-loaded campaign, so chapters, NPC scenes, and DM dialogue survive import.

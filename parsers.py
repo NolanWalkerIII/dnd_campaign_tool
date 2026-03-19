@@ -60,7 +60,7 @@ def _multiline_field(body, key, known_fields, default=''):
 
 def parse_character_md(text):
     """
-    Parse a character markdown template.
+    Parse a character markdown template (v2 format).
 
     Expected format::
 
@@ -72,12 +72,7 @@ def parse_character_md(text):
         Alignment: Lawful Good
 
         ## Ability Scores
-        STR: 15
-        DEX: 10
-        CON: 14
-        INT: 13
-        WIS: 12
-        CHA: 8
+        STR: 15  DEX: 10  CON: 14  INT: 13  WIS: 12  CHA: 8
 
         ## Skill Proficiencies
         - Athletics
@@ -90,16 +85,43 @@ def parse_character_md(text):
         ## Gold
         Gold: 10
 
-    Returns a dict:
-        name, race, class_name, background, alignment,
-        STR/DEX/CON/INT/WIS/CHA (ints, 1-30),
-        skills (list of str), equipment_extra (list of str), gold (int >=0)
+        ## Physical Characteristics
+        Height: 4'5"
+        Weight: 150 lbs
+        Age: 58
+        Eyes: Steel grey
+        Hair: Black, braided
+        Skin: Bronzed
+        Gender: Male
+
+        ## Backstory
+        Born in the mountain holds of Kharak Dûm...
+
+        ## Personality Traits
+        I am always polite and respectful, even to my enemies.
+
+        ## Ideals
+        Honor. I never break my word, no matter the cost.
+
+        ## Bonds
+        I will do anything to protect my clan's legacy.
+
+        ## Flaws
+        I am too proud to admit when I am wrong.
+
+        ## Appearance
+        A stocky dwarf with a black braided beard reaching his belt...
+
+    Returns a dict with all fields. New in v2:
+        physical (dict of height/weight/age/eyes/hair/skin/gender),
+        custom_background, personality_traits, ideals, bonds, flaws, appearance (all str)
     """
     basics     = _section(text, 'Basic Info')
     scores_sec = _section(text, 'Ability Scores')
     skills_sec = _section(text, 'Skill Proficiencies')
     equip_sec  = _section(text, 'Equipment')
     gold_sec   = _section(text, 'Gold')
+    phys_sec   = _section(text, 'Physical Characteristics')
 
     return {
         'name':            _kv(basics, 'Name'),
@@ -116,6 +138,22 @@ def parse_character_md(text):
         'skills':          _list_items(skills_sec),
         'equipment_extra': _list_items(equip_sec),
         'gold':            _safe_int(_kv(gold_sec, 'Gold', '0'), default=0, lo=0, hi=999999),
+        # Phase 20 background fields
+        'physical': {
+            'height': _kv(phys_sec, 'Height'),
+            'weight': _kv(phys_sec, 'Weight'),
+            'age':    _kv(phys_sec, 'Age'),
+            'eyes':   _kv(phys_sec, 'Eyes'),
+            'hair':   _kv(phys_sec, 'Hair'),
+            'skin':   _kv(phys_sec, 'Skin'),
+            'gender': _kv(phys_sec, 'Gender'),
+        },
+        'custom_background':  _section(text, 'Backstory'),
+        'personality_traits': _section(text, 'Personality Traits'),
+        'ideals':             _section(text, 'Ideals'),
+        'bonds':              _section(text, 'Bonds'),
+        'flaws':              _section(text, 'Flaws'),
+        'appearance':         _section(text, 'Appearance'),
     }
 
 
@@ -252,6 +290,9 @@ def parse_campaign_md(text):
 
 CHARACTER_TEMPLATE = """\
 # Character Sheet
+# Campaign Codex — Character Import Template (v2)
+# Fill in your details below and import via the Characters page.
+# Lines starting with # are comments and are ignored.
 
 ## Basic Info
 Name: Your Character Name
@@ -280,6 +321,40 @@ CHA: 8
 
 ## Gold
 Gold: 10
+
+## Physical Characteristics
+Height: 5'10"
+Weight: 165 lbs
+Age: 28
+Eyes: Brown
+Hair: Dark brown, short
+Skin: Tanned
+Gender: Male
+
+## Backstory
+Write your character's full origin story here. Be as detailed as you like —
+this text drives the AI generation for your personality traits, ideals, bonds,
+flaws, and appearance on the character sheet.
+
+## Personality Traits
+How does your character act day-to-day? What are their mannerisms, quirks,
+and habits? What do other people notice about them first?
+
+## Ideals
+What principle does your character live by? What drives them forward even
+when things are hard? This could be a belief, a cause, or a code of honor.
+
+## Bonds
+Who or what does your character care about most? What ties them to the world —
+a person, a place, a promise, or a memory they carry with them?
+
+## Flaws
+What weakness, vice, or blind spot holds your character back? What might
+betray them at the worst possible moment?
+
+## Appearance
+Describe what your character looks like — their build, face, distinctive
+features, how they dress, and how they carry themselves.
 """
 
 CAMPAIGN_TEMPLATE = """\
