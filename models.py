@@ -14,6 +14,21 @@ class User(db.Model):
     last_seen = Column(DateTime, nullable=True)
     phone_number = Column(String(20), unique=True, nullable=True)
     discord_id = Column(String(30), unique=True, nullable=True)
+    is_admin = Column(Boolean, default=False)
+    is_banned = Column(Boolean, default=False)
+    temp_password = Column(String(200), nullable=True)  # one-time reset password hash
+
+
+class AdminAuditLog(db.Model):
+    id = Column(Integer, primary_key=True)
+    admin_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    admin_username = Column(String(50), nullable=False)
+    action = Column(String(100), nullable=False)
+    target_type = Column(String(30), nullable=True)   # 'user', 'campaign', 'character'
+    target_id = Column(Integer, nullable=True)
+    target_label = Column(String(100), nullable=True)
+    detail = Column(Text, nullable=True)
+    timestamp = Column(DateTime, nullable=False)
 
 
 class Character(db.Model):

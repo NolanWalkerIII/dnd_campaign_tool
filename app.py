@@ -13,7 +13,7 @@ from flask import (Flask, render_template, redirect, url_for,
                    request, flash, session, send_file, jsonify)
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from models import db, User, Character, Campaign, DiceRoller
+from models import db, User, Character, Campaign, DiceRoller, AdminAuditLog
 from parsers import parse_character_md, parse_campaign_md, CHARACTER_TEMPLATE, CAMPAIGN_TEMPLATE
 from services.ai import (cleanup_narration, generate_narration,
                          cleanup_background, generate_background,
@@ -184,6 +184,31 @@ def player_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        if not session.get('is_admin'):
+            flash('Admin access required.', 'error')
+            return redirect(url_for('home'))
+        return f(*args, **kwargs)
+    return decorated
+
+def _admin_log(action, target_type=None, target_id=None, target_label=None, detail=None):
+    entry = AdminAuditLog(
+        admin_id=session['user_id'],
+        admin_username=session.get('username', '?'),
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        target_label=target_label,
+        detail=detail,
+        timestamp=datetime.utcnow(),
+    )
+    db.session.add(entry)
+    db.session.commit()
+
 
 # ── Template context ──────────────────────────────────────────────────────────
 
@@ -220,10 +245,26 @@ def login():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password_hash, password):
+        temp_match = (user and user.temp_password and
+                      check_password_hash(user.temp_password, password))
+        if user and (check_password_hash(user.password_hash, password) or temp_match):
+            if user.is_banned:
+                flash('This account has been suspended. Contact an admin.', 'error')
+                return render_template('login.html')
+            if temp_match:
+                # Clear the temp password after use; redirect to change password
+                user.temp_password = None
+                db.session.commit()
+                session['user_id'] = user.id
+                session['username'] = user.username
+                session['role'] = user.role
+                session['is_admin'] = bool(user.is_admin)
+                flash('You logged in with a temporary password. Please update your password.', 'error')
+                return redirect(url_for('change_password'))
             session['user_id'] = user.id
             session['username'] = user.username
             session['role'] = user.role
+            session['is_admin'] = bool(user.is_admin)
             flash(f'Welcome back, {user.username}!', 'success')
             return redirect(url_for('home'))
         flash('Invalid username or password.', 'error')
@@ -270,6 +311,25 @@ def logout():
     session.clear()
     flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
+
+
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    if request.method == 'POST':
+        new_pw = request.form.get('password', '')
+        confirm = request.form.get('confirm', '')
+        if len(new_pw) < 6:
+            flash('Password must be at least 6 characters.', 'error')
+        elif new_pw != confirm:
+            flash('Passwords do not match.', 'error')
+        else:
+            user = User.query.get(session['user_id'])
+            user.password_hash = generate_password_hash(new_pw)
+            db.session.commit()
+            flash('Password updated successfully.', 'success')
+            return redirect(url_for('home'))
+    return render_template('change_password.html')
 
 
 # ── Character routes (shared) ─────────────────────────────────────────────────
@@ -2558,6 +2618,120 @@ def player_attack(campaign_id):
     return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
 
 
+# ── Admin Console ─────────────────────────────────────────────────────────────
+
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    total_users = User.query.count()
+    total_campaigns = Campaign.query.count()
+    total_characters = Character.query.count()
+    recent_users = User.query.order_by(User.id.desc()).limit(5).all()
+    recent_logs = AdminAuditLog.query.order_by(AdminAuditLog.id.desc()).limit(10).all()
+    return render_template('admin/dashboard.html',
+        total_users=total_users,
+        total_campaigns=total_campaigns,
+        total_characters=total_characters,
+        recent_users=recent_users,
+        recent_logs=recent_logs,
+    )
+
+
+@app.route('/admin/users')
+@admin_required
+def admin_users():
+    q = request.args.get('q', '').strip()
+    query = User.query
+    if q:
+        query = query.filter(User.username.ilike(f'%{q}%'))
+    users = query.order_by(User.id.desc()).all()
+    return render_template('admin/users.html', users=users, q=q)
+
+
+@app.route('/admin/users/<int:uid>')
+@admin_required
+def admin_user_detail(uid):
+    user = User.query.get_or_404(uid)
+    characters = Character.query.filter_by(user_id=uid).all()
+    campaigns_dm = Campaign.query.filter_by(dm_id=uid).all()
+    logs = AdminAuditLog.query.filter_by(target_type='user', target_id=uid).order_by(AdminAuditLog.id.desc()).limit(20).all()
+    return render_template('admin/user_detail.html', user=user, characters=characters, campaigns_dm=campaigns_dm, logs=logs)
+
+
+@app.route('/admin/users/<int:uid>/reset-password', methods=['POST'])
+@admin_required
+def admin_reset_password(uid):
+    user = User.query.get_or_404(uid)
+    temp_pw = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+    user.temp_password = generate_password_hash(temp_pw)
+    db.session.commit()
+    _admin_log('reset_password', 'user', uid, user.username)
+    flash(f'Temporary password for {user.username}: <strong>{temp_pw}</strong> — share this with the user.', 'success')
+    return redirect(url_for('admin_user_detail', uid=uid))
+
+
+@app.route('/admin/users/<int:uid>/toggle-ban', methods=['POST'])
+@admin_required
+def admin_toggle_ban(uid):
+    user = User.query.get_or_404(uid)
+    if user.is_admin:
+        flash('Cannot ban another admin.', 'error')
+        return redirect(url_for('admin_user_detail', uid=uid))
+    user.is_banned = not user.is_banned
+    db.session.commit()
+    action = 'ban_user' if user.is_banned else 'unban_user'
+    _admin_log(action, 'user', uid, user.username)
+    flash(f'User {user.username} has been {"banned" if user.is_banned else "unbanned"}.', 'success')
+    return redirect(url_for('admin_user_detail', uid=uid))
+
+
+@app.route('/admin/users/<int:uid>/set-role', methods=['POST'])
+@admin_required
+def admin_set_role(uid):
+    user = User.query.get_or_404(uid)
+    new_role = request.form.get('role')
+    if new_role not in ('player', 'dm'):
+        flash('Invalid role.', 'error')
+        return redirect(url_for('admin_user_detail', uid=uid))
+    old_role = user.role
+    user.role = new_role
+    db.session.commit()
+    _admin_log('set_role', 'user', uid, user.username, detail=f'{old_role} → {new_role}')
+    flash(f'{user.username} role updated to {new_role}.', 'success')
+    return redirect(url_for('admin_user_detail', uid=uid))
+
+
+@app.route('/admin/users/<int:uid>/toggle-admin', methods=['POST'])
+@admin_required
+def admin_toggle_admin(uid):
+    if uid == session['user_id']:
+        flash('You cannot change your own admin status.', 'error')
+        return redirect(url_for('admin_user_detail', uid=uid))
+    user = User.query.get_or_404(uid)
+    user.is_admin = not user.is_admin
+    db.session.commit()
+    _admin_log('toggle_admin', 'user', uid, user.username, detail=str(user.is_admin))
+    flash(f'Admin status for {user.username} set to {user.is_admin}.', 'success')
+    return redirect(url_for('admin_user_detail', uid=uid))
+
+
+@app.route('/admin/users/<int:uid>/delete', methods=['POST'])
+@admin_required
+def admin_delete_user(uid):
+    if uid == session['user_id']:
+        flash('You cannot delete yourself.', 'error')
+        return redirect(url_for('admin_user_detail', uid=uid))
+    user = User.query.get_or_404(uid)
+    username = user.username
+    # Orphan characters (keep data, remove ownership)
+    Character.query.filter_by(user_id=uid).update({'user_id': None})
+    db.session.delete(user)
+    db.session.commit()
+    _admin_log('delete_user', 'user', uid, username)
+    flash(f'User {username} deleted. Their characters have been orphaned.', 'success')
+    return redirect(url_for('admin_users'))
+
+
 def _migrate():
     """Apply any schema changes that db.create_all() won't add to existing tables."""
     with db.engine.connect() as conn:
@@ -2571,6 +2745,15 @@ def _migrate():
         if 'phone_number' not in cols:
             # SQLite does not support ADD COLUMN with UNIQUE; add without constraint
             conn.execute(db.text("ALTER TABLE user ADD COLUMN phone_number VARCHAR(20)"))
+            conn.commit()
+        if 'is_admin' not in cols:
+            conn.execute(db.text("ALTER TABLE user ADD COLUMN is_admin BOOLEAN DEFAULT 0"))
+            conn.commit()
+        if 'is_banned' not in cols:
+            conn.execute(db.text("ALTER TABLE user ADD COLUMN is_banned BOOLEAN DEFAULT 0"))
+            conn.commit()
+        if 'temp_password' not in cols:
+            conn.execute(db.text("ALTER TABLE user ADD COLUMN temp_password VARCHAR(200)"))
             conn.commit()
 
 

@@ -622,7 +622,7 @@ Full system health dashboard with one-click tests for: environment variables, xA
   - `user_detail.html` — full profile with action buttons
 - **Security**: Admin routes require both `@login_required` and `@admin_required`; all actions logged to an `AdminAuditLog` table (who did what, when, to whom)
 - **Updated files**: `models.py`, `app.py`, `templates/admin/*.html`
-- **Status**: Proposed
+- **Status**: Complete ✓ (2026-03-20)
 
 ---
 

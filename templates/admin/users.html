@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Users — Admin Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>🛡 Users</h1>
+  <a href="/admin" class="btn btn-outline" style="font-size:0.85rem;">← Dashboard</a>
+</div>
+
+<!-- Search -->
+<form method="get" style="display:flex; gap:0.5rem; margin-bottom:1.5rem;">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search by username…"
+         style="max-width:320px;">
+  <button type="submit" class="btn btn-gold" style="padding:8px 18px;">Search</button>
+  {% if q %}<a href="/admin/users" class="btn btn-outline">Clear</a>{% endif %}
+</form>
+
+<div class="card" style="padding:0; overflow:hidden;">
+  <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+    <thead style="background:var(--card);">
+      <tr style="color:var(--muted); text-align:left;">
+        <th style="padding:10px 14px;">ID</th>
+        <th style="padding:10px 14px;">Username</th>
+        <th style="padding:10px 14px;">Role</th>
+        <th style="padding:10px 14px;">Last Seen</th>
+        <th style="padding:10px 14px;">Status</th>
+        <th style="padding:10px 14px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr style="border-top:1px solid var(--border);">
+        <td style="padding:9px 14px; color:var(--muted);">{{ u.id }}</td>
+        <td style="padding:9px 14px; font-weight:600;">
+          {{ u.username }}
+          {% if u.is_admin %}<span style="color:var(--gold); font-size:0.75rem; margin-left:4px;">[ADMIN]</span>{% endif %}
+        </td>
+        <td style="padding:9px 14px; color:var(--muted);">{{ u.role|upper }}</td>
+        <td style="padding:9px 14px; color:var(--muted); font-size:0.82rem;">
+          {{ u.last_seen.strftime('%Y-%m-%d %H:%M') if u.last_seen else 'Never' }}
+        </td>
+        <td style="padding:9px 14px;">
+          {% if u.is_banned %}
+            <span style="color:var(--accent); font-size:0.82rem; font-weight:600;">⛔ Banned</span>
+          {% else %}
+            <span style="color:var(--success); font-size:0.82rem;">✓ Active</span>
+          {% endif %}
+        </td>
+        <td style="padding:9px 14px;">
+          <a href="/admin/users/{{ u.id }}" class="btn btn-outline" style="padding:3px 12px; font-size:0.8rem;">Manage</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" style="padding:2rem; text-align:center; color:var(--muted);">No users found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

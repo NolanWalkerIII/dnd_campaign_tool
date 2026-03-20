@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}{{ user.username }} — Admin Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>
+    👤 {{ user.username }}
+    {% if user.is_admin %}<span style="color:var(--gold); font-size:1rem;"> [ADMIN]</span>{% endif %}
+    {% if user.is_banned %}<span style="color:var(--accent); font-size:1rem;"> [BANNED]</span>{% endif %}
+  </h1>
+  <a href="/admin/users" class="btn btn-outline" style="font-size:0.85rem;">← All Users</a>
+</div>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+
+  <!-- Profile + Actions -->
+  <div>
+    <div class="card">
+      <h2>Profile</h2>
+      <table style="width:100%; font-size:0.9rem; border-collapse:collapse;">
+        <tr><td style="padding:6px 0; color:var(--muted); width:120px;">User ID</td><td>{{ user.id }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Role</td><td>{{ user.role|upper }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Last Seen</td>
+            <td>{{ user.last_seen.strftime('%Y-%m-%d %H:%M') if user.last_seen else 'Never' }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Discord ID</td><td>{{ user.discord_id or '—' }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Phone</td><td>{{ user.phone_number or '—' }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Admin</td>
+            <td>{{ '✓ Yes' if user.is_admin else 'No' }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Banned</td>
+            <td style="color:{% if user.is_banned %}var(--accent){% else %}var(--success){% endif %};">
+              {{ '⛔ Yes' if user.is_banned else '✓ No' }}
+            </td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Actions</h2>
+
+      <!-- Reset password -->
+      <form method="post" action="/admin/users/{{ user.id }}/reset-password"
+            onsubmit="return confirm('Generate a temporary password for {{ user.username }}?');"
+            style="margin-bottom:0.75rem;">
+        <button class="btn btn-outline" style="width:100%; text-align:left; padding:8px 14px;">
+          🔑 Reset Password (generate temp)
+        </button>
+      </form>
+
+      <!-- Change role -->
+      <form method="post" action="/admin/users/{{ user.id }}/set-role"
+            style="display:flex; gap:0.5rem; margin-bottom:0.75rem;">
+        <select name="role" style="flex:1;">
+          <option value="player" {% if user.role == 'player' %}selected{% endif %}>Player</option>
+          <option value="dm"     {% if user.role == 'dm'     %}selected{% endif %}>DM</option>
+        </select>
+        <button class="btn btn-gold" style="padding:6px 14px; font-size:0.85rem;">Set Role</button>
+      </form>
+
+      <!-- Ban / Unban -->
+      <form method="post" action="/admin/users/{{ user.id }}/toggle-ban"
+            onsubmit="return confirm('{% if user.is_banned %}Unban{% else %}Ban{% endif %} {{ user.username }}?');"
+            style="margin-bottom:0.75rem;">
+        <button class="btn {% if user.is_banned %}btn-gold{% else %}btn-outline{% endif %}"
+                style="width:100%; text-align:left; padding:8px 14px; {% if not user.is_banned %}border-color:var(--accent); color:var(--accent);{% endif %}">
+          {% if user.is_banned %}✓ Unban User{% else %}⛔ Ban User{% endif %}
+        </button>
+      </form>
+
+      <!-- Toggle admin -->
+      {% if user.id != session.user_id %}
+      <form method="post" action="/admin/users/{{ user.id }}/toggle-admin"
+            onsubmit="return confirm('{% if user.is_admin %}Remove{% else %}Grant{% endif %} admin for {{ user.username }}?');"
+            style="margin-bottom:0.75rem;">
+        <button class="btn btn-outline" style="width:100%; text-align:left; padding:8px 14px;">
+          🛡 {% if user.is_admin %}Remove Admin{% else %}Grant Admin{% endif %}
+        </button>
+      </form>
+      {% endif %}
+
+      <!-- Delete -->
+      {% if user.id != session.user_id %}
+      <form method="post" action="/admin/users/{{ user.id }}/delete"
+            onsubmit="return confirm('Permanently delete {{ user.username }}? Their characters will be orphaned.');">
+        <button class="btn btn-outline"
+                style="width:100%; text-align:left; padding:8px 14px; border-color:var(--accent); color:var(--accent);">
+          🗑 Delete User
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Characters + Campaigns + Log -->
+  <div>
+    <div class="card">
+      <h2>Characters ({{ characters|length }})</h2>
+      {% if characters %}
+      <table style="width:100%; font-size:0.87rem; border-collapse:collapse;">
+        {% for c in characters %}
+        <tr style="border-top:1px solid var(--border);">
+          <td style="padding:6px 8px; font-weight:600; color:var(--gold);">{{ c.name }}</td>
+          <td style="padding:6px 8px; color:var(--muted);">{{ c.race }} {{ c.class_name }}</td>
+          <td style="padding:6px 8px; color:var(--muted);">Lv{{ c.level }}</td>
+          <td style="padding:6px 8px;">
+            <a href="/characters/{{ c.id }}" style="color:var(--gold); font-size:0.8rem;">View</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p style="color:var(--muted); font-size:0.88rem;">No characters.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>DM Campaigns ({{ campaigns_dm|length }})</h2>
+      {% if campaigns_dm %}
+      <table style="width:100%; font-size:0.87rem; border-collapse:collapse;">
+        {% for camp in campaigns_dm %}
+        <tr style="border-top:1px solid var(--border);">
+          <td style="padding:6px 8px; font-weight:600; color:var(--gold);">{{ camp.name }}</td>
+          <td style="padding:6px 8px; color:var(--muted);">{{ (camp.players or [])|length }} players</td>
+          <td style="padding:6px 8px;">
+            {% if camp.is_active %}
+              <span style="color:var(--success); font-size:0.8rem;">Active</span>
+            {% else %}
+              <span style="color:var(--muted); font-size:0.8rem;">Archived</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p style="color:var(--muted); font-size:0.88rem;">No campaigns as DM.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Admin Action History</h2>
+      {% if logs %}
+      <table style="width:100%; font-size:0.83rem; border-collapse:collapse;">
+        {% for log in logs %}
+        <tr style="border-top:1px solid var(--border);">
+          <td style="padding:5px 8px; color:var(--muted); white-space:nowrap;">
+            {{ log.timestamp.strftime('%m/%d %H:%M') if log.timestamp else '' }}
+          </td>
+          <td style="padding:5px 8px; font-weight:600; color:var(--gold);">{{ log.admin_username }}</td>
+          <td style="padding:5px 8px;">{{ log.action.replace('_', ' ') }}</td>
+          <td style="padding:5px 8px; color:var(--muted);">{{ log.detail or '' }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p style="color:var(--muted); font-size:0.88rem;">No admin actions for this user.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

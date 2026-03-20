@@ -376,6 +376,9 @@
         <div class="left-nav-section">System</div>
         <a href="/dm/settings">⚙ Settings</a>
         <a href="/dm/diagnostics">🔧 Diagnostics</a>
+        {% if session.is_admin %}
+        <a href="/admin">🛡 Admin Console</a>
+        {% endif %}
 
       {% else %}
         <div class="left-nav-section">Campaigns</div>
