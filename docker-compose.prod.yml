@@ -15,9 +15,10 @@ services:
       - "traefik.http.routers.campaigncodex.tls=true"
       - "traefik.http.routers.campaigncodex.tls.certresolver=letsencrypt"
       - "traefik.http.services.campaigncodex.loadbalancer.server.port=5000"
+      - "traefik.docker.network=root_default"
     networks:
-      - traefik
+      - root_default
 
 networks:
-  traefik:
+  root_default:
     external: true
