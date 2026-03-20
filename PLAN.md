@@ -601,6 +601,84 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
+### Phase 29: Admin Console — User & Account Management
+- **Source**: DM request (2026-03-20) — user forgot their password; need an admin panel to manage accounts without touching the database directly.
+- **Objectives**: Give a designated super-admin a web UI to view, manage, and troubleshoot all user accounts.
+- **Prerequisites**: Phase 1 (auth/users) complete.
+- **Admin role**: Add `is_admin` boolean field to `User` model (default `False`). Seed one admin via env var `ADMIN_EMAIL` on first run or via a CLI command `flask create-admin`.
+- **Admin-only routes** (all behind `@admin_required` decorator):
+  - `GET /admin` — dashboard: total users, campaigns, characters, recent signups
+  - `GET /admin/users` — paginated user list: username, email, role (DM/player/admin), last login, account status (active/banned)
+  - `GET /admin/users/<id>` — user detail: profile info, linked characters, campaigns, login history
+  - `POST /admin/users/<id>/reset-password` — generate a temporary one-time password and display it to admin (user must change on next login)
+  - `POST /admin/users/<id>/toggle-ban` — ban/unban account (banned users get "Account suspended" on login)
+  - `POST /admin/users/<id>/set-role` — promote to DM, demote to player, or grant admin
+  - `DELETE /admin/users/<id>` — soft-delete: mark `deleted_at`, anonymize PII, orphan characters (don't cascade-delete campaign data)
+  - `POST /admin/users/<id>/send-reset-email` — trigger password reset email (requires email config)
+- **Admin UI** (`templates/admin/`):
+  - `base.html` — admin layout: sidebar nav (Dashboard, Users, Campaigns, Characters, System)
+  - `dashboard.html` — stats cards + recent activity feed
+  - `users.html` — searchable/filterable table with inline actions
+  - `user_detail.html` — full profile with action buttons
+- **Security**: Admin routes require both `@login_required` and `@admin_required`; all actions logged to an `AdminAuditLog` table (who did what, when, to whom)
+- **Updated files**: `models.py`, `app.py`, `templates/admin/*.html`
+- **Status**: Proposed
+
+---
+
+### Phase 30: Admin Console — Campaign & Character Oversight
+- **Source**: Natural extension of Phase 29 — admins should be able to inspect and fix campaign/character state without direct DB access.
+- **Objectives**: Full CRUD visibility over campaigns and characters; ability to reassign ownership, fix broken state, and export data.
+- **Prerequisites**: Phase 29 complete.
+- **Campaign management**:
+  - `GET /admin/campaigns` — all campaigns: name, DM, player count, status (active/archived), created date
+  - `GET /admin/campaigns/<id>` — full campaign detail: players, characters, `current_state` JSON viewer, narration log, combat log
+  - `POST /admin/campaigns/<id>/reassign-dm` — transfer DM ownership to another user
+  - `POST /admin/campaigns/<id>/reset-state` — wipe `current_state` back to defaults (nuclear option for broken sessions)
+  - `POST /admin/campaigns/<id>/archive` — soft-archive (hidden from active list, data preserved)
+  - `GET /admin/campaigns/<id>/export` — download full campaign JSON (all logs, characters, state)
+- **Character management**:
+  - `GET /admin/characters` — all characters: name, class, level, owner, campaign assignment
+  - `GET /admin/characters/<id>` — full character detail: stats, spells JSON viewer, HP, conditions
+  - `POST /admin/characters/<id>/reassign` — move character to a different user or campaign
+  - `POST /admin/characters/<id>/fix-hp` — admin override to set current/max HP (for data corruption)
+  - `DELETE /admin/characters/<id>` — hard delete (with confirmation prompt)
+- **JSON state viewer**: Collapsible read-only JSON tree for `current_state` and `spells` fields — lets admin inspect without raw DB access
+- **Audit trail**: All campaign/character admin actions logged to `AdminAuditLog`
+- **Updated files**: `app.py`, `templates/admin/campaigns.html`, `templates/admin/campaign_detail.html`, `templates/admin/characters.html`, `templates/admin/character_detail.html`
+- **Status**: Proposed
+
+---
+
+### Phase 31: Admin Console — System Health & Diagnostics
+- **Source**: Ops need — as the app grows, the admin needs visibility into system health, errors, and API usage.
+- **Objectives**: System-level dashboards for monitoring, error triage, and API key management — all without SSH access.
+- **Prerequisites**: Phase 29 complete.
+- **System dashboard** (`GET /admin/system`):
+  - App version, uptime, Python/Flask versions
+  - Database stats: total rows per table, DB file size (SQLite), recent slow queries
+  - Active sessions count (users logged in last 30 min)
+  - Disk usage: `instance/` folder size, log file sizes
+- **Error log viewer** (`GET /admin/logs`):
+  - Tail of `app.log` (last 200 lines) with auto-refresh toggle
+  - Filter by level: ERROR, WARNING, INFO
+  - Download full log file button
+- **AI API usage tracker**:
+  - Log each xAI API call: timestamp, character/campaign, tokens used, latency, success/failure
+  - `GET /admin/ai-usage` — table of recent calls + daily token totals
+  - Helps spot runaway usage or API key exhaustion early
+- **Discord bot status** (`GET /admin/discord`):
+  - Bot online/offline indicator (ping the Discord API)
+  - Last command run, command usage counts
+  - "Restart Bot" button (sends SIGTERM to bot process, supervisor restarts it)
+- **Password reset email config** (`GET/POST /admin/settings`):
+  - SMTP settings (host, port, from address) stored in DB — no restart needed to change
+  - Test email button
+- **Updated files**: `app.py`, `models.py` (new `ApiUsageLog` model), `templates/admin/system.html`, `templates/admin/logs.html`, `templates/admin/ai_usage.html`
+- **Status**: Proposed
+
+---
+
 ## Wishlist (Future Consideration)
 *Not prioritized for active development; revisit after Phase 13.*
 
