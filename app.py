@@ -19,6 +19,7 @@ from services.ai import (cleanup_narration, generate_narration,
                          cleanup_background, generate_background,
                          generate_trait_field, generate_appearance,
                          generate_character)
+from services.ai_player import generate_player_action
 import re as _re
 
 from game_data import (
@@ -1461,6 +1462,56 @@ def dm_ai_player_level(char_id):
     if campaign_id:
         return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
     return redirect(url_for('character_sheet', char_id=char_id))
+
+
+@app.route('/dm/characters/<int:char_id>/ai-action', methods=['POST'])
+@dm_required
+def dm_ai_action(char_id):
+    """Generate an AI player action — returns JSON for inline preview."""
+    char = Character.query.get_or_404(char_id)
+    campaign_id = request.form.get('campaign_id', type=int)
+    campaign = Campaign.query.get(campaign_id) if campaign_id else None
+    if not campaign or campaign.dm_id != session['user_id']:
+        return jsonify({'error': 'Campaign not found.'}), 400
+    extra = char.spells or {}
+    if not extra.get('ai_player'):
+        return jsonify({'error': 'Character is not AI-controlled.'}), 400
+    persona_level = extra.get('ai_level', 'intermediate')
+    action, error = generate_player_action(char, campaign, persona_level)
+    if error:
+        return jsonify({'error': error}), 500
+    return jsonify({
+        'action': action,
+        'character_name': char.name,
+        'persona_level': persona_level,
+    })
+
+
+@app.route('/dm/characters/<int:char_id>/ai-action/post', methods=['POST'])
+@dm_required
+def dm_ai_action_post(char_id):
+    """Post an AI-generated (or DM-edited) action to the campaign narration log."""
+    from sqlalchemy.orm.attributes import flag_modified
+    char = Character.query.get_or_404(char_id)
+    campaign_id = request.form.get('campaign_id', type=int)
+    campaign = Campaign.query.get(campaign_id) if campaign_id else None
+    if not campaign or campaign.dm_id != session['user_id']:
+        flash('Campaign not found.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    action_text = request.form.get('action_text', '').strip()
+    if action_text:
+        state = campaign.current_state or {}
+        log = state.get('narration_log', [])
+        log.append({
+            'text': f'[{char.name}] {action_text}',
+            'timestamp': datetime.now().strftime('%b %d, %H:%M'),
+        })
+        state['narration_log'] = log
+        campaign.current_state = state
+        flag_modified(campaign, 'current_state')
+        db.session.commit()
+        flash(f"{char.name}'s action posted to log.", 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
 
 
 # ── DM Impersonation routes ───────────────────────────────────────────────────
