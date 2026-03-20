@@ -748,6 +748,8 @@ def character_sheet(char_id):
     languages  = race_data.get('languages', [])
     temp_hp     = extra.get('temp_hp', 0)
     inspiration = extra.get('inspiration', False)
+    ai_player   = extra.get('ai_player', False)
+    ai_level    = extra.get('ai_level', 'intermediate')
     bg_details  = extra.get('background_details', {})
 
     # Passive scores (10 + skill modifier)
@@ -786,6 +788,8 @@ def character_sheet(char_id):
         languages=languages,
         temp_hp=temp_hp,
         inspiration=inspiration,
+        ai_player=ai_player,
+        ai_level=ai_level,
         bg_details=bg_details,
         passive_perception=passive_perception,
         passive_investigation=passive_investigation,
@@ -1085,6 +1089,15 @@ def dm_campaign_detail(campaign_id):
     state = campaign.current_state or {}
     narration_log = state.get('narration_log', [])
 
+    # DM-managed characters (no player login required)
+    dm_managed_ids = state.get('dm_managed_chars', [])
+    dm_managed_chars = [Character.query.get(cid) for cid in dm_managed_ids
+                        if Character.query.get(cid)]
+    # DM's own characters available to add (not already managed)
+    dm_available_chars = Character.query.filter_by(
+        user_id=session['user_id']
+    ).filter(~Character.id.in_(dm_managed_ids)).all()
+
     # Pre-fetch Character objects for combatants in initiative order
     combatant_chars = {}
     for entry in state.get('initiative_order', []):
@@ -1096,6 +1109,8 @@ def dm_campaign_detail(campaign_id):
                            campaign=campaign,
                            players=players,
                            player_chars=player_chars,
+                           dm_managed_chars=dm_managed_chars,
+                           dm_available_chars=dm_available_chars,
                            narration_log=narration_log,
                            combatant_chars=combatant_chars,
                            conditions=CONDITIONS,
@@ -1355,6 +1370,96 @@ def spend_inspiration(char_id):
     campaign_id = request.form.get('campaign_id', type=int)
     if campaign_id:
         return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+    return redirect(url_for('character_sheet', char_id=char_id))
+
+
+# ── DM-managed character roster routes ───────────────────────────────────────
+
+@app.route('/dm/campaigns/<int:campaign_id>/add-managed-char', methods=['POST'])
+@dm_required
+def dm_add_managed_char(campaign_id):
+    from sqlalchemy.orm.attributes import flag_modified
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    char_id = request.form.get('char_id', type=int)
+    char = Character.query.get(char_id) if char_id else None
+    if not char or char.user_id != session['user_id']:
+        flash('Character not found.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    state = campaign.current_state or {}
+    managed = state.get('dm_managed_chars', [])
+    if char_id not in managed:
+        managed.append(char_id)
+        state['dm_managed_chars'] = managed
+        campaign.current_state = state
+        flag_modified(campaign, 'current_state')
+        db.session.commit()
+        flash(f'{char.name} added to campaign roster.', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/remove-managed-char', methods=['POST'])
+@dm_required
+def dm_remove_managed_char(campaign_id):
+    from sqlalchemy.orm.attributes import flag_modified
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    char_id = request.form.get('char_id', type=int)
+    state = campaign.current_state or {}
+    managed = state.get('dm_managed_chars', [])
+    if char_id in managed:
+        managed.remove(char_id)
+        state['dm_managed_chars'] = managed
+        campaign.current_state = state
+        flag_modified(campaign, 'current_state')
+        db.session.commit()
+        flash('Character removed from campaign roster.', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+# ── AI Player routes ──────────────────────────────────────────────────────────
+
+@app.route('/dm/characters/<int:char_id>/ai-toggle', methods=['POST'])
+@dm_required
+def dm_ai_player_toggle(char_id):
+    from sqlalchemy.orm.attributes import flag_modified
+    char = Character.query.get_or_404(char_id)
+    campaign_id = request.form.get('campaign_id', type=int)
+    extra = char.spells or {}
+    extra['ai_player'] = not extra.get('ai_player', False)
+    if extra['ai_player'] and 'ai_level' not in extra:
+        extra['ai_level'] = 'intermediate'
+    char.spells = extra
+    flag_modified(char, 'spells')
+    db.session.commit()
+    state = 'enabled' if extra['ai_player'] else 'disabled'
+    flash(f'AI Player {state} for {char.name}.', 'success')
+    if campaign_id:
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    return redirect(url_for('character_sheet', char_id=char_id))
+
+
+@app.route('/dm/characters/<int:char_id>/ai-level', methods=['POST'])
+@dm_required
+def dm_ai_player_level(char_id):
+    from sqlalchemy.orm.attributes import flag_modified
+    char = Character.query.get_or_404(char_id)
+    campaign_id = request.form.get('campaign_id', type=int)
+    level = request.form.get('level', 'intermediate')
+    if level not in ('novice', 'intermediate', 'experienced'):
+        level = 'intermediate'
+    extra = char.spells or {}
+    extra['ai_level'] = level
+    char.spells = extra
+    flag_modified(char, 'spells')
+    db.session.commit()
+    flash(f'{char.name} AI persona set to {level.capitalize()}.', 'success')
+    if campaign_id:
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
     return redirect(url_for('character_sheet', char_id=char_id))
 
 

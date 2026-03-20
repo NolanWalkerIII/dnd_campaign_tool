@@ -792,12 +792,21 @@ function toggleGettingStarted() {
             {% set bar_col = 'var(--success)' if pct > 50 else ('var(--gold)' if pct > 25 else 'var(--accent)') %}
             <div style="background:var(--card); border-radius:var(--radius);
                         padding:10px 12px; margin-bottom:8px;">
+              {% set char_ai = (char.spells or {}).get('ai_player', false) %}
+              {% set char_ai_level = (char.spells or {}).get('ai_level', 'intermediate') %}
               <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
                 <div>
                   <a href="/characters/{{ char.id }}"
                      style="font-weight:600; color:var(--text); text-decoration:none;">
                     {{ char.name }}
                   </a>
+                  {% if char_ai %}
+                  <span style="font-size:0.72rem; color:var(--muted); margin-left:6px;
+                               background:var(--bg); border:1px solid var(--border);
+                               border-radius:10px; padding:1px 7px;">
+                    🤖 {{ char_ai_level|capitalize }}
+                  </span>
+                  {% endif %}
                   <span style="font-size:0.8rem; color:var(--muted); margin-left:6px;">
                     Lv{{ char.level }} {{ char.race }} {{ char.class_name }}
                   </span>
@@ -833,6 +842,30 @@ function toggleGettingStarted() {
                   {{ '★ Revoke Inspiration' if char_inspired else '☆ Grant Inspiration' }}
                 </button>
               </form>
+              <!-- AI Player toggle -->
+              <div style="margin-top:6px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <form method="POST" action="/dm/characters/{{ char.id }}/ai-toggle" style="margin:0;">
+                  <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+                  <button type="submit" class="btn btn-outline"
+                          style="padding:3px 10px; font-size:0.8rem;
+                                 color:{{ 'var(--success)' if char_ai else 'var(--muted)' }};">
+                    {{ '✅ AI Active — Disable' if char_ai else '🤖 Enable AI Player' }}
+                  </button>
+                </form>
+                {% if char_ai %}
+                {% for lvl in ['novice', 'intermediate', 'experienced'] %}
+                <form method="POST" action="/dm/characters/{{ char.id }}/ai-level" style="margin:0;">
+                  <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+                  <input type="hidden" name="level" value="{{ lvl }}">
+                  <button type="submit" class="btn btn-outline"
+                          style="padding:2px 8px; font-size:0.75rem;
+                                 {{ 'border-color:var(--gold); color:var(--gold);' if char_ai_level == lvl else '' }}">
+                    {{ lvl|capitalize }}
+                  </button>
+                </form>
+                {% endfor %}
+                {% endif %}
+              </div>
             </div>
             {% endfor %}
           {% else %}
@@ -847,6 +880,134 @@ function toggleGettingStarted() {
             Share code <strong style="color:var(--gold); letter-spacing:2px;">{{ campaign.join_code }}</strong>
           </p>
         </div>
+      {% endif %}
+    </div>
+
+    <!-- DM-Managed Characters (no player login required) -->
+    <div class="card" style="margin-bottom:1.25rem;">
+      <h2 style="margin:0 0 0.75rem; font-size:1rem;">
+        DM-Managed Characters
+        <span style="font-size:0.78rem; font-weight:400; color:var(--muted); margin-left:6px;">
+          — characters you control directly (no player login needed)
+        </span>
+      </h2>
+
+      {% if dm_managed_chars %}
+        {% for char in dm_managed_chars %}
+        {% set pct = [(char.hp_current / char.hp_max * 100)|int, 0]|max %}
+        {% set bar_col = 'var(--success)' if pct > 50 else ('var(--gold)' if pct > 25 else 'var(--accent)') %}
+        {% set char_ai = (char.spells or {}).get('ai_player', false) %}
+        {% set char_ai_level = (char.spells or {}).get('ai_level', 'intermediate') %}
+        <div style="background:var(--card); border-radius:var(--radius);
+                    padding:10px 12px; margin-bottom:8px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <div>
+              <a href="/characters/{{ char.id }}"
+                 style="font-weight:600; color:var(--text); text-decoration:none;">
+                {{ char.name }}
+              </a>
+              {% if char_ai %}
+              <span style="font-size:0.72rem; color:var(--muted); margin-left:6px;
+                           background:var(--bg); border:1px solid var(--border);
+                           border-radius:10px; padding:1px 7px;">
+                🤖 {{ char_ai_level|capitalize }}
+              </span>
+              {% endif %}
+              <span style="font-size:0.8rem; color:var(--muted); margin-left:6px;">
+                Lv{{ char.level }} {{ char.race }} {{ char.class_name }}
+              </span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:0.82rem; color:var(--muted);">AC {{ char.ac }}</span>
+              <form method="POST" action="/dm/campaigns/{{ campaign.id }}/remove-managed-char" style="margin:0;">
+                <input type="hidden" name="char_id" value="{{ char.id }}">
+                <button type="submit" class="btn btn-outline"
+                        style="padding:2px 8px; font-size:0.75rem; color:var(--muted);"
+                        title="Remove from campaign roster">✕</button>
+              </form>
+            </div>
+          </div>
+          <!-- HP bar -->
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+            <div style="flex:1; background:var(--border); border-radius:4px; height:7px; overflow:hidden;">
+              <div style="width:{{ pct }}%; background:{{ bar_col }}; height:100%;"></div>
+            </div>
+            <span style="font-size:0.8rem; color:var(--text); white-space:nowrap;">
+              {{ char.hp_current }}/{{ char.hp_max }} HP
+            </span>
+          </div>
+          <!-- HP adjust -->
+          <form method="POST" action="/dm/characters/{{ char.id }}/hp"
+                style="display:flex; gap:6px;">
+            <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+            <input type="number" name="delta" placeholder="±HP"
+                   style="width:80px; padding:4px 8px; font-size:0.85rem;">
+            <button type="submit" class="btn btn-outline"
+                    style="padding:4px 10px; font-size:0.8rem;">Apply</button>
+          </form>
+          <!-- Inspiration toggle -->
+          {% set char_inspired = (char.spells or {}).get('inspiration', false) %}
+          <form method="POST" action="/dm/characters/{{ char.id }}/inspiration"
+                style="margin-top:6px;">
+            <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+            <button type="submit" class="btn btn-outline"
+                    style="padding:3px 10px; font-size:0.8rem;
+                           color:{{ 'var(--accent)' if char_inspired else 'var(--gold)' }};">
+              {{ '★ Revoke Inspiration' if char_inspired else '☆ Grant Inspiration' }}
+            </button>
+          </form>
+          <!-- AI Player toggle -->
+          <div style="margin-top:6px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <form method="POST" action="/dm/characters/{{ char.id }}/ai-toggle" style="margin:0;">
+              <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+              <button type="submit" class="btn btn-outline"
+                      style="padding:3px 10px; font-size:0.8rem;
+                             color:{{ 'var(--success)' if char_ai else 'var(--muted)' }};">
+                {{ '✅ AI Active — Disable' if char_ai else '🤖 Enable AI Player' }}
+              </button>
+            </form>
+            {% if char_ai %}
+            {% for lvl in ['novice', 'intermediate', 'experienced'] %}
+            <form method="POST" action="/dm/characters/{{ char.id }}/ai-level" style="margin:0;">
+              <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+              <input type="hidden" name="level" value="{{ lvl }}">
+              <button type="submit" class="btn btn-outline"
+                      style="padding:2px 8px; font-size:0.75rem;
+                             {{ 'border-color:var(--gold); color:var(--gold);' if char_ai_level == lvl else '' }}">
+                {{ lvl|capitalize }}
+              </button>
+            </form>
+            {% endfor %}
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p style="font-size:0.85rem; color:var(--muted); margin-bottom:0.75rem;">
+          No managed characters yet.
+        </p>
+      {% endif %}
+
+      <!-- Add a DM character to the roster -->
+      {% if dm_available_chars %}
+      <form method="POST" action="/dm/campaigns/{{ campaign.id }}/add-managed-char"
+            style="display:flex; gap:8px; align-items:center; margin-top:0.75rem; flex-wrap:wrap;">
+        <select name="char_id" required
+                style="flex:1; min-width:160px; padding:5px 8px; font-size:0.85rem;">
+          <option value="">— Select a character to add —</option>
+          {% for c in dm_available_chars %}
+          <option value="{{ c.id }}">{{ c.name }} (Lv{{ c.level }} {{ c.race }} {{ c.class_name }})</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-outline" style="padding:5px 14px; font-size:0.85rem;">
+          ＋ Add to Roster
+        </button>
+      </form>
+      {% else %}
+      <p style="font-size:0.82rem; color:var(--muted); margin-top:0.5rem;">
+        All your characters are already on the roster.
+        <a href="/characters/new" style="color:var(--gold);">Create a new one</a> to add more.
+      </p>
       {% endif %}
     </div>
 
