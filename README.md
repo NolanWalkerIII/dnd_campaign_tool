@@ -37,15 +37,26 @@ PORT=5050 python app.py
 # App is available at http://localhost:5050
 ```
 
-### Option B — Docker
+### Option B — Docker (Local)
 
 ```bash
 cp .env.example .env    # fill in API keys
-docker compose up --build
+docker compose up --build -d
 # App is available at http://localhost:5001
 ```
 
 The SQLite database is persisted in `./instance/` via a volume mount, so data survives container restarts.
+
+### Option C — Docker (Production / VPS)
+
+Production uses `docker-compose.prod.yml` which includes Traefik labels for HTTPS routing:
+
+```bash
+# Copy files to server, then:
+docker-compose -f docker-compose.prod.yml up --build -d
+```
+
+> **Note**: Production servers use `docker-compose` (hyphenated, Compose v2). Local Mac/Linux installs use `docker compose` (space, Compose v3+).
 
 ---
 
