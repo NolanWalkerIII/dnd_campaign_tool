@@ -1,16 +1,23 @@
 services:
   dnd:
     build: .
-    expose:
-      - "5000"
     volumes:
       - ./instance:/app/instance
     env_file:
       - .env
     environment:
       - FLASK_ENV=production
-      - VIRTUAL_HOST=questerledger.johnbest.ai
-      - VIRTUAL_PORT=5000
-      - LETSENCRYPT_HOST=questerledger.johnbest.ai
-      - LETSENCRYPT_EMAIL=john@jsbjr.digital
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.campaigncodex.rule=Host(`campaigncodex.momentumlabs.cloud`)"
+      - "traefik.http.routers.campaigncodex.entrypoints=websecure"
+      - "traefik.http.routers.campaigncodex.tls=true"
+      - "traefik.http.routers.campaigncodex.tls.certresolver=letsencrypt"
+      - "traefik.http.services.campaigncodex.loadbalancer.server.port=5000"
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true
