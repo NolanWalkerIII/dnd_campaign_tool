@@ -19,7 +19,7 @@ from services.ai import (cleanup_narration, generate_narration,
                          cleanup_background, generate_background,
                          generate_trait_field, generate_appearance,
                          generate_character)
-from services.ai_player import generate_player_action
+from services.ai_player import generate_player_action, generate_combat_decision
 import re as _re
 
 from game_data import (
@@ -1511,6 +1511,46 @@ def dm_ai_action_post(char_id):
         flag_modified(campaign, 'current_state')
         db.session.commit()
         flash(f"{char.name}'s action posted to log.", 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/characters/<int:char_id>/ai-combat-turn', methods=['POST'])
+@dm_required
+def dm_ai_combat_turn(char_id):
+    """Generate an AI combat decision — returns JSON for inline DM preview."""
+    char = Character.query.get_or_404(char_id)
+    campaign_id = request.form.get('campaign_id', type=int)
+    campaign = Campaign.query.get(campaign_id) if campaign_id else None
+    if not campaign or campaign.dm_id != session['user_id']:
+        return jsonify({'error': 'Campaign not found.'}), 400
+    extra = char.spells or {}
+    if not extra.get('ai_player'):
+        return jsonify({'error': 'Character is not AI-controlled.'}), 400
+    persona_level = extra.get('ai_level', 'intermediate')
+    decision, error = generate_combat_decision(char, campaign, persona_level)
+    if error:
+        return jsonify({'error': error}), 500
+    return jsonify({
+        'decision': decision,
+        'character_name': char.name,
+        'persona_level': persona_level,
+    })
+
+
+@app.route('/dm/characters/<int:char_id>/ai-combat-execute', methods=['POST'])
+@dm_required
+def dm_ai_combat_execute(char_id):
+    """Post an approved AI combat decision to the combat log."""
+    char = Character.query.get_or_404(char_id)
+    campaign_id = request.form.get('campaign_id', type=int)
+    campaign = Campaign.query.get(campaign_id) if campaign_id else None
+    if not campaign or campaign.dm_id != session['user_id']:
+        flash('Campaign not found.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    summary = request.form.get('action_summary', '').strip()
+    if summary:
+        _add_combat_log(campaign, char.name, summary, 'action')
+        flash(f"{char.name}'s action posted to combat log.", 'success')
     return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
 
 

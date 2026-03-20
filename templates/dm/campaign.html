@@ -728,6 +728,55 @@ function toggleGettingStarted() {
       </details>
       {% endif %}
 
+      <!-- AI Turn (PC only, AI-controlled) -->
+      {% if not entry.is_npc %}
+      {% set char = combatant_chars.get(entry.char_id) %}
+      {% if char and (char.spells or {}).get('ai_player', false) %}
+      <div style="margin-top:6px; margin-left:30px;">
+        {% if is_current %}
+        <button type="button" class="btn btn-outline"
+                style="padding:3px 12px; font-size:0.8rem; color:var(--gold);
+                       border-color:var(--gold);"
+                onclick="triggerAiCombatTurn({{ char.id }}, {{ campaign.id }})">
+          🤖 AI Turn
+        </button>
+        {% else %}
+        <span style="font-size:0.75rem; color:var(--muted); font-style:italic;">🤖 AI Player</span>
+        {% endif %}
+        <div id="ai-combat-result-{{ char.id }}"
+             style="display:none; margin-top:8px; background:var(--bg);
+                    border:1px solid var(--gold); border-radius:var(--radius); padding:10px;">
+          <div style="font-size:0.72rem; color:var(--muted); margin-bottom:6px;">
+            🤖 <strong id="ai-combat-name-{{ char.id }}"></strong> decides:
+          </div>
+          <div id="ai-combat-text-{{ char.id }}"
+               style="font-size:0.9rem; font-weight:600; margin-bottom:4px;"></div>
+          <div id="ai-combat-reason-{{ char.id }}"
+               style="font-size:0.82rem; color:var(--muted); margin-bottom:10px;
+                      font-style:italic;"></div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <form method="POST" action="/dm/characters/{{ char.id }}/ai-combat-execute"
+                  style="margin:0;">
+              <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+              <input type="hidden" id="ai-combat-post-{{ char.id }}" name="action_summary" value="">
+              <button type="submit" class="btn btn-gold"
+                      style="padding:4px 12px; font-size:0.8rem;"
+                      onclick="document.getElementById('ai-combat-post-{{ char.id }}').value =
+                               document.getElementById('ai-combat-text-{{ char.id }}').innerText;">
+                ✅ Execute
+              </button>
+            </form>
+            <button type="button" class="btn btn-outline"
+                    style="padding:4px 10px; font-size:0.8rem; color:var(--muted);"
+                    onclick="document.getElementById('ai-combat-result-{{ char.id }}').style.display='none';">
+              ⏭ Skip Turn
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      {% endif %}
+
     </div>
     {% endfor %}
   </div>
@@ -1434,6 +1483,41 @@ function discardAiAction(charId) {
   var editDiv = document.getElementById('ai-edit-' + charId);
   if (resultDiv) resultDiv.style.display = 'none';
   if (editDiv) editDiv.style.display = 'none';
+}
+
+function triggerAiCombatTurn(charId, campaignId) {
+  var btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '✨ Thinking…';
+
+  var body = new FormData();
+  body.append('campaign_id', campaignId);
+
+  fetch('/dm/characters/' + charId + '/ai-combat-turn', { method: 'POST', body: body })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) { alert('Error: ' + data.error); return; }
+      var d = data.decision;
+      var summary = (d.action_type || 'action').charAt(0).toUpperCase()
+                  + (d.action_type || 'action').slice(1);
+      if (d.weapon_or_spell) summary += ': ' + d.weapon_or_spell;
+      if (d.target) summary += ' → ' + d.target;
+      if (d.bonus_action) summary += ' | Bonus: ' + d.bonus_action;
+
+      var nameEl   = document.getElementById('ai-combat-name-'   + charId);
+      var textEl   = document.getElementById('ai-combat-text-'   + charId);
+      var reasonEl = document.getElementById('ai-combat-reason-' + charId);
+      var resultDiv = document.getElementById('ai-combat-result-' + charId);
+      if (nameEl)   nameEl.textContent   = data.character_name + ' (' + data.persona_level + ')';
+      if (textEl)   textEl.innerText     = summary;
+      if (reasonEl) reasonEl.textContent = d.reasoning || '';
+      if (resultDiv) resultDiv.style.display = 'block';
+    })
+    .catch(function() { alert('Network error generating combat decision.'); })
+    .finally(function() {
+      btn.disabled = false;
+      btn.textContent = '🤖 AI Turn';
+    });
 }
 
 function triggerAllAiPlayers() {

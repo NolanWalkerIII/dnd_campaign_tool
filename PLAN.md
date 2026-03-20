@@ -521,7 +521,7 @@ Full system health dashboard with one-click tests for: environment variables, xA
   - `POST /dm/characters/<id>/ai-level` — sets `spells['ai_level']` to posted value (`novice`/`intermediate`/`experienced`); DM-only; redirects back to campaign
   - Both routes use `flag_modified(char, 'spells')` after mutation
 - **Updated files**: `app.py`, `templates/dm/campaign.html`, `templates/character_sheet.html`
-- **Status**: Proposed
+- **Status**: Complete ✓ (2026-03-19)
 
 ---
 
@@ -549,7 +549,7 @@ Full system health dashboard with one-click tests for: environment variables, xA
   - `POST /dm/characters/<id>/ai-action/post` — accepts `{action_text}`, appends to `current_state['narration_log']`
 - **Updated files**: `app.py`, `templates/dm/campaign.html`
 - **New files**: `services/ai_player.py`
-- **Status**: Proposed
+- **Status**: Complete ✓ (2026-03-19)
 
 ---
 
@@ -575,7 +575,7 @@ Full system health dashboard with one-click tests for: environment variables, xA
   - `POST /dm/characters/<id>/ai-combat-turn` — calls `generate_combat_decision()`, returns JSON decision for DM review
   - `POST /dm/characters/<id>/ai-combat-execute` — receives approved decision dict, routes to correct engine function, returns result
 - **Updated files**: `services/ai_player.py`, `app.py`, `templates/dm/campaign.html`
-- **Status**: Proposed
+- **Status**: Complete ✓ (2026-03-19)
 
 ---
 

@@ -6,6 +6,8 @@ Persona levels shape how the AI "plays":
   intermediate — competent, uses backstory, engages with story
   experienced  — tactical, distinct voice, creative solutions
 """
+import json
+import re
 from services.ai import _call
 
 PERSONA_PROMPTS = {
@@ -78,3 +80,126 @@ def generate_player_action(character, campaign, persona_level):
          {'role': 'user', 'content': user_msg}],
         max_tokens=300
     )
+
+
+_COMBAT_PERSONA = {
+    'novice': (
+        "You are a first-time RPG player controlling {name} in combat. "
+        "Choose a simple, obvious action — usually just attack the nearest enemy. "
+        "You may forget bonus actions or special abilities. "
+        "Return ONLY valid JSON (no markdown fences) with exactly these keys: "
+        "action_type (one of: attack, spell, dash, help), "
+        "target (name of the target or null), "
+        "weapon_or_spell (weapon or spell name, or null), "
+        "bonus_action (brief description or null), "
+        "reasoning (one sentence)."
+    ),
+    'intermediate': (
+        "You are an experienced RPG player controlling {name} in combat. "
+        "Pick a tactically reasonable action — prioritize low-HP or dangerous enemies. "
+        "Use bonus actions when available; conserve spell slots unless necessary. "
+        "Return ONLY valid JSON (no markdown fences) with exactly these keys: "
+        "action_type (one of: attack, spell, dash, help), "
+        "target (name of the target or null), "
+        "weapon_or_spell (weapon or spell name, or null), "
+        "bonus_action (brief description or null), "
+        "reasoning (one sentence)."
+    ),
+    'experienced': (
+        "You are a veteran RPG player controlling {name} in combat. "
+        "Make the most tactically efficient decision: focus-fire low-HP targets, "
+        "maximise action economy, coordinate with allies, and exploit every advantage. "
+        "Return ONLY valid JSON (no markdown fences) with exactly these keys: "
+        "action_type (one of: attack, spell, dash, help), "
+        "target (name of the target or null), "
+        "weapon_or_spell (weapon or spell name, or null), "
+        "bonus_action (brief description or null), "
+        "reasoning (one sentence)."
+    ),
+}
+
+
+def generate_combat_decision(character, campaign, persona_level):
+    """
+    Generate a structured combat decision for an AI-controlled character.
+    Returns (decision_dict, error).
+    decision_dict keys: action_type, target, weapon_or_spell, bonus_action, reasoning
+    """
+    state = campaign.current_state or {}
+    order = state.get('initiative_order', [])
+    combat_log = state.get('combat_log', [])
+    conditions_map = state.get('active_conditions', {})
+
+    # Build combatant list for context
+    from models import Character as _Char
+    combatant_lines = []
+    for entry in order:
+        if entry.get('is_npc'):
+            combatant_lines.append(
+                f"  NPC {entry['name']} "
+                f"(HP: {entry['npc_hp']}/{entry['npc_hp_max']}, AC: {entry['npc_ac']})"
+            )
+        else:
+            c = _Char.query.get(entry.get('char_id'))
+            if c:
+                combatant_lines.append(
+                    f"  PC {c.name} (HP: {c.hp_current}/{c.hp_max}, AC: {c.ac})"
+                )
+    combatants_text = '\n'.join(combatant_lines) or '  No combatants visible.'
+
+    # Recent combat log (last 6 entries)
+    recent_log = combat_log[-6:] if combat_log else []
+    log_text = '\n'.join(
+        f"  {e.get('actor', '?')}: {e.get('text', '')}" for e in recent_log
+    ) or '  (combat just started)'
+
+    # Character state
+    extra = character.spells or {}
+    slots = extra.get('slots', {})
+    slot_summary = ', '.join(f"L{k}:{v}" for k, v in slots.items() if v > 0) or 'none'
+    cond_key = f'char_{character.id}'
+    conditions = conditions_map.get(cond_key, [])
+    cond_text = ', '.join(conditions) or 'none'
+
+    char_ctx = (
+        f"{character.name} — Lv{character.level} {character.race} {character.class_name}\n"
+        f"HP: {character.hp_current}/{character.hp_max}  AC: {character.ac}  "
+        f"Prof: +{character.proficiency_bonus}\n"
+        f"Conditions: {cond_text}\n"
+        f"Spell slots remaining: {slot_summary}\n"
+        f"Equipment: {', '.join((character.equipment or [])[:6]) or 'none'}"
+    )
+
+    level = persona_level if persona_level in _COMBAT_PERSONA else 'intermediate'
+    system = _COMBAT_PERSONA[level].format(name=character.name)
+
+    user_msg = (
+        f"Your character:\n{char_ctx}\n\n"
+        f"All combatants:\n{combatants_text}\n\n"
+        f"Recent combat log:\n{log_text}\n\n"
+        f"It is {character.name}'s turn. Decide their action."
+    )
+
+    text, error = _call(
+        [{'role': 'system', 'content': system},
+         {'role': 'user', 'content': user_msg}],
+        max_tokens=400
+    )
+    if error:
+        return None, error
+
+    # Strip markdown fences if present and parse JSON
+    clean = re.sub(r'^```(?:json)?\s*', '', text.strip())
+    clean = re.sub(r'\s*```$', '', clean)
+    try:
+        decision = json.loads(clean)
+        return decision, None
+    except Exception:
+        # Fallback: wrap raw text so the UI still has something to show
+        return {
+            'action_type': 'attack',
+            'target': None,
+            'weapon_or_spell': None,
+            'bonus_action': None,
+            'reasoning': text,
+        }, None
