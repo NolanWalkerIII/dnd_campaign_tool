@@ -2898,7 +2898,7 @@ def _diag_twilio(phone=''):
             phone = '+1' + phone.replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
         try:
             msg = client.messages.create(
-                body='[QuesterLedger] Diagnostic test - SMS is working!',
+                body='[Campaign Codex] Diagnostic test - SMS is working!',
                 from_=from_num,
                 to=phone,
             )

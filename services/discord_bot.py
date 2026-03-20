@@ -553,7 +553,7 @@ async def inventory_cmd(interaction: discord.Interaction):
 # ── Join / Verify ──
 
 @bot.tree.command(name="join", description="Link your Discord to your game account")
-@app_commands.describe(username="Your QuesterLedger username")
+@app_commands.describe(username="Your Campaign Codex username")
 async def join_cmd(interaction: discord.Interaction, username: str):
     with _flask_app.app_context():
         from models import User
