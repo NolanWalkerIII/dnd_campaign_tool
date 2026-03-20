@@ -597,7 +597,7 @@ Full system health dashboard with one-click tests for: environment variables, xA
 - **New route**: `POST /dm/campaigns/<id>/advance-party` — iterates all AI characters, calls `generate_player_action()` or `generate_combat_decision()` for each, returns ordered list of pending decisions; DM approves/edits/skips each via existing Phase 26/27 confirm routes
 - **New template**: `templates/dm/practice_summary.html`
 - **Updated files**: `templates/dm/campaign.html`, `app.py`
-- **Status**: Proposed
+- **Status**: Complete ✓ (2026-03-19)
 
 ---
 

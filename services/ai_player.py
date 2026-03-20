@@ -203,3 +203,49 @@ def generate_combat_decision(character, campaign, persona_level):
             'bonus_action': None,
             'reasoning': text,
         }, None
+
+
+def generate_practice_debrief(campaign, ai_char_data):
+    """
+    Generate a DM coaching debrief from the session.
+    ai_char_data: list of dicts {name, level, class_name, persona_level}
+    Returns (text, error).
+    """
+    state = campaign.current_state or {}
+    narration_log = state.get('narration_log', [])
+    combat_log = state.get('combat_log', [])
+
+    char_list = '\n'.join(
+        f"  - {c['name']} (Lv{c['level']} {c['class_name']}, {c['persona_level']} persona)"
+        for c in ai_char_data
+    ) or '  None'
+
+    recent_narration = narration_log[-10:]
+    narration_text = '\n'.join(f"  {e.get('text', '')}" for e in recent_narration) or '  (none)'
+
+    recent_combat = combat_log[-10:]
+    combat_text = '\n'.join(
+        f"  {e.get('actor', '?')}: {e.get('text', '')}" for e in recent_combat
+    ) or '  (none)'
+
+    system = (
+        "You are a tabletop RPG coach helping a Dungeon Master improve their skills. "
+        "Analyse this practice session and give constructive, specific feedback. "
+        "Cover: how each AI persona behaved, what a real player at that experience level might do "
+        "differently, and 2-3 actionable tips for the DM. Be encouraging and practical. "
+        "Aim for 3-5 paragraphs."
+    )
+
+    user_msg = (
+        f"Campaign: {campaign.name}\n\n"
+        f"AI players this session:\n{char_list}\n\n"
+        f"Recent narration log:\n{narration_text}\n\n"
+        f"Recent combat log:\n{combat_text}\n\n"
+        "Provide a coaching debrief for the DM."
+    )
+
+    return _call(
+        [{'role': 'system', 'content': system},
+         {'role': 'user', 'content': user_msg}],
+        max_tokens=900
+    )

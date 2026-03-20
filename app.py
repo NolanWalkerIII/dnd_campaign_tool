@@ -19,7 +19,7 @@ from services.ai import (cleanup_narration, generate_narration,
                          cleanup_background, generate_background,
                          generate_trait_field, generate_appearance,
                          generate_character)
-from services.ai_player import generate_player_action, generate_combat_decision
+from services.ai_player import generate_player_action, generate_combat_decision, generate_practice_debrief
 import re as _re
 
 from game_data import (
@@ -1106,6 +1106,17 @@ def dm_campaign_detail(campaign_id):
         if cid and not entry.get('is_npc'):
             combatant_chars[cid] = Character.query.get(cid)
 
+    # Practice Mode
+    practice_mode = state.get('practice_mode', False)
+    all_ai_chars = []
+    for p in players:
+        for char in player_chars.get(p.id, []):
+            if (char.spells or {}).get('ai_player'):
+                all_ai_chars.append({'id': char.id, 'name': char.name})
+    for char in dm_managed_chars:
+        if (char.spells or {}).get('ai_player'):
+            all_ai_chars.append({'id': char.id, 'name': char.name})
+
     return render_template('dm/campaign.html',
                            campaign=campaign,
                            players=players,
@@ -1114,6 +1125,8 @@ def dm_campaign_detail(campaign_id):
                            dm_available_chars=dm_available_chars,
                            narration_log=narration_log,
                            combatant_chars=combatant_chars,
+                           practice_mode=practice_mode,
+                           all_ai_chars=all_ai_chars,
                            conditions=CONDITIONS,
                            skills_sorted=sorted(SKILLS.keys()),
                            twilio_number=os.environ.get('TWILIO_PHONE_NUMBER', ''),
@@ -1512,6 +1525,81 @@ def dm_ai_action_post(char_id):
         db.session.commit()
         flash(f"{char.name}'s action posted to log.", 'success')
     return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/practice-mode/toggle', methods=['POST'])
+@dm_required
+def dm_practice_mode_toggle(campaign_id):
+    from sqlalchemy.orm.attributes import flag_modified
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    state = campaign.current_state or {}
+    state['practice_mode'] = not state.get('practice_mode', False)
+    campaign.current_state = state
+    flag_modified(campaign, 'current_state')
+    db.session.commit()
+    mode = 'enabled' if state['practice_mode'] else 'disabled'
+    flash(f'Practice Mode {mode}.', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/practice-summary')
+@dm_required
+def dm_practice_summary(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    state = campaign.current_state or {}
+    player_ids = campaign.players or []
+    players = User.query.filter(User.id.in_(player_ids)).all() if player_ids else []
+    ai_chars = []
+    for p in players:
+        for char in Character.query.filter_by(user_id=p.id).all():
+            if (char.spells or {}).get('ai_player'):
+                ai_chars.append(char)
+    for cid in state.get('dm_managed_chars', []):
+        char = Character.query.get(cid)
+        if char and (char.spells or {}).get('ai_player'):
+            ai_chars.append(char)
+    return render_template('dm/practice_summary.html',
+                           campaign=campaign,
+                           ai_chars=ai_chars,
+                           narration_log=state.get('narration_log', []),
+                           combat_log=state.get('combat_log', []))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/practice-summary/generate', methods=['POST'])
+@dm_required
+def dm_practice_summary_generate(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        return jsonify({'error': 'Access denied.'}), 403
+    state = campaign.current_state or {}
+    player_ids = campaign.players or []
+    players = User.query.filter(User.id.in_(player_ids)).all() if player_ids else []
+    ai_char_data = []
+    for p in players:
+        for char in Character.query.filter_by(user_id=p.id).all():
+            extra = char.spells or {}
+            if extra.get('ai_player'):
+                ai_char_data.append({'name': char.name, 'level': char.level,
+                                     'class_name': char.class_name,
+                                     'persona_level': extra.get('ai_level', 'intermediate')})
+    for cid in state.get('dm_managed_chars', []):
+        char = Character.query.get(cid)
+        if char:
+            extra = char.spells or {}
+            if extra.get('ai_player'):
+                ai_char_data.append({'name': char.name, 'level': char.level,
+                                     'class_name': char.class_name,
+                                     'persona_level': extra.get('ai_level', 'intermediate')})
+    text, error = generate_practice_debrief(campaign, ai_char_data)
+    if error:
+        return jsonify({'error': error}), 500
+    return jsonify({'debrief': text})
 
 
 @app.route('/dm/characters/<int:char_id>/ai-combat-turn', methods=['POST'])

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Practice Session Summary — {{ campaign.name }}{% endblock %}
+
+{% block content %}
+<div style="max-width:820px; margin:0 auto; padding:1.5rem 1rem;">
+
+  <!-- Header -->
+  <div style="display:flex; align-items:center; justify-content:space-between;
+              flex-wrap:wrap; gap:0.75rem; margin-bottom:1.5rem;">
+    <div>
+      <h1 style="margin:0; font-size:1.5rem;">📊 Practice Session Summary</h1>
+      <div style="color:var(--muted); font-size:0.85rem; margin-top:2px;">
+        {{ campaign.name }}
+      </div>
+    </div>
+    <a href="/dm/campaigns/{{ campaign.id }}" class="btn btn-outline"
+       style="font-size:0.85rem;">← Back to Campaign</a>
+  </div>
+
+  <!-- AI Characters this session -->
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div style="font-weight:600; font-size:0.95rem; margin-bottom:0.75rem; color:var(--gold);">
+      🤖 AI-Controlled Characters
+    </div>
+    {% if ai_chars %}
+    <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+      {% for char in ai_chars %}
+      {% set lvl = (char.spells or {}).get('ai_level', 'intermediate') %}
+      <div style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius);
+                  padding:6px 12px; font-size:0.85rem;">
+        <strong>{{ char.name }}</strong>
+        <span style="color:var(--muted);">
+          — Lv{{ char.level }} {{ char.race }} {{ char.class_name }}
+        </span>
+        <span style="background:rgba(212,175,55,0.15); color:var(--gold); border-radius:4px;
+                     padding:1px 6px; font-size:0.75rem; margin-left:4px;">
+          {{ lvl|capitalize }}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p style="color:var(--muted); font-size:0.85rem; margin:0;">
+      No AI-controlled characters were active this session.
+    </p>
+    {% endif %}
+  </div>
+
+  <!-- AI Coaching Debrief -->
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between;
+                flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
+      <div style="font-weight:600; font-size:0.95rem; color:var(--gold);">
+        🎓 DM Coaching Debrief
+      </div>
+      {% if ai_chars %}
+      <button id="debrief-btn" type="button" class="btn btn-gold"
+              style="padding:5px 14px; font-size:0.82rem;"
+              onclick="generateDebrief()">
+        ✨ Generate Debrief
+      </button>
+      {% endif %}
+    </div>
+    <div id="debrief-loading" style="display:none; color:var(--muted); font-size:0.85rem;">
+      ✨ Generating coaching feedback…
+    </div>
+    <div id="debrief-error" style="display:none; color:var(--accent); font-size:0.85rem;"></div>
+    <div id="debrief-text"
+         style="font-size:0.9rem; line-height:1.65; white-space:pre-wrap; color:var(--text);">
+      {% if not ai_chars %}
+      <span style="color:var(--muted);">Enable AI characters and run a session to get coaching feedback.</span>
+      {% else %}
+      <span style="color:var(--muted);">Click "Generate Debrief" to receive AI coaching feedback for this session.</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Session logs (collapsible) -->
+  <div class="card" style="margin-bottom:1.25rem;">
+    <details>
+      <summary style="font-weight:600; font-size:0.95rem; color:var(--gold); cursor:pointer;
+                      list-style:none; display:flex; align-items:center; gap:6px;">
+        <span id="log-arrow">▶</span> Narration Log ({{ narration_log|length }} entries)
+      </summary>
+      <div style="margin-top:0.75rem; max-height:320px; overflow-y:auto;">
+        {% if narration_log %}
+        {% for entry in narration_log %}
+        <div style="border-bottom:1px solid var(--border); padding:6px 0;
+                    font-size:0.82rem; line-height:1.5;">
+          {% if entry.type == 'narration' %}
+          <span style="color:var(--gold); font-size:0.72rem; text-transform:uppercase;
+                       letter-spacing:0.05em;">DM Narration</span><br>
+          {% elif entry.type == 'action' %}
+          <span style="color:var(--muted); font-size:0.72rem; text-transform:uppercase;
+                       letter-spacing:0.05em;">{{ entry.get('actor', 'Player') }}</span><br>
+          {% endif %}
+          {{ entry.text }}
+        </div>
+        {% endfor %}
+        {% else %}
+        <p style="color:var(--muted); font-size:0.85rem;">No narration logged yet.</p>
+        {% endif %}
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary style="font-weight:600; font-size:0.95rem; color:var(--gold); cursor:pointer;
+                      list-style:none; display:flex; align-items:center; gap:6px;">
+        <span>▶</span> Combat Log ({{ combat_log|length }} entries)
+      </summary>
+      <div style="margin-top:0.75rem; max-height:320px; overflow-y:auto;">
+        {% if combat_log %}
+        {% for entry in combat_log %}
+        <div style="border-bottom:1px solid var(--border); padding:6px 0;
+                    font-size:0.82rem; line-height:1.5;">
+          <span style="color:var(--gold); font-size:0.72rem; font-weight:600;">
+            {{ entry.get('actor', '?') }}
+          </span>
+          {% if entry.get('type') %}<span style="color:var(--muted); font-size:0.72rem;">
+            [{{ entry.type }}]</span>{% endif %}<br>
+          {{ entry.get('text', '') }}
+        </div>
+        {% endfor %}
+        {% else %}
+        <p style="color:var(--muted); font-size:0.85rem;">No combat logged yet.</p>
+        {% endif %}
+      </div>
+    </details>
+  </div>
+
+</div>
+
+<script>
+function generateDebrief() {
+  var btn = document.getElementById('debrief-btn');
+  var loadingEl = document.getElementById('debrief-loading');
+  var errorEl = document.getElementById('debrief-error');
+  var textEl = document.getElementById('debrief-text');
+
+  btn.disabled = true;
+  btn.textContent = '✨ Generating…';
+  if (loadingEl) loadingEl.style.display = 'block';
+  if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+  if (textEl) textEl.textContent = '';
+
+  fetch('/dm/campaigns/{{ campaign.id }}/practice-summary/generate', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (data.error) {
+        if (errorEl) { errorEl.textContent = 'Error: ' + data.error; errorEl.style.display = 'block'; }
+      } else {
+        if (textEl) textEl.textContent = data.debrief;
+      }
+    })
+    .catch(function() {
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (errorEl) { errorEl.textContent = 'Network error. Please try again.'; errorEl.style.display = 'block'; }
+    })
+    .finally(function() {
+      btn.disabled = false;
+      btn.textContent = '✨ Generate Debrief';
+    });
+}
+
+// Toggle arrow icon on details open/close
+document.querySelectorAll('details').forEach(function(d) {
+  d.addEventListener('toggle', function() {
+    var arrow = d.querySelector('summary span');
+    if (arrow) arrow.textContent = d.open ? '▼' : '▶';
+  });
+});
+</script>
+{% endblock %}

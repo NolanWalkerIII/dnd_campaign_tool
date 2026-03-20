@@ -4,13 +4,46 @@
 {% block content %}
 {% macro ai_action_block(char, campaign_id) %}
 {% set ai_level = (char.spells or {}).get('ai_level', 'intermediate') %}
-<div style="margin-top:8px;">
+<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
   <button type="button" class="btn btn-outline"
           style="padding:3px 10px; font-size:0.8rem; color:var(--gold);"
           data-ai-char-id="{{ char.id }}" data-campaign-id="{{ campaign_id }}"
           onclick="toggleAiForm({{ char.id }})">
     🎲 Take Action
   </button>
+  <button type="button" class="btn btn-outline"
+          style="padding:3px 10px; font-size:0.8rem; color:var(--muted);"
+          onclick="toggleHotSeat({{ char.id }})">
+    🎭 Hot Seat
+  </button>
+</div>
+<div id="hot-seat-{{ char.id }}" style="display:none; margin-top:8px;
+     background:var(--bg); border:1px solid var(--border);
+     border-radius:var(--radius); padding:10px;">
+  <div style="font-size:0.75rem; color:var(--muted); margin-bottom:6px;">
+    🎭 DM takes control — type one action as <strong>{{ char.name }}</strong>:
+  </div>
+  <textarea id="hot-seat-text-{{ char.id }}" rows="2"
+            style="width:100%; font-size:0.85rem; resize:vertical; margin-bottom:6px;"
+            placeholder="e.g. I draw my sword and demand to know who sent them…"></textarea>
+  <form method="POST" action="/dm/characters/{{ char.id }}/ai-action/post" style="margin:0;">
+    <input type="hidden" name="campaign_id" value="{{ campaign_id }}">
+    <input type="hidden" id="hot-seat-post-{{ char.id }}" name="action_text" value="">
+    <div style="display:flex; gap:6px;">
+      <button type="submit" class="btn btn-gold" style="padding:4px 12px; font-size:0.8rem;"
+              onclick="document.getElementById('hot-seat-post-{{ char.id }}').value =
+                       document.getElementById('hot-seat-text-{{ char.id }}').value;">
+        ✅ Post as {{ char.name }}
+      </button>
+      <button type="button" class="btn btn-outline"
+              style="padding:4px 10px; font-size:0.8rem; color:var(--muted);"
+              onclick="document.getElementById('hot-seat-{{ char.id }}').style.display='none';">
+        Cancel
+      </button>
+    </div>
+  </form>
+</div>
+<div style="margin-top:0;">
   <div id="ai-form-{{ char.id }}" style="display:none; margin-top:8px;">
     <textarea id="ai-hint-{{ char.id }}" rows="2"
               style="width:100%; font-size:0.82rem; resize:vertical; margin-bottom:6px;"
@@ -109,8 +142,37 @@
       📂 Load
     </button>
     <a href="/dm/dashboard" class="btn btn-outline">← Dashboard</a>
+    <!-- Practice Mode -->
+    <form method="POST" action="/dm/campaigns/{{ campaign.id }}/practice-mode/toggle" style="margin:0;">
+      <button type="submit" class="btn btn-outline"
+              style="font-size:0.85rem;
+                     {{ 'border-color:var(--gold); color:var(--gold);' if practice_mode else '' }}">
+        {{ '🎓 Practice Mode ON' if practice_mode else '🎓 Practice Mode' }}
+      </button>
+    </form>
+    {% if practice_mode %}
+    <a href="/dm/campaigns/{{ campaign.id }}/practice-summary"
+       class="btn btn-outline" style="font-size:0.85rem;">
+      📊 Session Summary
+    </a>
+    {% endif %}
   </div>
 </div>
+
+{% if practice_mode %}
+<div style="background:rgba(212,175,55,0.12); border:1px solid var(--gold);
+            border-radius:var(--radius); padding:10px 16px; margin-bottom:1rem;
+            display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+  <span style="color:var(--gold); font-weight:600; font-size:0.9rem;">
+    🎓 Practice Mode Active — AI is controlling all characters
+  </span>
+  <button type="button" class="btn btn-gold"
+          style="padding:5px 16px; font-size:0.85rem;"
+          onclick="advanceParty()">
+    ⏭ Advance Party
+  </button>
+</div>
+{% endif %}
 
 <!-- Load save file panel (hidden by default) -->
 <div id="load-panel"
@@ -1518,6 +1580,47 @@ function triggerAiCombatTurn(charId, campaignId) {
       btn.disabled = false;
       btn.textContent = '🤖 AI Turn';
     });
+}
+
+function toggleHotSeat(charId) {
+  var panel = document.getElementById('hot-seat-' + charId);
+  if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function advanceParty() {
+  var btn = event.target;
+  var triggers = document.querySelectorAll('[data-ai-char-id]');
+  if (!triggers.length) { alert('No AI-controlled characters found.'); return; }
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating…';
+  var pending = Array.from(triggers).map(function(el) {
+    return { charId: el.dataset.aiCharId, campaignId: el.dataset.campaignId };
+  });
+  function next() {
+    if (!pending.length) {
+      btn.disabled = false;
+      btn.textContent = '⏭ Advance Party';
+      return;
+    }
+    var item = pending.shift();
+    var body = new FormData();
+    body.append('campaign_id', item.campaignId);
+    fetch('/dm/characters/' + item.charId + '/ai-action', { method: 'POST', body: body })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var textDiv = document.getElementById('ai-text-' + item.charId);
+        var resultDiv = document.getElementById('ai-result-' + item.charId);
+        var editDiv = document.getElementById('ai-edit-' + item.charId);
+        if (data.action && textDiv) {
+          textDiv.innerText = data.action;
+          if (editDiv) editDiv.style.display = 'none';
+          if (resultDiv) resultDiv.style.display = 'block';
+        }
+        next();
+      })
+      .catch(function() { next(); });
+  }
+  next();
 }
 
 function triggerAllAiPlayers() {
