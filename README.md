@@ -227,6 +227,23 @@ Requires `XAI_API_KEY` in `.env`.
 - Wizard form → xAI Grok generates: name, backstory, personality traits, ideals, bonds, flaws, appearance, ability score priority order, and suggested skills
 - Preview page shows full character before anything is saved; Regenerate for a fresh take
 
+**AI Player Mode (DM Tool)**
+
+Requires `XAI_API_KEY`. Enables the DM to assign AI-controlled personas to characters, useful for solo play, practice sessions, and filling empty player slots.
+
+- **Enable AI Player** — toggle per character from the campaign page; choose persona level: `Novice`, `Intermediate`, or `Experienced`
+- **🎲 Take Action** — generate an in-character action for any AI-controlled character; shows a preview with Post / Edit & Post / Discard options
+- **🤖 All AI Players — Take Action** — batch trigger that sequentially generates actions for every AI-controlled character in one click
+- **🤖 AI Turn** — appears on the active combatant's row in the initiative order when that character is AI-controlled; generates a structured combat decision (action type, target, weapon/spell, bonus action, reasoning) for DM review; Execute or Skip
+- **🎭 Hot Seat** — DM temporarily overrides any AI character to type a single action themselves; posts as that character
+- **DM-Managed Characters** — DM can add characters (not linked to any player login) directly to the campaign roster; they receive the same HP, inspiration, and AI controls as regular player characters
+
+**Practice Mode**
+
+- **🎓 Practice Mode toggle** — when all active characters are AI-controlled, the DM can enable Practice Mode; a gold banner marks the session
+- **⏭ Advance Party** — generates actions for every AI character in sequence; each result shown for DM review before posting
+- **📊 Session Summary** — dedicated page showing all AI characters, narration log, combat log, and an AI-generated coaching debrief (what each persona did well, what a real player at that level might do differently, and 2–3 actionable tips for the DM)
+
 ### Character Assignment (DM Tool)
 
 - DM dashboard shows each character's current owner or ⚠ Unassigned
@@ -269,6 +286,7 @@ Requires `XAI_API_KEY` in `.env`.
 ├── services/
 │   ├── ai.py               # xAI Grok wrapper (narration, background, character generation)
 │   ├── ai_dm.py            # AI DM engine layer
+│   ├── ai_player.py        # AI Player mode (out-of-combat actions, combat decisions, practice debrief)
 │   ├── engine.py           # Pure-function game logic (rolls, attacks, skill checks)
 │   ├── discord_bot.py      # Discord bot with slash commands
 │   └── sms.py              # Twilio SMS helpers
@@ -280,7 +298,7 @@ Requires `XAI_API_KEY` in `.env`.
 ├── docker-compose.yml
 ├── docker-compose.prod.yml # Production docker-compose
 ├── DOCKER.md               # Docker operations reference
-├── PLAN.md                 # Full project plan and phase history (Phases 1–28)
+├── PLAN.md                 # Full project plan and phase history (Phases 1–28, all complete)
 ├── instance/
 │   └── dnd.db              # SQLite database (created at runtime)
 ├── static/
@@ -301,7 +319,8 @@ Requires `XAI_API_KEY` in `.env`.
 │   ├── rules.html
 │   ├── dm/
 │   │   ├── dashboard.html
-│   │   └── campaign.html
+│   │   ├── campaign.html
+│   │   └── practice_summary.html  # Practice Mode session summary + AI debrief
 │   └── player/
 │       ├── dashboard.html
 │       └── campaign.html
@@ -349,6 +368,17 @@ Requires `XAI_API_KEY` in `.env`.
 | `/dm/campaigns/<id>/chapter/<idx>/summarize` | DM | AI chapter summary |
 | `/dm/campaigns/<id>/combat/log/revert` | DM | Revert last combat log entry |
 | `/dm/campaigns/<id>/npc/<idx>/attack` | DM | Roll attack for NPC |
+| `/dm/campaigns/<id>/add-managed-char` | DM | Add DM-managed character to campaign |
+| `/dm/campaigns/<id>/remove-managed-char` | DM | Remove DM-managed character |
+| `/dm/campaigns/<id>/practice-mode/toggle` | DM | Enable/disable Practice Mode |
+| `/dm/campaigns/<id>/practice-summary` | DM | Practice session summary page |
+| `/dm/campaigns/<id>/practice-summary/generate` | DM | Generate AI coaching debrief |
+| `/dm/characters/<id>/ai-toggle` | DM | Enable/disable AI Player for a character |
+| `/dm/characters/<id>/ai-level` | DM | Set AI persona level (novice/intermediate/experienced) |
+| `/dm/characters/<id>/ai-action` | DM | Generate out-of-combat AI action |
+| `/dm/characters/<id>/ai-action/post` | DM | Post AI action to narration log |
+| `/dm/characters/<id>/ai-combat-turn` | DM | Generate AI combat decision |
+| `/dm/characters/<id>/ai-combat-execute` | DM | Execute approved AI combat action |
 | `/player/dashboard` | Player | Dashboard — campaigns + characters |
 | `/player/campaigns/<id>` | Player | Play in campaign |
 
