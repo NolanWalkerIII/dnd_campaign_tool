@@ -338,56 +338,84 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
-### Phase 24: AI Character Generator Wizard
-- **Source**: DM/player request (2026-03-19) — "New Character" should offer an AI-powered path alongside manual creation.
-- **Objectives**: Build a full AI character generation wizard with a preview/approval step so no character is created without the player's sign-off.
-- **User flow**:
-  1. `/characters/new` — two-path choice: "🎲 Generate with AI" or "✏️ Create Manually"
-  2. `/characters/generate` (GET) — wizard form: Race, Class, Background, Alignment (required); Name Hint + 4 story prompt textareas (all optional)
-  3. `/characters/generate` (POST) — validates inputs, calls xAI Grok, stores result in session, redirects to preview
-  4. `/characters/generate/preview` — full character preview: name in gold, identity pills, ability score grid (standard array assigned by AI priority), backstory, personality traits/ideals/bonds/flaws (2×2 grid), appearance; three action buttons
-  5. `/characters/generate/confirm` (POST) — creates Character in DB with `background_details` fully populated from AI output; redirects to character sheet
-  6. `/characters/generate/regenerate` (POST) — re-calls AI with same inputs from session, shows new preview; no data is lost
-- **AI function**: `generate_character(race, class_name, background, alignment, name_hint, prompts)` in `services/ai.py`
-  - System prompt instructs Grok to return ONLY valid JSON (no fences) with keys: name, backstory, personality_traits, ideals, bonds, flaws, appearance, ability_priorities (ordered list of 6 ability score abbreviations), suggested_skills
-  - `max_tokens=1400` (up from 600 via new `_call(messages, max_tokens=600)` default parameter)
-  - Response parsed with `json.loads()`; markdown fences stripped if present; ability_priorities validated/deduped/padded
-- **Ability score assignment**: AI returns priority order → standard array `[15,14,13,12,10,8]` assigned in that order → racial ASI applied on top
-- **Skill assignment**: AI's suggested_skills filtered to class options; remaining class slots filled automatically from available class skills
-- **`_call()` updated**: added `max_tokens=600` default parameter — backwards-compatible with all existing callers
-- **Session storage**: `session['char_gen']` holds `{result, inputs}` across the preview and regenerate steps; cleared on confirm
-- **New files**: `templates/character_generate.html`, `templates/character_preview.html`
-- **Updated files**: `services/ai.py`, `app.py`, `templates/character_create.html`
-- **Status**: Complete ✓ (2026-03-19)
+### Phase 17: DM Campaign Page — Panel Consolidation & Collapsible Integrations
+- **Source**: DM UX feedback (2026-03-17) — too many always-visible sections clutter the page.
+- **Objectives**: Reduce visual noise on the DM campaign page without removing any functionality.
+- **Tasks**:
+  1. **Merge Getting Started + Campaign Info** — Permanent top card shows Join URL, large Join Code, Players Joined, QR code. A "Tell them how to get started" toggle button reveals/hides the 3-step walkthrough inline. Dismiss still persisted in state.
+  2. **SMS Play Mode collapsible** — Wrap entire section in a `<details>` block. Summary shows title + a status pill (Active / Off). localStorage remembers open/closed state.
+  3. **Discord Integration collapsible** — Same treatment: `<details>` with Connected / Not connected status pill.
+- **Deliverables**: Updated `templates/dm/campaign.html` only.
+- **Status**: Complete ✓ (2026-03-17)
 
 ---
 
-### Phase 23: Character & Campaign Download Templates — v2 Format
-- **Source**: Review of download templates after Phase 22 (2026-03-19) — CHARACTER_TEMPLATE was still v1
-  (no background/story fields); CAMPAIGN_TEMPLATE was already updated in Phase 22.
-- **Objectives**: Bring the character download template up to date with Phase 20 character sheet additions
-  so players can fully specify their character — including backstory, personality, and physical description
-  — in the markdown file they import. What you write in the template becomes immediately usable by the
-  AI generation features on the character sheet.
+### Phase 18: DM Campaign Page — Three-Button Accordion
+- **Source**: DM UX feedback (2026-03-17) — consolidated panels still take too much vertical space; want three equal buttons that reveal content on demand.
+- **Objectives**: Replace the three stacked cards (Campaign Info, SMS, Discord) with a compact three-button row. Clicking a button expands its panel below; clicking again collapses it. Only the content for the active panel is visible. Status indicators (Active / Off, Connected / Not connected, player count) visible on each button even when collapsed. Last open panel remembered via localStorage.
+- **Deliverables**: Updated `templates/dm/campaign.html` only.
+- **Status**: Complete ✓ (2026-03-17)
+
+---
+
+### Phase 19: Branding Integration — Campaign Codex Assets
+- **Source**: New brand package uploaded 2026-03-17 (Branding/Logo/).
+- **Objectives**: Apply the Campaign Codex visual identity across the app.
 - **Tasks**:
-  1. **`CHARACTER_TEMPLATE` v2** — add five new sections after `## Gold`:
-     - `## Physical Characteristics` — Height, Weight, Age, Eyes, Hair, Skin, Gender (key-value)
-     - `## Backstory` — freeform multi-line origin story (feeds AI generation)
-     - `## Personality Traits` — freeform (feeds AI trait generation)
-     - `## Ideals` — freeform
-     - `## Bonds` — freeform
-     - `## Flaws` — freeform
-     - `## Appearance` — freeform physical description
-     - Added comment header explaining the file format
-  2. **`parse_character_md` v2** — reads all seven new sections using `_section()` and `_kv()`.
-     Returns `physical` dict + `custom_background`, `personality_traits`, `ideals`, `bonds`, `flaws`,
-     `appearance` strings alongside existing fields. Fully backwards-compatible with v1 templates.
-  3. **`character_import()` updated** — builds `bg_details` dict from all new parsed fields and stores
-     it in `spells['background_details']` at character creation time. No migration needed — the
-     background_details key is already handled by the character sheet route.
-- **Not changed**: `CAMPAIGN_TEMPLATE` (already v2 from Phase 22). Parser for campaigns is unchanged.
-- **Deliverables**: Updated `parsers.py` (template + parser); updated `app.py` (import route).
-- **Status**: Complete ✓ (2026-03-19)
+  1. **Static asset setup** — Created `static/img/logo/`, `static/img/monogram/`, `static/img/icon/`, and `static/favicon/` directories. All brand files served by Flask at `/static/`.
+     - `static/favicon/favicon.ico`, `favicon-16.png`, `favicon-32.png`, `apple-touch-icon.png`
+     - `static/img/logo/campaign-codex-dark.png`, `campaign-codex-light.png`
+     - `static/img/icon/codex-icon.png`, `codex-icon-1024.png`
+     - `static/img/monogram/cc-monogram.png`, `cc-monogram-inverted.png`
+  2. **Favicons** — Added `<link rel="icon">` tags in `base.html <head>` for all four favicon sizes. Updated page `<title>` to "Campaign Codex".
+  3. **Nav bar brand** — Replaced plain text `⚔ D&D Manager` with `cc-monogram.png` (30px) + "Campaign Codex" text side by side, styled in gold.
+  4. **Login page branding** — Added `campaign-codex-dark.png` logo above the login form; gold `border-color: var(--gold)` on the card; "Welcome Back / Sign in to continue your adventure" heading.
+  5. **Sidebar brand** — Sidebar brand block removed after review; nav already shows monogram + text so sidebar was redundant.
+- **Deliverables**: `static/` folder with all branding assets; updated `templates/base.html`; updated `templates/login.html`.
+- **Status**: Complete ✓ (2026-03-17)
+
+---
+
+### Phase 20: Character Sheet — Official Layout + Background Tab + AI Generation
+- **Source**: Beta playtest comparison against official D&D 5e character sheet layout (2026-03-17).
+- **Objectives**: Add key missing sections so the character sheet is a complete reference during play, and empower players with AI-assisted backstory and personality generation.
+- **Tasks**:
+  1. **Temp HP** — display and edit field next to Current/Max HP. Stored in `character.spells['temp_hp']`. New route `POST /characters/<id>/temp_hp`.
+  2. **Passive Scores** — show Passive Perception, Passive Investigation, Passive Insight (10 + skill modifier) as three labeled boxes. Computed server-side via inner `_passive()` helper in the character_sheet route.
+  3. **Senses** — extract darkvision/tremorsense/etc. from race traits (filtering for sense keywords) and display as pills.
+  4. **Languages** — pull from `race_data['languages']` and show in Proficiencies section.
+  5. **Background Feature** — pull feature name from `BACKGROUNDS` data and show on sheet.
+  6. **Tab interface** — reorganize bottom half into tabs: Saves & Skills | Inventory | Spells | Features | Background | Rests. All content preserved, just grouped more cleanly. Tab state persisted per-character via localStorage.
+  7. **Background Tab** — new editable tab with: Custom Background textarea, Personality Traits, Ideals, Bonds, Flaws, Physical Characteristics grid (height, weight, age, eyes, hair, skin, gender), and Appearance textarea. All stored in `character.spells['background_details']` JSON. New route `POST /characters/<id>/background_details`.
+  8. **AI Background Generation** — "✨ Clean Up" button polishes existing custom background text; "🎲 Generate" button creates a 2-4 paragraph origin story from character info. Both call xAI Grok via new routes.
+  9. **AI Trait Generation** — "🎲 Generate" buttons on Personality Traits, Ideals, Bonds, and Flaws. Requires custom background to be filled in first (client-side guard alerts user if empty).
+  10. **AI Appearance Generation** — "🎲 Generate" button on Appearance field. Requires both custom background AND at least one physical characteristic filled in.
+- **New Routes**:
+  - `POST /characters/<id>/temp_hp` — stores temp HP in `spells['temp_hp']`
+  - `POST /characters/<id>/background_details` — stores 15 background fields in `spells['background_details']`
+  - `POST /characters/<id>/ai/background/cleanup` — polish backstory via xAI Grok
+  - `POST /characters/<id>/ai/background/generate` — generate origin story via xAI Grok
+  - `POST /characters/<id>/ai/trait` — generate personality_traits / ideals / bonds / flaws (field specified in body)
+  - `POST /characters/<id>/ai/appearance` — generate appearance description
+- **New AI functions** (`services/ai.py`): `cleanup_background()`, `generate_background()`, `generate_trait_field()`, `generate_appearance()` — all return `(text, error)` tuple via `_call()`.
+- **Auth helper**: `_char_ai_auth(char)` — allows character owner or DM to call AI routes.
+- **Deliverables**: Updated `services/ai.py` (4 new functions), updated `app.py` (6 new routes + helper), updated `templates/character_sheet.html` (complete Background tab with AI buttons).
+- **Status**: Complete ✓ (2026-03-17)
+
+---
+
+### Phase 21: DM Inspiration — Grant & Spend
+- **Source**: DM request (2026-03-17) — DMs need a way to award Inspiration to players, just like adjusting HP.
+- **Objectives**: Allow the DM to grant or revoke D&D Inspiration for any player character. Players can see their inspiration status on their character sheet and spend it.
+- **D&D Rule**: Inspiration is a binary reward (have it or don't) that the DM awards for good roleplay. A player can spend it to gain advantage on any roll.
+- **Tasks**:
+  1. **Storage** — `character.spells['inspiration']` boolean. No migration needed.
+  2. **DM toggle route** — `POST /dm/characters/<id>/inspiration`: flips the boolean, flashes confirmation, redirects back to campaign.
+  3. **DM campaign page** — Add a "★ Grant Inspiration" / "★ Revoke Inspiration" toggle button below the HP adjust form for each player's character in the Players section.
+  4. **Character sheet pill** — Add an Inspiration pill in the combat-bar row. Shows "★ Inspired!" in gold when active, "☆ No Inspiration" in muted when not. If `can_edit`, shows a "Spend" button when inspired.
+  5. **Spend route** — `POST /characters/<id>/inspiration/spend`: clears inspiration (player or DM), flashes confirmation.
+- **Deliverables**: Two new routes in `app.py`; updated `templates/dm/campaign.html`; updated `templates/character_sheet.html`.
+- **Status**: Complete ✓ (2026-03-17)
 
 ---
 
@@ -421,84 +449,155 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
-### Phase 21: DM Inspiration — Grant & Spend
-- **Source**: DM request (2026-03-17) — DMs need a way to award Inspiration to players, just like adjusting HP.
-- **Objectives**: Allow the DM to grant or revoke D&D Inspiration for any player character. Players can see their inspiration status on their character sheet and spend it.
-- **D&D Rule**: Inspiration is a binary reward (have it or don't) that the DM awards for good roleplay. A player can spend it to gain advantage on any roll.
+### Phase 23: Character & Campaign Download Templates — v2 Format
+- **Source**: Review of download templates after Phase 22 (2026-03-19) — CHARACTER_TEMPLATE was still v1
+  (no background/story fields); CAMPAIGN_TEMPLATE was already updated in Phase 22.
+- **Objectives**: Bring the character download template up to date with Phase 20 character sheet additions
+  so players can fully specify their character — including backstory, personality, and physical description
+  — in the markdown file they import. What you write in the template becomes immediately usable by the
+  AI generation features on the character sheet.
 - **Tasks**:
-  1. **Storage** — `character.spells['inspiration']` boolean. No migration needed.
-  2. **DM toggle route** — `POST /dm/characters/<id>/inspiration`: flips the boolean, flashes confirmation, redirects back to campaign.
-  3. **DM campaign page** — Add a "★ Grant Inspiration" / "★ Revoke Inspiration" toggle button below the HP adjust form for each player's character in the Players section.
-  4. **Character sheet pill** — Add an Inspiration pill in the combat-bar row. Shows "★ Inspired!" in gold when active, "☆ No Inspiration" in muted when not. If `can_edit`, shows a "Spend" button when inspired.
-  5. **Spend route** — `POST /characters/<id>/inspiration/spend`: clears inspiration (player or DM), flashes confirmation.
-- **Deliverables**: Two new routes in `app.py`; updated `templates/dm/campaign.html`; updated `templates/character_sheet.html`.
-- **Status**: Complete ✓ (2026-03-17)
+  1. **`CHARACTER_TEMPLATE` v2** — add five new sections after `## Gold`:
+     - `## Physical Characteristics` — Height, Weight, Age, Eyes, Hair, Skin, Gender (key-value)
+     - `## Backstory` — freeform multi-line origin story (feeds AI generation)
+     - `## Personality Traits` — freeform (feeds AI trait generation)
+     - `## Ideals` — freeform
+     - `## Bonds` — freeform
+     - `## Flaws` — freeform
+     - `## Appearance` — freeform physical description
+     - Added comment header explaining the file format
+  2. **`parse_character_md` v2** — reads all seven new sections using `_section()` and `_kv()`.
+     Returns `physical` dict + `custom_background`, `personality_traits`, `ideals`, `bonds`, `flaws`,
+     `appearance` strings alongside existing fields. Fully backwards-compatible with v1 templates.
+  3. **`character_import()` updated** — builds `bg_details` dict from all new parsed fields and stores
+     it in `spells['background_details']` at character creation time. No migration needed — the
+     background_details key is already handled by the character sheet route.
+- **Not changed**: `CAMPAIGN_TEMPLATE` (already v2 from Phase 22). Parser for campaigns is unchanged.
+- **Deliverables**: Updated `parsers.py` (template + parser); updated `app.py` (import route).
+- **Status**: Complete ✓ (2026-03-19)
 
 ---
 
-### Phase 20: Character Sheet — Official Layout + Background Tab + AI Generation
-- **Source**: Beta playtest comparison against official D&D 5e character sheet layout (2026-03-17).
-- **Objectives**: Add key missing sections so the character sheet is a complete reference during play, and empower players with AI-assisted backstory and personality generation.
-- **Tasks**:
-  1. **Temp HP** — display and edit field next to Current/Max HP. Stored in `character.spells['temp_hp']`. New route `POST /characters/<id>/temp_hp`.
-  2. **Passive Scores** — show Passive Perception, Passive Investigation, Passive Insight (10 + skill modifier) as three labeled boxes. Computed server-side via inner `_passive()` helper in the character_sheet route.
-  3. **Senses** — extract darkvision/tremorsense/etc. from race traits (filtering for sense keywords) and display as pills.
-  4. **Languages** — pull from `race_data['languages']` and show in Proficiencies section.
-  5. **Background Feature** — pull feature name from `BACKGROUNDS` data and show on sheet.
-  6. **Tab interface** — reorganize bottom half into tabs: Saves & Skills | Inventory | Spells | Features | Background | Rests. All content preserved, just grouped more cleanly. Tab state persisted per-character via localStorage.
-  7. **Background Tab** — new editable tab with: Custom Background textarea, Personality Traits, Ideals, Bonds, Flaws, Physical Characteristics grid (height, weight, age, eyes, hair, skin, gender), and Appearance textarea. All stored in `character.spells['background_details']` JSON. New route `POST /characters/<id>/background_details`.
-  8. **AI Background Generation** — "✨ Clean Up" button polishes existing custom background text; "🎲 Generate" button creates a 2-4 paragraph origin story from character info. Both call xAI Grok via new routes.
-  9. **AI Trait Generation** — "🎲 Generate" buttons on Personality Traits, Ideals, Bonds, and Flaws. Requires custom background to be filled in first (client-side guard alerts user if empty).
-  10. **AI Appearance Generation** — "🎲 Generate" button on Appearance field. Requires both custom background AND at least one physical characteristic filled in.
-- **New Routes**:
-  - `POST /characters/<id>/temp_hp` — stores temp HP in `spells['temp_hp']`
-  - `POST /characters/<id>/background_details` — stores 15 background fields in `spells['background_details']`
-  - `POST /characters/<id>/ai/background/cleanup` — polish backstory via xAI Grok
-  - `POST /characters/<id>/ai/background/generate` — generate origin story via xAI Grok
-  - `POST /characters/<id>/ai/trait` — generate personality_traits / ideals / bonds / flaws (field specified in body)
-  - `POST /characters/<id>/ai/appearance` — generate appearance description
-- **New AI functions** (`services/ai.py`): `cleanup_background()`, `generate_background()`, `generate_trait_field()`, `generate_appearance()` — all return `(text, error)` tuple via `_call()`.
-- **Auth helper**: `_char_ai_auth(char)` — allows character owner or DM to call AI routes.
-- **Deliverables**: Updated `services/ai.py` (4 new functions), updated `app.py` (6 new routes + helper), updated `templates/character_sheet.html` (complete Background tab with AI buttons).
-- **Status**: Complete ✓ (2026-03-17)
+### Phase 24: AI Character Generator Wizard
+- **Source**: DM/player request (2026-03-19) — "New Character" should offer an AI-powered path alongside manual creation.
+- **Objectives**: Build a full AI character generation wizard with a preview/approval step so no character is created without the player's sign-off.
+- **User flow**:
+  1. `/characters/new` — two-path choice: "🎲 Generate with AI" or "✏️ Create Manually"
+  2. `/characters/generate` (GET) — wizard form: Race, Class, Background, Alignment (required); Name Hint + 4 story prompt textareas (all optional)
+  3. `/characters/generate` (POST) — validates inputs, calls xAI Grok, stores result in session, redirects to preview
+  4. `/characters/generate/preview` — full character preview: name in gold, identity pills, ability score grid (standard array assigned by AI priority), backstory, personality traits/ideals/bonds/flaws (2×2 grid), appearance; three action buttons
+  5. `/characters/generate/confirm` (POST) — creates Character in DB with `background_details` fully populated from AI output; redirects to character sheet
+  6. `/characters/generate/regenerate` (POST) — re-calls AI with same inputs from session, shows new preview; no data is lost
+- **AI function**: `generate_character(race, class_name, background, alignment, name_hint, prompts)` in `services/ai.py`
+  - System prompt instructs Grok to return ONLY valid JSON (no fences) with keys: name, backstory, personality_traits, ideals, bonds, flaws, appearance, ability_priorities (ordered list of 6 ability score abbreviations), suggested_skills
+  - `max_tokens=1400` (up from 600 via new `_call(messages, max_tokens=600)` default parameter)
+  - Response parsed with `json.loads()`; markdown fences stripped if present; ability_priorities validated/deduped/padded
+- **Ability score assignment**: AI returns priority order → standard array `[15,14,13,12,10,8]` assigned in that order → racial ASI applied on top
+- **Skill assignment**: AI's suggested_skills filtered to class options; remaining class slots filled automatically from available class skills
+- **`_call()` updated**: added `max_tokens=600` default parameter — backwards-compatible with all existing callers
+- **Session storage**: `session['char_gen']` holds `{result, inputs}` across the preview and regenerate steps; cleared on confirm
+- **New files**: `templates/character_generate.html`, `templates/character_preview.html`
+- **Updated files**: `services/ai.py`, `app.py`, `templates/character_create.html`
+- **Status**: Complete ✓ (2026-03-19)
 
 ---
 
-### Phase 19: Branding Integration — Campaign Codex Assets
-- **Source**: New brand package uploaded 2026-03-17 (Branding/Logo/).
-- **Objectives**: Apply the Campaign Codex visual identity across the app.
-- **Tasks**:
-  1. **Static asset setup** — Created `static/img/logo/`, `static/img/monogram/`, `static/img/icon/`, and `static/favicon/` directories. All brand files served by Flask at `/static/`.
-     - `static/favicon/favicon.ico`, `favicon-16.png`, `favicon-32.png`, `apple-touch-icon.png`
-     - `static/img/logo/campaign-codex-dark.png`, `campaign-codex-light.png`
-     - `static/img/icon/codex-icon.png`, `codex-icon-1024.png`
-     - `static/img/monogram/cc-monogram.png`, `cc-monogram-inverted.png`
-  2. **Favicons** — Added `<link rel="icon">` tags in `base.html <head>` for all four favicon sizes. Updated page `<title>` to "Campaign Codex".
-  3. **Nav bar brand** — Replaced plain text `⚔ D&D Manager` with `cc-monogram.png` (30px) + "Campaign Codex" text side by side, styled in gold.
-  4. **Login page branding** — Added `campaign-codex-dark.png` logo above the login form; gold `border-color: var(--gold)` on the card; "Welcome Back / Sign in to continue your adventure" heading.
-  5. **Sidebar brand** — Sidebar brand block removed after review; nav already shows monogram + text so sidebar was redundant.
-- **Deliverables**: `static/` folder with all branding assets; updated `templates/base.html`; updated `templates/login.html`.
-- **Status**: Complete ✓ (2026-03-17)
+### Phase 25: AI Player Character Flagging & Identity
+- **Source**: DM request (2026-03-19) — DM wants to assign AI control to player characters so they can practice DMing against simulated players.
+- **Objectives**: Give the DM a way to mark any character as AI-controlled and set its persona level (novice / intermediate / experienced); surface this clearly in the UI so the DM always knows which characters are human vs AI.
+- **Data model** (no schema change — stored in existing `character.spells` JSON):
+  - `spells['ai_player']` — boolean, default `False`
+  - `spells['ai_level']` — string: `"novice"` | `"intermediate"` | `"experienced"`, default `"intermediate"`
+- **DM UI additions** (`templates/dm/campaign.html`, Players section):
+  - Below the existing HP-adjust form and inspiration toggle for each character: new "AI Player" row
+  - Toggle button: "🤖 Enable AI" / "✅ AI Active — Disable" — calls `POST /dm/characters/<id>/ai-toggle`
+  - When AI is active: persona level selector appears — three buttons (Novice / Intermediate / Experienced), active one highlighted in gold; calls `POST /dm/characters/<id>/ai-level`
+- **Character sheet badge** (`templates/character_sheet.html`):
+  - If `ai_player` is True: subtle "🤖 AI-Controlled" badge in the character header area (muted style, not intrusive)
+- **Campaign page badge** (`templates/dm/campaign.html`):
+  - Character name in Players section gets a small `[🤖 Novice]` / `[🤖 Experienced]` tag next to it when AI is active
+- **New routes** (`app.py`):
+  - `POST /dm/characters/<id>/ai-toggle` — flips `spells['ai_player']`; DM-only; redirects back to campaign
+  - `POST /dm/characters/<id>/ai-level` — sets `spells['ai_level']` to posted value (`novice`/`intermediate`/`experienced`); DM-only; redirects back to campaign
+  - Both routes use `flag_modified(char, 'spells')` after mutation
+- **Updated files**: `app.py`, `templates/dm/campaign.html`, `templates/character_sheet.html`
+- **Status**: Proposed
 
 ---
 
-### Phase 18: DM Campaign Page — Three-Button Accordion
-- **Source**: DM UX feedback (2026-03-17) — consolidated panels still take too much vertical space; want three equal buttons that reveal content on demand.
-- **Objectives**: Replace the three stacked cards (Campaign Info, SMS, Discord) with a compact three-button row. Clicking a button expands its panel below; clicking again collapses it. Only the content for the active panel is visible. Status indicators (Active / Off, Connected / Not connected, player count) visible on each button even when collapsed. Last open panel remembered via localStorage.
-- **Deliverables**: Updated `templates/dm/campaign.html` only.
-- **Status**: Complete ✓ (2026-03-17)
+### Phase 26: AI Player Out-of-Combat Actions
+- **Source**: DM request (2026-03-19) — AI-flagged characters should be able to generate contextually appropriate player actions during narrative/exploration scenes.
+- **Objectives**: DM can trigger an AI action for any AI-flagged character; the AI generates what that character would say or do based on their persona level; DM previews and optionally edits before posting to the campaign log.
+- **Prerequisites**: Phase 25 complete.
+- **New file** `services/ai_player.py`:
+  - `generate_player_action(character, campaign, persona_level)` — main function
+  - Builds context from: character name/race/class/background, personality traits/ideals/bonds/flaws (from `background_details`), recent narration log (last 5 entries from `current_state['narration_log']`), current scene description
+  - Persona-level system prompt modifiers:
+    - **Novice**: "You are roleplaying as a first-time tabletop RPG player. Your character speaks simply and directly. You often ask the DM clarifying questions. You sometimes forget to use skills or abilities. You focus on obvious actions rather than creative solutions."
+    - **Intermediate**: "You are roleplaying as a player with some experience. Your character uses their backstory occasionally to inform decisions. You use skills and abilities when clearly relevant. You engage with NPCs and plot hooks."
+    - **Experienced**: "You are roleplaying as a veteran RPG player. Your character has a distinct voice, references past events, and makes mechanically efficient choices. You look for creative solutions, ask probing questions of NPCs, and use all available tools."
+  - Returns `(action_text, error)` — plain narrative string of what the character does/says
+- **DM UI additions** (`templates/dm/campaign.html`, Players section):
+  - For each AI-flagged character: "🎲 Take Action" button appears below the inspiration toggle
+  - Clicking opens a small form: text field pre-filled with current scene context (editable), "Generate" button
+  - `POST /dm/characters/<id>/ai-action` returns the generated action text
+  - DM sees action in a preview card with character name and persona level badge
+  - Three buttons: "✅ Post to Log" (saves to narration_log), "✏️ Edit & Post" (editable textarea + post), "❌ Discard"
+  - "All AI Players" batch trigger at top of Players section — generates actions for all AI characters sequentially, queues them for DM approval
+- **New routes** (`app.py`):
+  - `POST /dm/characters/<id>/ai-action` — calls `generate_player_action()`, returns JSON `{action, character_name, persona_level}`
+  - `POST /dm/characters/<id>/ai-action/post` — accepts `{action_text}`, appends to `current_state['narration_log']`
+- **Updated files**: `app.py`, `templates/dm/campaign.html`
+- **New files**: `services/ai_player.py`
+- **Status**: Proposed
 
 ---
 
-### Phase 17: DM Campaign Page — Panel Consolidation & Collapsible Integrations
-- **Source**: DM UX feedback (2026-03-17) — too many always-visible sections clutter the page.
-- **Objectives**: Reduce visual noise on the DM campaign page without removing any functionality.
-- **Tasks**:
-  1. **Merge Getting Started + Campaign Info** — Permanent top card shows Join URL, large Join Code, Players Joined, QR code. A "Tell them how to get started" toggle button reveals/hides the 3-step walkthrough inline. Dismiss still persisted in state.
-  2. **SMS Play Mode collapsible** — Wrap entire section in a `<details>` block. Summary shows title + a status pill (Active / Off). localStorage remembers open/closed state.
-  3. **Discord Integration collapsible** — Same treatment: `<details>` with Connected / Not connected status pill.
-- **Deliverables**: Updated `templates/dm/campaign.html` only.
-- **Status**: Complete ✓ (2026-03-17)
+### Phase 27: AI Player Combat Decisions
+- **Source**: DM request (2026-03-19) — AI players should participate in combat rounds, not just narrative scenes.
+- **Objectives**: When it is an AI character's turn in combat, the DM can trigger an AI decision; the AI picks a target, action, and (if applicable) spell or bonus action; the DM approves before the engine executes it.
+- **Prerequisites**: Phase 25 complete; Phase 26 `services/ai_player.py` in place.
+- **New function** `generate_combat_decision(character, campaign, persona_level)` in `services/ai_player.py`:
+  - Context fed to the AI: character stats (HP, AC, spell slots, conditions), initiative order, all combatants with current HP, recent combat log (last 3 rounds), terrain notes from `current_state`
+  - AI returns a structured JSON decision: `{action_type, target, weapon_or_spell, bonus_action, reasoning}`
+  - Persona shapes decision style:
+    - **Novice**: may attack the nearest enemy regardless of tactics; may forget bonus actions; might use a powerful spell on a weak target
+    - **Intermediate**: picks reasonable targets (lowest HP or biggest threat); uses bonus actions; conserves spell slots until badly needed
+    - **Experienced**: optimal focus-fire, uses action economy efficiently, coordinates with party (e.g., avoids attacking an ally's Hold Person target)
+  - Returns `(decision_dict, error)` — same pattern as `generate_character()`
+- **DM UI additions** (`templates/dm/campaign.html`, combat section):
+  - When combat is active and it is an AI character's turn: "🤖 AI Turn" button appears next to that character's initiative slot
+  - Clicking "🤖 AI Turn" calls `POST /dm/characters/<id>/ai-combat-turn`
+  - Response displays the AI's proposed decision in a modal or inline card: "Thordak attacks Goblin A with Greataxe — reasoning: lowest HP, within range"
+  - DM buttons: "✅ Execute", "✏️ Edit Action", "⏭ Skip Turn"
+  - On "Execute": calls existing engine routes (`/dm/characters/<id>/attack`, etc.) with the AI-chosen parameters
+- **New routes** (`app.py`):
+  - `POST /dm/characters/<id>/ai-combat-turn` — calls `generate_combat_decision()`, returns JSON decision for DM review
+  - `POST /dm/characters/<id>/ai-combat-execute` — receives approved decision dict, routes to correct engine function, returns result
+- **Updated files**: `services/ai_player.py`, `app.py`, `templates/dm/campaign.html`
+- **Status**: Proposed
+
+---
+
+### Phase 28: Practice Mode — Full-Party AI Orchestration
+- **Source**: DM request (2026-03-19) — DM wants to run complete practice sessions where every player slot is AI-controlled.
+- **Objectives**: Let the DM "advance" the entire party with one action, mix AI personas across characters, step in as any character mid-session, and get a post-session summary they can learn from.
+- **Prerequisites**: Phases 25, 26, 27 complete.
+- **DM UI additions** (`templates/dm/campaign.html`):
+  - "🎓 Practice Mode" toggle button at the top of the campaign panel — only enabled when all active characters have `ai_player: true`
+  - When Practice Mode is active: banner at top of page ("Practice Mode Active — All characters are AI-controlled"); "⏭ Advance Party" button
+  - "⏭ Advance Party" — triggers all AI characters in turn order (combat or narrative) in sequence, showing each decision for DM review before execution; DM can skip, edit, or approve each one
+  - "Hot Seat" button per character — DM temporarily overrides AI for that character and types their own action; one action only, then AI resumes
+- **Session summary** (new route `GET /dm/campaigns/<id>/practice-summary`):
+  - Shows a recap of the session: actions taken, rolls made, outcomes; which persona made which decision
+  - AI-generated debrief: what each AI "player" did well, what a real player might have done differently
+  - Useful for DM skill-building — see how players of different experience levels think
+- **Persona mixing**: DM can assign different levels (novice/intermediate/experienced) to different characters; Practice Mode respects each character's individual level
+- **Difficulty awareness**: The AI debrief notes when decisions were suboptimal (e.g., novice walking into a trap a veteran would have spotted) — helps DM understand player experience gaps
+- **New route**: `POST /dm/campaigns/<id>/advance-party` — iterates all AI characters, calls `generate_player_action()` or `generate_combat_decision()` for each, returns ordered list of pending decisions; DM approves/edits/skips each via existing Phase 26/27 confirm routes
+- **New template**: `templates/dm/practice_summary.html`
+- **Updated files**: `templates/dm/campaign.html`, `app.py`
+- **Status**: Proposed
 
 ---
 
