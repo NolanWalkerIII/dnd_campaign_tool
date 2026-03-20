@@ -10,12 +10,12 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.campaigncodex.rule=Host(`campaigncodex.momentumlabs.cloud`)"
-      - "traefik.http.routers.campaigncodex.entrypoints=websecure"
-      - "traefik.http.routers.campaigncodex.tls=true"
-      - "traefik.http.routers.campaigncodex.tls.certresolver=letsencrypt"
-      - "traefik.http.services.campaigncodex.loadbalancer.server.port=5000"
       - "traefik.docker.network=root_default"
+      - "traefik.http.routers.campaigncodex.rule=Host(`campaigncodex.momentumlabs.cloud`)"
+      - "traefik.http.routers.campaigncodex.entrypoints=web,websecure"
+      - "traefik.http.routers.campaigncodex.tls=true"
+      - "traefik.http.routers.campaigncodex.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.campaigncodex.loadbalancer.server.port=5000"
     networks:
       - root_default
 
