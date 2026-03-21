@@ -1769,17 +1769,235 @@ def dm_ai_combat_turn(char_id):
 @app.route('/dm/characters/<int:char_id>/ai-combat-execute', methods=['POST'])
 @dm_required
 def dm_ai_combat_execute(char_id):
-    """Post an approved AI combat decision to the combat log."""
+    """Execute an approved AI combat decision with dice rolls."""
     char = Character.query.get_or_404(char_id)
     campaign_id = request.form.get('campaign_id', type=int)
     campaign = Campaign.query.get(campaign_id) if campaign_id else None
     if not campaign or campaign.dm_id != session['user_id']:
         flash('Campaign not found.', 'error')
         return redirect(url_for('dm_dashboard'))
-    summary = request.form.get('action_summary', '').strip()
-    if summary:
-        _add_combat_log(campaign, char.name, summary, 'action')
-        flash(f"{char.name}'s action posted to combat log.", 'success')
+
+    # Parse the full decision JSON sent by the JS
+    import json as _json
+    raw = request.form.get('action_decision', '').strip()
+    try:
+        decision = _json.loads(raw) if raw else {}
+    except Exception:
+        decision = {}
+
+    action_type     = (decision.get('action_type') or 'action').lower()
+    target_name     = decision.get('target') or 'target'
+    weapon_or_spell = decision.get('weapon_or_spell') or ''
+    bonus_action    = decision.get('bonus_action') or ''
+    reasoning       = decision.get('reasoning') or ''
+
+    # Simple weapon → (damage_dice, ability) lookup
+    _WEAPON_DMG = {
+        'dagger': ('1d4', 'DEX'), 'handaxe': ('1d6', 'STR'), 'shortsword': ('1d6', 'DEX'),
+        'longsword': ('1d8', 'STR'), 'rapier': ('1d8', 'DEX'), 'mace': ('1d6', 'STR'),
+        'quarterstaff': ('1d6', 'STR'), 'greataxe': ('1d12', 'STR'), 'greatsword': ('2d6', 'STR'),
+        'warhammer': ('1d8', 'STR'), 'battleaxe': ('1d8', 'STR'), 'flail': ('1d8', 'STR'),
+        'spear': ('1d6', 'STR'), 'javelin': ('1d6', 'STR'), 'light crossbow': ('1d8', 'DEX'),
+        'hand crossbow': ('1d6', 'DEX'), 'heavy crossbow': ('1d10', 'DEX'),
+        'shortbow': ('1d6', 'DEX'), 'longbow': ('1d8', 'DEX'), 'scimitar': ('1d6', 'DEX'),
+        'dart': ('1d4', 'DEX'), 'sling': ('1d4', 'DEX'), 'club': ('1d4', 'STR'),
+        'greatclub': ('1d8', 'STR'), 'glaive': ('1d10', 'STR'), 'halberd': ('1d10', 'STR'),
+        'pike': ('1d10', 'STR'), 'maul': ('2d6', 'STR'), 'lance': ('1d12', 'STR'),
+        'whip': ('1d4', 'DEX'), 'morningstar': ('1d8', 'STR'), 'war pick': ('1d8', 'STR'),
+        'trident': ('1d6', 'STR'), 'net': ('0', 'STR'), 'unarmed': ('1', 'STR'),
+    }
+
+    state = campaign.current_state or {}
+    conds = _get_combatant_conditions(state, char.id)
+    has_disadvantage = 'Poisoned' in conds or 'Restrained' in conds
+    has_advantage    = 'Invisible' in conds
+
+    log_lines = []
+    log_type  = 'action'
+
+    if action_type == 'attack':
+        # Determine weapon stats
+        weapon_key = weapon_or_spell.lower().strip()
+        damage_dice, ability = _WEAPON_DMG.get(weapon_key, ('1d6', 'STR'))
+        # Prefer DEX if finesse and DEX > STR
+        scores = char.ability_scores or {}
+        if ability == 'STR':
+            str_mod = ability_modifier(scores.get('STR', 10))
+            dex_mod = ability_modifier(scores.get('DEX', 10))
+            if weapon_key in ('dagger', 'rapier', 'shortsword', 'whip', 'scimitar') and dex_mod > str_mod:
+                ability = 'DEX'
+
+        atk_bonus = _char_attack_bonus(char, ability)
+        atk_total, rolls, is_crit = DiceRoller.roll(
+            '1d20', modifier=atk_bonus,
+            advantage=has_advantage, disadvantage=has_disadvantage
+        )
+        adv_tag  = ' (advantage)' if has_advantage else (' (disadvantage)' if has_disadvantage else '')
+        crit_tag = ' — CRITICAL HIT!' if is_crit else ''
+        weapon_label = weapon_or_spell or 'weapon'
+        log_lines.append(
+            f'attacks {target_name} with {weapon_label}{adv_tag}: '
+            f'd20({rolls[0]}){mod_str(atk_bonus)} = {atk_total}{crit_tag}'
+        )
+
+        # Damage roll
+        if damage_dice and damage_dice != '0':
+            dice_str = damage_dice
+            if is_crit:
+                m = _re.match(r'^(\d+)d(\d+)([+-]\d+)?$', damage_dice.lower().strip())
+                if m:
+                    dice_str = f'{int(m.group(1))*2}d{m.group(2)}'
+                    if m.group(3):
+                        dice_str += m.group(3)
+            dmg_mod = ability_modifier(scores.get(ability, 10))
+            total_dmg, label, dmg_rolls, _, _ = DiceRoller.parse_and_roll(dice_str)
+            if not _re.search(r'[+-]\d+$', damage_dice.lower().strip()):
+                total_dmg += dmg_mod
+                label = f'{damage_dice}{mod_str(dmg_mod)}'
+            crit_label = ' (crit — doubled dice!)' if is_crit else ''
+            log_lines.append(f'Damage: {label} = {total_dmg}{crit_label}')
+        log_type = 'attack'
+
+    elif action_type == 'spell':
+        spell_name = weapon_or_spell or 'spell'
+        log_lines.append(f'casts {spell_name} at {target_name}')
+        if reasoning:
+            log_lines.append(f'({reasoning})')
+        log_type = 'action'
+
+    elif action_type == 'dash':
+        log_lines.append('uses Dash action')
+        log_type = 'action'
+
+    elif action_type == 'help':
+        log_lines.append(f'uses Help action (aiding {target_name})')
+        log_type = 'action'
+
+    else:
+        log_lines.append(f'{action_type}: {weapon_or_spell or target_name}')
+
+    if bonus_action:
+        log_lines.append(f'Bonus action: {bonus_action}')
+
+    full_text = '\n'.join(log_lines)
+    _add_combat_log(campaign, char.name, full_text, log_type)
+    _save_state(campaign)
+    flash(f"{char.name}'s action resolved.", 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+# ── DM Roll-for-Character ─────────────────────────────────────────────────────
+
+@app.route('/dm/campaigns/<int:campaign_id>/pc/<int:char_id>/roll-for', methods=['POST'])
+@dm_required
+def dm_roll_for_character(campaign_id, char_id):
+    """DM rolls any dice (attack, skill, save, custom) attributed to a specific character."""
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Not your campaign.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    char = Character.query.get_or_404(char_id)
+
+    roll_type  = request.form.get('roll_type', 'custom').lower()
+    scores     = char.ability_scores or {}
+
+    state = campaign.current_state or {}
+    conds = _get_combatant_conditions(state, char.id)
+    has_disadvantage = 'Poisoned' in conds or 'Restrained' in conds
+    has_advantage    = 'Invisible' in conds
+
+    if roll_type == 'attack':
+        target_name = request.form.get('target', 'target').strip() or 'target'
+        ability     = request.form.get('ability', 'STR')
+        if ability not in ABILITY_SCORES:
+            ability = 'STR'
+        damage_dice = request.form.get('damage_dice', '').strip()
+        try:
+            target_ac = int(request.form.get('target_ac', '')) if request.form.get('target_ac') else None
+        except (ValueError, TypeError):
+            target_ac = None
+
+        atk_bonus = _char_attack_bonus(char, ability)
+        atk_total, rolls, is_crit = DiceRoller.roll(
+            '1d20', modifier=atk_bonus,
+            advantage=has_advantage, disadvantage=has_disadvantage
+        )
+        adv_tag  = ' (advantage)' if has_advantage else (' (disadvantage)' if has_disadvantage else '')
+        crit_tag = ' — CRITICAL HIT!' if is_crit else ''
+        hit_tag  = ''
+        if target_ac is not None:
+            hit_tag = ' — HIT!' if atk_total >= target_ac or is_crit else ' — MISS!'
+
+        text = (f'attacks {target_name}{adv_tag}: '
+                f'd20({rolls[0]}){mod_str(atk_bonus)} = {atk_total}{hit_tag}{crit_tag}')
+
+        if damage_dice and (hit_tag in (' — HIT!', '') or is_crit):
+            try:
+                dice_str = damage_dice
+                if is_crit:
+                    m = _re.match(r'^(\d+)d(\d+)([+-]\d+)?$', damage_dice.lower().strip())
+                    if m:
+                        dice_str = f'{int(m.group(1))*2}d{m.group(2)}'
+                        if m.group(3):
+                            dice_str += m.group(3)
+                dmg_mod = ability_modifier(scores.get(ability, 10))
+                total_dmg, label, dmg_rolls, _, _ = DiceRoller.parse_and_roll(dice_str)
+                if not _re.search(r'[+-]\d+$', damage_dice.lower().strip()):
+                    total_dmg += dmg_mod
+                    label = f'{damage_dice}{mod_str(dmg_mod)}'
+                crit_label = ' (crit — doubled dice!)' if is_crit else ''
+                text += f'\nDamage: {label} = {total_dmg}{crit_label}'
+            except ValueError:
+                text += '\n(invalid damage dice)'
+        _add_combat_log(campaign, char.name, text, 'attack')
+        flash(f'Attack: {atk_total}{hit_tag}{crit_tag}', 'success')
+
+    elif roll_type == 'skill':
+        skill_name = request.form.get('skill_name', '').strip()
+        if skill_name not in SKILLS:
+            flash(f'Unknown skill: {skill_name}', 'error')
+            return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+        ab      = SKILLS[skill_name]
+        base    = ability_modifier(scores.get(ab, 10))
+        prof    = char.proficiency_bonus if skill_name in (char.skills or []) else 0
+        total_mod = base + prof
+        roll, rolls, _ = DiceRoller.roll('1d20', modifier=total_mod)
+        prof_tag = ' (proficient)' if prof else ''
+        text = f'{skill_name} check{prof_tag}: d20({rolls[0]}){mod_str(total_mod)} = {roll}'
+        _add_combat_log(campaign, char.name, text, 'skill')
+        flash(f'{skill_name}: {roll}', 'success')
+
+    elif roll_type == 'save':
+        ability = request.form.get('ability', 'CON')
+        if ability not in ABILITY_SCORES:
+            ability = 'CON'
+        score = scores.get(ability, 10)
+        mod   = ability_modifier(score)
+        # Saving throw proficiency: check spells data (some chars have save_proficiencies)
+        save_profs = (char.spells or {}).get('save_proficiencies', [])
+        if ability in save_profs:
+            mod += char.proficiency_bonus
+        total, rolls, _ = DiceRoller.roll('1d20', modifier=mod)
+        prof_tag = ' (proficient)' if ability in save_profs else ''
+        text = f'{ability} saving throw{prof_tag}: d20({rolls[0]}){mod_str(mod)} = {total}'
+        _add_combat_log(campaign, char.name, text, 'roll')
+        flash(f'{ability} save: {total}', 'success')
+
+    else:  # custom
+        dice_expr  = request.form.get('dice_expr', '1d20').strip() or '1d20'
+        roll_label = request.form.get('roll_label', '').strip()
+        try:
+            total, label, rolls, _, is_crit = DiceRoller.parse_and_roll(dice_expr)
+            crit_tag = ' CRIT!' if is_crit else ''
+            display  = roll_label or label
+            text     = f'{display}: [{", ".join(str(r) for r in rolls)}] = {total}{crit_tag}'
+        except ValueError:
+            flash('Invalid dice expression.', 'error')
+            return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+        _add_combat_log(campaign, char.name, text, 'roll')
+        flash(f'{char.name}: {total}', 'success')
+
+    _save_state(campaign)
     return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
 
 

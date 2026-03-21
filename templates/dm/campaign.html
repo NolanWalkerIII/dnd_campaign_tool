@@ -821,10 +821,9 @@ function toggleGettingStarted() {
                   style="margin:0;">
               <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
               <input type="hidden" id="ai-combat-post-{{ char.id }}" name="action_summary" value="">
+              <input type="hidden" id="ai-combat-decision-{{ char.id }}" name="action_decision" value="">
               <button type="submit" class="btn btn-gold"
-                      style="padding:4px 12px; font-size:0.8rem;"
-                      onclick="document.getElementById('ai-combat-post-{{ char.id }}').value =
-                               document.getElementById('ai-combat-text-{{ char.id }}').innerText;">
+                      style="padding:4px 12px; font-size:0.8rem;">
                 ✅ Execute
               </button>
             </form>
@@ -836,6 +835,119 @@ function toggleGettingStarted() {
           </div>
         </div>
       </div>
+      {% endif %}
+
+      <!-- DM Roll-for-Character (all PCs) -->
+      {% if char %}
+      <details style="margin-top:6px; margin-left:30px;">
+        <summary style="cursor:pointer; font-size:0.78rem; color:var(--muted); font-weight:600;
+                        user-select:none;">
+          🎲 DM Roll for {{ char.name }}
+        </summary>
+        <form method="POST" action="/dm/campaigns/{{ campaign.id }}/pc/{{ char.id }}/roll-for"
+              style="margin-top:8px;">
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="form-group" style="min-width:110px;">
+              <label style="font-size:0.75rem;">Roll Type</label>
+              <select name="roll_type" id="dm-roll-type-{{ char.id }}"
+                      onchange="dmRollTypeChange({{ char.id }})"
+                      style="padding:3px 6px; font-size:0.8rem;">
+                <option value="attack">Attack</option>
+                <option value="skill">Skill Check</option>
+                <option value="save">Saving Throw</option>
+                <option value="custom">Custom Dice</option>
+              </select>
+            </div>
+
+            <!-- Attack fields -->
+            <div id="dm-roll-attack-{{ char.id }}" style="display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end;">
+              <div class="form-group" style="min-width:100px;">
+                <label style="font-size:0.75rem;">Target</label>
+                <select name="target" style="padding:3px 6px; font-size:0.8rem;">
+                  {% for e2 in order %}
+                  {% if e2.is_npc %}
+                  <option value="{{ e2.name }}">{{ e2.name }}</option>
+                  {% elif e2.char_id != char.id %}
+                  <option value="{{ e2.name }}">{{ e2.name }}</option>
+                  {% endif %}
+                  {% endfor %}
+                  <option value="enemy">Enemy</option>
+                </select>
+              </div>
+              <div class="form-group" style="width:65px;">
+                <label style="font-size:0.75rem;">Ability</label>
+                <select name="ability" style="padding:3px 6px; font-size:0.8rem;">
+                  <option value="STR">STR</option>
+                  <option value="DEX">DEX</option>
+                  <option value="CON">CON</option>
+                  <option value="INT">INT</option>
+                  <option value="WIS">WIS</option>
+                  <option value="CHA">CHA</option>
+                </select>
+              </div>
+              <div class="form-group" style="width:75px;">
+                <label style="font-size:0.75rem;">Dmg Dice</label>
+                <input type="text" name="damage_dice" placeholder="1d8"
+                       style="width:70px; padding:3px 6px; font-size:0.8rem; font-family:monospace;">
+              </div>
+              <div class="form-group" style="width:65px;">
+                <label style="font-size:0.75rem;">Target AC</label>
+                <input type="number" name="target_ac" placeholder="opt"
+                       style="width:60px; padding:3px 6px; font-size:0.8rem;">
+              </div>
+            </div>
+
+            <!-- Skill fields -->
+            <div id="dm-roll-skill-{{ char.id }}" style="display:none;">
+              <div class="form-group" style="min-width:130px;">
+                <label style="font-size:0.75rem;">Skill</label>
+                <select name="skill_name" style="padding:3px 6px; font-size:0.8rem;">
+                  {% for skill_name in skills_sorted %}
+                  <option value="{{ skill_name }}"
+                    {% if skill_name in (char.skills or []) %}style="font-weight:700;"{% endif %}>
+                    {{ skill_name }}{% if skill_name in (char.skills or []) %} ✓{% endif %}
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            <!-- Save fields -->
+            <div id="dm-roll-save-{{ char.id }}" style="display:none;">
+              <div class="form-group" style="width:80px;">
+                <label style="font-size:0.75rem;">Ability</label>
+                <select name="ability" style="padding:3px 6px; font-size:0.8rem;">
+                  <option value="STR">STR</option>
+                  <option value="DEX">DEX</option>
+                  <option value="CON">CON</option>
+                  <option value="INT">INT</option>
+                  <option value="WIS">WIS</option>
+                  <option value="CHA">CHA</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Custom fields -->
+            <div id="dm-roll-custom-{{ char.id }}" style="display:none; gap:6px; flex-wrap:wrap; align-items:flex-end;">
+              <div class="form-group" style="width:90px;">
+                <label style="font-size:0.75rem;">Dice Expr</label>
+                <input type="text" name="dice_expr" placeholder="2d6+3"
+                       style="width:85px; padding:3px 6px; font-size:0.8rem; font-family:monospace;">
+              </div>
+              <div class="form-group" style="min-width:100px;">
+                <label style="font-size:0.75rem;">Label (opt)</label>
+                <input type="text" name="roll_label" placeholder="e.g. Sneak Attack"
+                       style="width:100px; padding:3px 6px; font-size:0.8rem;">
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-outline"
+                    style="padding:3px 10px; font-size:0.78rem; color:var(--accent); white-space:nowrap; align-self:flex-end;">
+              Roll
+            </button>
+          </div>
+        </form>
+      </details>
       {% endif %}
       {% endif %}
 
@@ -1427,6 +1539,21 @@ function toggleGettingStarted() {
 </div>
 
 <script>
+// Persist scroll position across form-submit page reloads
+(function () {
+  var SCROLL_KEY = 'dm_campaign_scroll_{{ campaign.id }}';
+  var saved = sessionStorage.getItem(SCROLL_KEY);
+  if (saved !== null) {
+    window.scrollTo(0, parseInt(saved, 10));
+    sessionStorage.removeItem(SCROLL_KEY);
+  }
+  document.addEventListener('submit', function () {
+    sessionStorage.setItem(SCROLL_KEY, window.scrollY);
+  });
+})();
+</script>
+
+<script>
 (function () {
   const textarea  = document.getElementById('narration-text');
   const statusEl  = document.getElementById('ai-status');
@@ -1586,14 +1713,18 @@ function triggerAiCombatTurn(charId, campaignId) {
       if (d.target) summary += ' → ' + d.target;
       if (d.bonus_action) summary += ' | Bonus: ' + d.bonus_action;
 
-      var nameEl   = document.getElementById('ai-combat-name-'   + charId);
-      var textEl   = document.getElementById('ai-combat-text-'   + charId);
-      var reasonEl = document.getElementById('ai-combat-reason-' + charId);
-      var resultDiv = document.getElementById('ai-combat-result-' + charId);
-      if (nameEl)   nameEl.textContent   = data.character_name + ' (' + data.persona_level + ')';
-      if (textEl)   textEl.innerText     = summary;
-      if (reasonEl) reasonEl.textContent = d.reasoning || '';
-      if (resultDiv) resultDiv.style.display = 'block';
+      var nameEl      = document.getElementById('ai-combat-name-'     + charId);
+      var textEl      = document.getElementById('ai-combat-text-'     + charId);
+      var reasonEl    = document.getElementById('ai-combat-reason-'   + charId);
+      var resultDiv   = document.getElementById('ai-combat-result-'   + charId);
+      var postEl      = document.getElementById('ai-combat-post-'     + charId);
+      var decisionEl  = document.getElementById('ai-combat-decision-' + charId);
+      if (nameEl)     nameEl.textContent   = data.character_name + ' (' + data.persona_level + ')';
+      if (textEl)     textEl.innerText     = summary;
+      if (reasonEl)   reasonEl.textContent = d.reasoning || '';
+      if (postEl)     postEl.value         = summary;
+      if (decisionEl) decisionEl.value     = JSON.stringify(d);
+      if (resultDiv)  resultDiv.style.display = 'block';
     })
     .catch(function() { alert('Network error generating combat decision.'); })
     .finally(function() {
@@ -1677,6 +1808,15 @@ function triggerAllAiPlayers() {
       .catch(function() { next(); });
   }
   next();
+}
+
+function dmRollTypeChange(charId) {
+  var type = document.getElementById('dm-roll-type-' + charId).value;
+  var sections = ['attack', 'skill', 'save', 'custom'];
+  sections.forEach(function(s) {
+    var el = document.getElementById('dm-roll-' + s + '-' + charId);
+    if (el) el.style.display = (s === type) ? (s === 'custom' ? 'flex' : 'block') : 'none';
+  });
 }
 </script>
 {% endblock %}
