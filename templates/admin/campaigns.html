@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Campaigns — Admin Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>🏰 Campaigns</h1>
+  <a href="/admin" class="btn btn-outline" style="font-size:0.85rem;">← Dashboard</a>
+</div>
+
+<form method="get" style="display:flex; gap:0.5rem; margin-bottom:1.5rem;">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search by name…" style="max-width:320px;">
+  <button type="submit" class="btn btn-gold" style="padding:8px 18px;">Search</button>
+  {% if q %}<a href="/admin/campaigns" class="btn btn-outline">Clear</a>{% endif %}
+</form>
+
+<div class="card" style="padding:0; overflow:hidden;">
+  <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+    <thead style="background:var(--card);">
+      <tr style="color:var(--muted); text-align:left;">
+        <th style="padding:10px 14px;">ID</th>
+        <th style="padding:10px 14px;">Name</th>
+        <th style="padding:10px 14px;">DM</th>
+        <th style="padding:10px 14px;">Players</th>
+        <th style="padding:10px 14px;">Status</th>
+        <th style="padding:10px 14px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in campaigns %}
+      <tr style="border-top:1px solid var(--border);">
+        <td style="padding:9px 14px; color:var(--muted);">{{ c.id }}</td>
+        <td style="padding:9px 14px; font-weight:600; color:var(--gold);">{{ c.name }}</td>
+        <td style="padding:9px 14px; color:var(--muted);">{{ dms.get(c.dm_id, '—') }}</td>
+        <td style="padding:9px 14px; color:var(--muted);">{{ (c.players or [])|length }}</td>
+        <td style="padding:9px 14px;">
+          {% if c.is_active %}
+            <span style="color:var(--success); font-size:0.82rem;">✓ Active</span>
+          {% else %}
+            <span style="color:var(--muted); font-size:0.82rem;">Archived</span>
+          {% endif %}
+        </td>
+        <td style="padding:9px 14px;">
+          <a href="/admin/campaigns/{{ c.id }}" class="btn btn-outline" style="padding:3px 12px; font-size:0.8rem;">Manage</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" style="padding:2rem; text-align:center; color:var(--muted);">No campaigns found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

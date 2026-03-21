@@ -377,7 +377,12 @@
         <a href="/dm/settings">⚙ Settings</a>
         <a href="/dm/diagnostics">🔧 Diagnostics</a>
         {% if session.is_admin %}
-        <a href="/admin">🛡 Admin Console</a>
+        <hr>
+        <div class="left-nav-section">Admin</div>
+        <a href="/admin">🛡 Dashboard</a>
+        <a href="/admin/users">👥 Users</a>
+        <a href="/admin/campaigns">🏰 Campaigns</a>
+        <a href="/admin/characters">🧙 Characters</a>
         {% endif %}
 
       {% else %}

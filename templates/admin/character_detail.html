@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}{{ char.name }} — Admin Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>🧙 {{ char.name }}</h1>
+  <a href="/admin/characters" class="btn btn-outline" style="font-size:0.85rem;">← All Characters</a>
+</div>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+
+  <!-- Profile + Actions -->
+  <div>
+    <div class="card">
+      <h2>Profile</h2>
+      <table style="width:100%; font-size:0.9rem; border-collapse:collapse;">
+        <tr><td style="padding:6px 0; color:var(--muted); width:130px;">Character ID</td><td>{{ char.id }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Race</td><td>{{ char.race }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Class</td><td>{{ char.class_name }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Level</td><td>{{ char.level }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">HP</td>
+            <td>{{ char.hp_current }} / {{ char.hp_max }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">AC</td><td>{{ char.ac }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Owner</td>
+            <td>
+              {% if owner %}
+                <a href="/admin/users/{{ owner.id }}" style="color:var(--gold);">{{ owner.username }}</a>
+              {% else %}
+                <span style="color:var(--accent);">⚠ Orphaned</span>
+              {% endif %}
+            </td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Campaign</td>
+            <td>
+              {% if campaign %}
+                <a href="/admin/campaigns/{{ campaign.id }}" style="color:var(--gold);">{{ campaign.name }}</a>
+              {% else %}—{% endif %}
+            </td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Fix HP</h2>
+      <form method="post" action="/admin/characters/{{ char.id }}/fix-hp"
+            style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; align-items:end;">
+        <div class="form-group">
+          <label>Current HP</label>
+          <input type="number" name="hp_current" value="{{ char.hp_current }}" min="0">
+        </div>
+        <div class="form-group">
+          <label>Max HP</label>
+          <input type="number" name="hp_max" value="{{ char.hp_max }}" min="1">
+        </div>
+        <button type="submit" class="btn btn-gold" style="grid-column:1/-1; margin-top:0.25rem;">Save HP</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Reassign</h2>
+      <form method="post" action="/admin/characters/{{ char.id }}/reassign">
+        <div class="form-group" style="margin-bottom:0.75rem;">
+          <label>Owner (User)</label>
+          <select name="user_id">
+            <option value="">— Unassigned —</option>
+            {% for u in all_users %}
+            <option value="{{ u.id }}" {% if u.id == char.user_id %}selected{% endif %}>{{ u.username }} [{{ u.role }}]</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0.75rem;">
+          <label>Campaign</label>
+          <select name="campaign_id">
+            <option value="">— None —</option>
+            {% for camp in all_campaigns %}
+            <option value="{{ camp.id }}" {% if camp.id == char.campaign_id %}selected{% endif %}>{{ camp.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-gold" style="width:100%;">Save Assignment</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2 style="color:var(--accent);">Danger Zone</h2>
+      <form method="post" action="/admin/characters/{{ char.id }}/delete"
+            onsubmit="return confirm('Permanently delete {{ char.name }}? This cannot be undone.');">
+        <button class="btn btn-outline"
+                style="width:100%; text-align:left; padding:8px 14px; border-color:var(--accent); color:var(--accent);">
+          🗑 Delete Character
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Spells JSON + Log -->
+  <div>
+    <div class="card">
+      <h2>Extended Data (spells JSON) <span style="font-size:0.8rem; color:var(--muted); font-weight:400;">(read-only)</span></h2>
+      <details open>
+        <summary style="cursor:pointer; color:var(--gold); font-size:0.88rem; margin-bottom:0.5rem;">Show JSON</summary>
+        <pre style="background:var(--card); border:1px solid var(--border); border-radius:4px; padding:0.75rem;
+                    font-size:0.78rem; overflow-x:auto; max-height:500px; overflow-y:auto; white-space:pre-wrap;">{{ spells_json }}</pre>
+      </details>
+    </div>
+
+    {% if logs %}
+    <div class="card">
+      <h2>Admin Action History</h2>
+      <table style="width:100%; font-size:0.83rem; border-collapse:collapse;">
+        {% for log in logs %}
+        <tr style="border-top:1px solid var(--border);">
+          <td style="padding:5px 8px; color:var(--muted); white-space:nowrap;">
+            {{ log.timestamp.strftime('%m/%d %H:%M') if log.timestamp else '' }}
+          </td>
+          <td style="padding:5px 8px; font-weight:600; color:var(--gold);">{{ log.admin_username }}</td>
+          <td style="padding:5px 8px;">{{ log.action.replace('_', ' ') }}</td>
+          <td style="padding:5px 8px; color:var(--muted);">{{ log.detail or '' }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

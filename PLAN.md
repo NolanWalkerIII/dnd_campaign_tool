@@ -646,7 +646,7 @@ Full system health dashboard with one-click tests for: environment variables, xA
 - **JSON state viewer**: Collapsible read-only JSON tree for `current_state` and `spells` fields — lets admin inspect without raw DB access
 - **Audit trail**: All campaign/character admin actions logged to `AdminAuditLog`
 - **Updated files**: `app.py`, `templates/admin/campaigns.html`, `templates/admin/campaign_detail.html`, `templates/admin/characters.html`, `templates/admin/character_detail.html`
-- **Status**: Proposed
+- **Status**: Complete ✓ (2026-03-20)
 
 ---
 

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}{{ campaign.name }} — Admin Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>🏰 {{ campaign.name }}</h1>
+  <a href="/admin/campaigns" class="btn btn-outline" style="font-size:0.85rem;">← All Campaigns</a>
+</div>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+
+  <!-- Info + Actions -->
+  <div>
+    <div class="card">
+      <h2>Details</h2>
+      <table style="width:100%; font-size:0.9rem; border-collapse:collapse;">
+        <tr><td style="padding:6px 0; color:var(--muted); width:120px;">Campaign ID</td><td>{{ campaign.id }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Join Code</td><td style="font-family:monospace;">{{ campaign.join_code }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">DM</td>
+            <td>{% if dm %}<a href="/admin/users/{{ dm.id }}" style="color:var(--gold);">{{ dm.username }}</a>{% else %}—{% endif %}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Players</td><td>{{ (campaign.players or [])|length }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Characters</td><td>{{ characters|length }}</td></tr>
+        <tr><td style="padding:6px 0; color:var(--muted);">Status</td>
+            <td style="color:{% if campaign.is_active %}var(--success){% else %}var(--muted){% endif %};">
+              {{ 'Active' if campaign.is_active else 'Archived' }}
+            </td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Actions</h2>
+
+      <!-- Reassign DM -->
+      <form method="post" action="/admin/campaigns/{{ campaign.id }}/reassign-dm"
+            style="margin-bottom:0.75rem;">
+        <label style="display:block; margin-bottom:4px;">Transfer DM Ownership</label>
+        <div style="display:flex; gap:0.5rem;">
+          <select name="dm_id" style="flex:1;">
+            {% for d in all_dms %}
+            <option value="{{ d.id }}" {% if d.id == campaign.dm_id %}selected{% endif %}>{{ d.username }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-gold" style="padding:6px 14px; font-size:0.85rem;">Reassign</button>
+        </div>
+      </form>
+
+      <!-- Archive / Restore -->
+      <form method="post" action="/admin/campaigns/{{ campaign.id }}/archive"
+            onsubmit="return confirm('{% if campaign.is_active %}Archive{% else %}Restore{% endif %} this campaign?');"
+            style="margin-bottom:0.75rem;">
+        <button class="btn btn-outline" style="width:100%; text-align:left; padding:8px 14px;">
+          {% if campaign.is_active %}📦 Archive Campaign{% else %}♻ Restore Campaign{% endif %}
+        </button>
+      </form>
+
+      <!-- Reset state -->
+      <form method="post" action="/admin/campaigns/{{ campaign.id }}/reset-state"
+            onsubmit="return confirm('WIPE all campaign state? Initiative, logs, and narration will be lost. This cannot be undone.');"
+            style="margin-bottom:0.75rem;">
+        <button class="btn btn-outline"
+                style="width:100%; text-align:left; padding:8px 14px; border-color:var(--accent); color:var(--accent);">
+          ⚠ Reset Campaign State
+        </button>
+      </form>
+
+      <!-- Export -->
+      <a href="/admin/campaigns/{{ campaign.id }}/export"
+         class="btn btn-outline"
+         style="display:block; width:100%; text-align:left; padding:8px 14px; box-sizing:border-box;">
+        ⬇ Export Campaign JSON
+      </a>
+    </div>
+  </div>
+
+  <!-- Characters + Players + State -->
+  <div>
+    <div class="card">
+      <h2>Characters ({{ characters|length }})</h2>
+      {% if characters %}
+      <table style="width:100%; font-size:0.87rem; border-collapse:collapse;">
+        {% for c in characters %}
+        <tr style="border-top:1px solid var(--border);">
+          <td style="padding:6px 8px; font-weight:600; color:var(--gold);">{{ c.name }}</td>
+          <td style="padding:6px 8px; color:var(--muted);">{{ c.race }} {{ c.class_name }} Lv{{ c.level }}</td>
+          <td style="padding:6px 8px; color:var(--muted);">{{ c.hp_current }}/{{ c.hp_max }} HP</td>
+          <td style="padding:6px 8px;">
+            <a href="/admin/characters/{{ c.id }}" style="color:var(--gold); font-size:0.8rem;">Manage</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p style="color:var(--muted); font-size:0.88rem;">No characters assigned.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Players ({{ players|length }})</h2>
+      {% if players %}
+      <table style="width:100%; font-size:0.87rem; border-collapse:collapse;">
+        {% for p in players %}
+        <tr style="border-top:1px solid var(--border);">
+          <td style="padding:6px 8px; font-weight:600;">{{ p.username }}</td>
+          <td style="padding:6px 8px;">
+            <a href="/admin/users/{{ p.id }}" style="color:var(--gold); font-size:0.8rem;">View User</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p style="color:var(--muted); font-size:0.88rem;">No players joined.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Campaign State <span style="font-size:0.8rem; color:var(--muted); font-weight:400;">(read-only)</span></h2>
+      <details>
+        <summary style="cursor:pointer; color:var(--gold); font-size:0.88rem; margin-bottom:0.5rem;">Show JSON</summary>
+        <pre style="background:var(--card); border:1px solid var(--border); border-radius:4px; padding:0.75rem;
+                    font-size:0.78rem; overflow-x:auto; max-height:400px; overflow-y:auto; white-space:pre-wrap;">{{ state_json }}</pre>
+      </details>
+    </div>
+
+    {% if logs %}
+    <div class="card">
+      <h2>Admin Action History</h2>
+      <table style="width:100%; font-size:0.83rem; border-collapse:collapse;">
+        {% for log in logs %}
+        <tr style="border-top:1px solid var(--border);">
+          <td style="padding:5px 8px; color:var(--muted); white-space:nowrap;">
+            {{ log.timestamp.strftime('%m/%d %H:%M') if log.timestamp else '' }}
+          </td>
+          <td style="padding:5px 8px; font-weight:600; color:var(--gold);">{{ log.admin_username }}</td>
+          <td style="padding:5px 8px;">{{ log.action.replace('_', ' ') }}</td>
+          <td style="padding:5px 8px; color:var(--muted);">{{ log.detail or '' }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

@@ -2732,6 +2732,184 @@ def admin_delete_user(uid):
     return redirect(url_for('admin_users'))
 
 
+# ── Admin Console — Phase 30: Campaign & Character Oversight ──────────────────
+
+@app.route('/admin/campaigns')
+@admin_required
+def admin_campaigns():
+    q = request.args.get('q', '').strip()
+    query = Campaign.query
+    if q:
+        query = query.filter(Campaign.name.ilike(f'%{q}%'))
+    campaigns = query.order_by(Campaign.id.desc()).all()
+    dms = {u.id: u.username for u in User.query.all()}
+    return render_template('admin/campaigns.html', campaigns=campaigns, dms=dms, q=q)
+
+
+@app.route('/admin/campaigns/<int:cid>')
+@admin_required
+def admin_campaign_detail(cid):
+    campaign = Campaign.query.get_or_404(cid)
+    dm = User.query.get(campaign.dm_id) if campaign.dm_id else None
+    player_ids = campaign.players or []
+    players = User.query.filter(User.id.in_(player_ids)).all() if player_ids else []
+    characters = Character.query.filter_by(campaign_id=cid).all()
+    all_dms = User.query.filter_by(role='dm').all()
+    state_json = json.dumps(campaign.current_state or {}, indent=2)
+    logs = AdminAuditLog.query.filter_by(target_type='campaign', target_id=cid).order_by(AdminAuditLog.id.desc()).limit(20).all()
+    return render_template('admin/campaign_detail.html',
+        campaign=campaign, dm=dm, players=players, characters=characters,
+        all_dms=all_dms, state_json=state_json, logs=logs)
+
+
+@app.route('/admin/campaigns/<int:cid>/reassign-dm', methods=['POST'])
+@admin_required
+def admin_campaign_reassign_dm(cid):
+    campaign = Campaign.query.get_or_404(cid)
+    new_dm_id = request.form.get('dm_id', type=int)
+    new_dm = User.query.get(new_dm_id) if new_dm_id else None
+    if not new_dm:
+        flash('Invalid DM selected.', 'error')
+        return redirect(url_for('admin_campaign_detail', cid=cid))
+    old_dm = User.query.get(campaign.dm_id)
+    campaign.dm_id = new_dm_id
+    db.session.commit()
+    _admin_log('reassign_dm', 'campaign', cid, campaign.name,
+               detail=f'{old_dm.username if old_dm else "?"} → {new_dm.username}')
+    flash(f'Campaign DM changed to {new_dm.username}.', 'success')
+    return redirect(url_for('admin_campaign_detail', cid=cid))
+
+
+@app.route('/admin/campaigns/<int:cid>/reset-state', methods=['POST'])
+@admin_required
+def admin_campaign_reset_state(cid):
+    campaign = Campaign.query.get_or_404(cid)
+    campaign.current_state = {}
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(campaign, 'current_state')
+    db.session.commit()
+    _admin_log('reset_state', 'campaign', cid, campaign.name)
+    flash(f'Campaign state for "{campaign.name}" has been reset.', 'success')
+    return redirect(url_for('admin_campaign_detail', cid=cid))
+
+
+@app.route('/admin/campaigns/<int:cid>/archive', methods=['POST'])
+@admin_required
+def admin_campaign_archive(cid):
+    campaign = Campaign.query.get_or_404(cid)
+    campaign.is_active = not campaign.is_active
+    db.session.commit()
+    action = 'archive_campaign' if not campaign.is_active else 'unarchive_campaign'
+    _admin_log(action, 'campaign', cid, campaign.name)
+    status = 'archived' if not campaign.is_active else 'restored'
+    flash(f'Campaign "{campaign.name}" {status}.', 'success')
+    return redirect(url_for('admin_campaign_detail', cid=cid))
+
+
+@app.route('/admin/campaigns/<int:cid>/export')
+@admin_required
+def admin_campaign_export(cid):
+    campaign = Campaign.query.get_or_404(cid)
+    characters = Character.query.filter_by(campaign_id=cid).all()
+    export = {
+        'campaign': {
+            'id': campaign.id,
+            'name': campaign.name,
+            'dm_id': campaign.dm_id,
+            'join_code': campaign.join_code,
+            'players': campaign.players,
+            'npcs': campaign.npcs,
+            'current_state': campaign.current_state,
+            'is_active': campaign.is_active,
+        },
+        'characters': [{
+            'id': c.id, 'name': c.name, 'race': c.race, 'class_name': c.class_name,
+            'level': c.level, 'hp_max': c.hp_max, 'hp_current': c.hp_current,
+            'ac': c.ac, 'user_id': c.user_id, 'spells': c.spells,
+        } for c in characters],
+    }
+    _admin_log('export_campaign', 'campaign', cid, campaign.name)
+    return app.response_class(
+        json.dumps(export, indent=2),
+        mimetype='application/json',
+        headers={'Content-Disposition': f'attachment; filename=campaign_{cid}_{campaign.name.replace(" ","_")}.json'}
+    )
+
+
+@app.route('/admin/characters')
+@admin_required
+def admin_characters():
+    q = request.args.get('q', '').strip()
+    query = Character.query
+    if q:
+        query = query.filter(Character.name.ilike(f'%{q}%'))
+    characters = query.order_by(Character.id.desc()).all()
+    owners = {u.id: u.username for u in User.query.all()}
+    campaigns = {c.id: c.name for c in Campaign.query.all()}
+    return render_template('admin/characters.html', characters=characters,
+                           owners=owners, campaigns=campaigns, q=q)
+
+
+@app.route('/admin/characters/<int:chid>')
+@admin_required
+def admin_character_detail(chid):
+    char = Character.query.get_or_404(chid)
+    owner = User.query.get(char.user_id) if char.user_id else None
+    campaign = Campaign.query.get(char.campaign_id) if char.campaign_id else None
+    all_users = User.query.order_by(User.username).all()
+    all_campaigns = Campaign.query.filter_by(is_active=True).order_by(Campaign.name).all()
+    spells_json = json.dumps(char.spells or {}, indent=2)
+    logs = AdminAuditLog.query.filter_by(target_type='character', target_id=chid).order_by(AdminAuditLog.id.desc()).limit(20).all()
+    return render_template('admin/character_detail.html',
+        char=char, owner=owner, campaign=campaign,
+        all_users=all_users, all_campaigns=all_campaigns,
+        spells_json=spells_json, logs=logs)
+
+
+@app.route('/admin/characters/<int:chid>/reassign', methods=['POST'])
+@admin_required
+def admin_character_reassign(chid):
+    char = Character.query.get_or_404(chid)
+    new_user_id = request.form.get('user_id', type=int) or None
+    new_campaign_id = request.form.get('campaign_id', type=int) or None
+    char.user_id = new_user_id
+    char.campaign_id = new_campaign_id
+    db.session.commit()
+    new_owner = User.query.get(new_user_id).username if new_user_id else 'unassigned'
+    _admin_log('reassign_character', 'character', chid, char.name, detail=f'owner→{new_owner}')
+    flash(f'Character "{char.name}" reassigned.', 'success')
+    return redirect(url_for('admin_character_detail', chid=chid))
+
+
+@app.route('/admin/characters/<int:chid>/fix-hp', methods=['POST'])
+@admin_required
+def admin_character_fix_hp(chid):
+    char = Character.query.get_or_404(chid)
+    new_hp = request.form.get('hp_current', type=int)
+    new_max = request.form.get('hp_max', type=int)
+    if new_hp is not None:
+        char.hp_current = new_hp
+    if new_max is not None:
+        char.hp_max = new_max
+    db.session.commit()
+    _admin_log('fix_hp', 'character', chid, char.name,
+               detail=f'HP set to {char.hp_current}/{char.hp_max}')
+    flash(f'HP for "{char.name}" updated to {char.hp_current}/{char.hp_max}.', 'success')
+    return redirect(url_for('admin_character_detail', chid=chid))
+
+
+@app.route('/admin/characters/<int:chid>/delete', methods=['POST'])
+@admin_required
+def admin_character_delete(chid):
+    char = Character.query.get_or_404(chid)
+    name = char.name
+    db.session.delete(char)
+    db.session.commit()
+    _admin_log('delete_character', 'character', chid, name)
+    flash(f'Character "{name}" permanently deleted.', 'success')
+    return redirect(url_for('admin_characters'))
+
+
 def _migrate():
     """Apply any schema changes that db.create_all() won't add to existing tables."""
     with db.engine.connect() as conn:
