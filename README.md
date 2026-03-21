@@ -270,16 +270,27 @@ Accessible to accounts with the `is_admin` flag. Promote a user via the Docker C
 - **Audit log** — every admin action is recorded (who, what, when, on which account) and shown on the dashboard and user detail pages
 
 **Promoting the first admin:**
+
+After registering your account, run this once from the host machine (replace `gadget` with your username):
+
 ```bash
 docker exec dndidea-dnd-1 python -c "
-from app import app
-from models import db, User
+from app import app, db
+from models import User
 with app.app_context():
     u = User.query.filter_by(username='YOUR_USERNAME').first()
-    u.is_admin = True
-    db.session.commit()
+    if not u:
+        print('ERROR: user not found')
+    else:
+        u.is_admin = True
+        db.session.commit()
+        print('Done —', u.username, 'is now admin')
 "
 ```
+
+Once you have one admin account, all subsequent promotions can be done through the Admin Console UI at `/admin/users`.
+
+> **Note**: If your container name differs from `dndidea-dnd-1`, run `docker ps` to find it.
 
 ### Character Assignment (DM Tool)
 
