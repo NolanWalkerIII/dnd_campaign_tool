@@ -2617,6 +2617,51 @@ def dm_combat_next(campaign_id):
     return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
 
 
+@app.route('/dm/campaigns/<int:campaign_id>/combat/remove-combatant', methods=['POST'])
+@dm_required
+def dm_combat_remove_combatant(campaign_id):
+    """Remove a single combatant from the initiative order without ending combat."""
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Not your campaign.', 'error')
+        return redirect(url_for('dm_dashboard'))
+
+    state  = campaign.current_state or {}
+    order  = state.get('initiative_order', [])
+    try:
+        idx = int(request.form.get('order_idx', -1))
+    except (ValueError, TypeError):
+        idx = -1
+
+    if idx < 0 or idx >= len(order):
+        flash('Combatant not found.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+    removed   = order.pop(idx)
+    name      = removed.get('name', '?')
+
+    # Keep turn_index valid after removal
+    turn_idx = state.get('turn_index', 0)
+    if order:
+        if idx < turn_idx:
+            turn_idx -= 1
+        turn_idx = turn_idx % len(order)
+    else:
+        turn_idx = 0
+    state['turn_index']       = turn_idx
+    state['initiative_order'] = order
+
+    # Clean up any conditions stored for this combatant
+    cond_key = f'char_{removed["char_id"]}' if not removed.get('is_npc') else removed.get('name', '')
+    state.get('active_conditions', {}).pop(cond_key, None)
+
+    campaign.current_state = state
+    _add_combat_log(campaign, 'System', f'{name} removed from combat.', 'system')
+    _save_state(campaign)
+    flash(f'{name} removed from combat.', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
 @app.route('/dm/campaigns/<int:campaign_id>/combat/end', methods=['POST'])
 @dm_required
 def dm_combat_end(campaign_id):

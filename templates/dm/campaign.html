@@ -702,6 +702,17 @@ function toggleGettingStarted() {
           Death saves: ✓×{{ ds.get('successes',0) }} ✗×{{ ds.get('failures',0) }}
         </span>
         {% endif %}
+
+        <!-- Remove from combat -->
+        <form method="POST" action="/dm/campaigns/{{ campaign.id }}/combat/remove-combatant"
+              style="margin-left:auto; margin-bottom:0;"
+              onsubmit="return confirm('Remove {{ entry.name }} from combat?');">
+          <input type="hidden" name="order_idx" value="{{ loop.index0 }}">
+          <button type="submit" class="btn btn-outline"
+                  style="padding:1px 8px; font-size:0.72rem; color:var(--muted);
+                         border-color:var(--border);"
+                  title="Remove from combat">✕ Remove</button>
+        </form>
       </div>
 
       <!-- HP bar -->
