@@ -680,6 +680,126 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
+### Phase 32: AI Combat Execution — Dice Rolls & DM Roll-for-Character
+- **Source**: DM request (2026-03-20) — AI combat decisions were planned but execution (rolling dice, applying results) was still manual.
+- **Objectives**: When a DM approves an AI combat decision, the engine should automatically roll dice and apply the result; DMs should also be able to roll on behalf of any character (player or NPC) directly from the combat panel.
+- **Tasks**:
+  1. **AI combat execute route** — `POST /dm/characters/<id>/ai-combat-execute` resolves the approved AI decision through the game engine (attack roll, damage, spell effect), logs to the combat log, and returns the result narrative.
+  2. **DM roll-for-character** — mini-form in the DM initiative panel allowing the DM to roll any die (or expression) on behalf of a specific combatant; result appended to the combat log with the character's name.
+  3. **Scroll persistence on form submit** — DM campaign page saves scroll position to `sessionStorage` before form submission and restores it on load so the DM's view doesn't jump to the top after every action.
+- **Updated files**: `app.py`, `templates/dm/campaign.html`
+- **Status**: Complete ✓ (2026-03-20)
+
+---
+
+### Phase 33: Remove Combatants from Combat Mid-Scene
+- **Source**: DM request (2026-03-20) — DMs needed a way to pull a character or NPC out of the initiative order during combat (fled, incapacitated, no longer relevant) without ending the whole encounter.
+- **Objectives**: Add a per-combatant "Remove" action in the DM's initiative panel that removes that combatant from the order and adjusts the turn pointer if needed.
+- **Tasks**:
+  1. `POST /dm/campaigns/<id>/combat/remove` — accepts a `combatant_name` form field; removes the combatant from `current_state['initiative_order']`; adjusts `current_turn` index if the removed slot was at or before the current pointer; logs a combat log entry.
+  2. DM campaign page — "✕ Remove" button next to each combatant in the initiative order list.
+  3. Guard: if removing the last combatant, treat it as combat end (same as the existing end-combat route).
+- **Updated files**: `app.py`, `templates/dm/campaign.html`
+- **Status**: Complete ✓ (2026-03-20)
+
+---
+
+### Phase 34: Player Page — Section State Persistence (Skill Check & Attack Roll)
+- **Source**: Player bug report (2026-03-21) — Skill Check and Attack Roll sections collapse back to their default state on every page refresh, causing friction mid-session.
+- **Objectives**: Persist the expanded/collapsed state of every `<details>` section on the player campaign page across refreshes and auto-reloads using `localStorage`.
+- **Root cause**: All action sections use the HTML `<details>` element whose open/closed state is purely in-memory and resets on any navigation or `location.reload()`.
+- **Sections affected** (all in `templates/player/campaign.html`):
+  - Roll Dice (line ~146) — starts open, collapses if user closes it
+  - **Skill Check** (line ~176) — reported bug; starts closed
+  - **Attack Roll** (line ~198) — reported bug; partially driven by `is_my_turn` but user toggle is lost
+  - Cast Spell (line ~249) — starts closed
+  - Quick Reference (line ~410) — starts closed
+  - Scene Earlier History (line ~101) — starts closed
+- **Tasks**:
+  1. Add a `data-persist-key` attribute to each `<details>` element on the player campaign page (e.g., `data-persist-key="player_details_skill_check"`).
+  2. Add a small JavaScript block (bottom of page) that:
+     - On page load: reads each key from `localStorage` and sets `details.open = true` if stored as `"1"`.
+     - On every `toggle` event on a `<details>` element: writes `"1"` or `"0"` to `localStorage` under that key.
+  3. For Attack Roll: if `is_my_turn` is true server-side, override the stored state and force-open the section (so it still auto-opens on a player's turn even if they had it collapsed before).
+  4. Key namespace: `player_<campaign_id>_<section_name>` to avoid conflicts across campaigns.
+- **Deliverables**: Updated `templates/player/campaign.html` only — no backend changes.
+- **Validation**: Open Skill Check section → refresh → section stays open. Close Roll Dice → refresh → stays closed. Start combat as active player → Attack Roll opens automatically regardless of prior state.
+- **Status**: Complete ✓ (2026-03-21)
+
+---
+
+### Phase 35: Player Page — Form Field State Persistence
+- **Source**: Same bug report session (2026-03-21) — form inputs reset on page refresh, frustrating players who are mid-action.
+- **Objectives**: Persist player action form field selections in `localStorage` so they survive the 20-second auto-refresh and manual reloads.
+- **Fields affected** (all in `templates/player/campaign.html`):
+  - Dice count & die type dropdowns (Roll Dice form)
+  - Skill selection dropdown (Skill Check form)
+  - Target dropdown + custom target text field, AC input, ability dropdown, damage dice inputs (Attack Roll form)
+  - Spell name, slot level, concentration checkbox (Cast Spell form)
+- **Auto-refresh interaction**: The page calls `location.reload()` every 20 seconds. Form state must be saved **before** the reload fires and restored immediately after page load — not just on user interaction.
+- **Tasks**:
+  1. Write a `persistField(el, key)` helper that:
+     - On `change` / `input`: saves value to `localStorage[key]`.
+     - Saves state also immediately before `location.reload()` is called (intercept the reload call or add a `beforeunload` / pre-reload save flush).
+  2. On page load: for each persisted field, read `localStorage` and set the element's value before the page renders visually.
+  3. Restore the Attack Roll "Other…" custom target input display state (show/hide) based on the saved target dropdown value.
+  4. Clear persisted form state when a form is **successfully submitted** (listen for the form's `submit` event; on submit, delete the relevant keys so stale data doesn't re-appear after an action completes).
+  5. Key namespace: `player_<campaign_id>_form_<field_name>`.
+- **Deliverables**: Updated `templates/player/campaign.html` only — no backend changes.
+- **Validation**: Fill in Attack Roll form → page auto-refreshes (20 s) → all fields still populated.
+- **Implementation notes**: Fields persisted: dice count/type, skill selection, attack ability, damage dice, target AC, spell name, slot level, concentration. Target `<select>` and custom target text are intentionally skipped — the target dropdown is server-rendered from initiative order (dynamic) and restoring a stale selection is confusing. "Clear on submit" was also dropped: players often repeat the same attack setup, so persistence across submits is a better UX, and the target dropdown options naturally refresh from the server each reload.
+- **Status**: Complete ✓ (2026-03-21)
+
+---
+
+### Phase 36: DM Page — Panel & Section State Persistence
+- **Source**: Discovered during player bug audit (2026-03-21) — DM page has many toggle panels and `<details>` sections whose visibility resets on refresh, forcing DMs to re-open sections after every page load.
+- **Objectives**: Persist the open/closed state of every DM-side panel and `<details>` section using `localStorage` (building on the existing partial implementation for the top accordion and Getting Started toggle).
+- **Sections / panels affected** (all in `templates/dm/campaign.html`):
+  - AI Player Action form (currently toggled via `toggleAiForm()` JS — no localStorage)
+  - AI Combat Result panel (shown by `triggerAiCombatTurn()`)
+  - Hot Seat form panel (`toggleHotSeat()`)
+  - Load Campaign File panel (inline `onclick` toggle)
+  - AI Action Edit panel (`editAiAction()`)
+  - SMS Log `<details>` block (line ~457)
+  - Per-character Conditions `<details>` blocks (one per player, lines ~741, ~765)
+  - Narration text `<details>` (line ~971+)
+- **Tasks**:
+  1. For each `<details>` element: add `data-persist-key` attribute; attach the same `toggle` listener pattern from Phase 34.
+  2. For JS-toggled panels (`toggleAiForm`, `toggleHotSeat`, Load File): wrap the existing show/hide logic to also write to `localStorage`; on page load, read and apply.
+  3. Per-character condition sections: key includes the character ID so each player's section is tracked independently (e.g., `dm_<campaign_id>_conditions_<char_id>`).
+  4. Panels that are **ephemeral by nature** (AI Combat Result, AI Action Edit preview) should NOT be persisted — they show transient AI-generated content that is meaningless after a reload. Skip these.
+  5. Key namespace: `dm_<campaign_id>_<section_name>`.
+- **Deliverables**: Updated `templates/dm/campaign.html` only — no backend changes.
+- **Validation**: Open SMS Log section → refresh → still open. Open Hot Seat form → refresh → still open. Close each per-character conditions panel individually → refresh → each remembers its state.
+- **Implementation notes**: Used `data-persist-key` attribute pattern on all `<details>` elements — a single generic JS listener picks them all up. Ephemeral panels (AI Combat Result, AI Action Edit, AI Player result card) intentionally not persisted. Load panel and Hot Seat panels use localStorage-aware toggle functions. Keys are namespaced `dm_<campaign_id>_<section>`.
+- **Status**: Complete ✓ (2026-03-21)
+
+---
+
+### Phase 37: DM Page — Form Field State Persistence
+- **Source**: Discovered during player bug audit (2026-03-21) — DM textareas and combat form inputs reset on refresh, causing DMs to lose in-progress AI hints, hot-seat text, and HP adjustments.
+- **Objectives**: Persist DM form inputs that represent work-in-progress across page refreshes.
+- **Fields affected** (all in `templates/dm/campaign.html`):
+  - AI Hint textarea (scene context for AI player actions, line ~48–50)
+  - Hot Seat textarea (DM action text, line ~26–28)
+  - AI Action Edit textarea (edited AI action text, line ~86–87) — **ephemeral, skip**
+  - Per-combat HP Adjust input (line ~731)
+  - Condition type and target dropdowns (lines ~750, ~774)
+  - Attack bonus, target AC, damage dice inputs in DM attack roll mini-form (lines ~785, ~789, ~793)
+- **Tasks**:
+  1. AI Hint and Hot Seat textareas: persist on `input` event; restore on page load. Clear on successful form submit.
+  2. Combat HP Adjust and attack roll fields: persist per-character using key `dm_<campaign_id>_combat_<char_id>_<field>`. Clear when combat ends (detect from `current_state.combat_active === false` passed as a JS variable from Flask).
+  3. Condition selects: persist the last-used condition type and target as defaults for convenience (not cleared on submit — DMs often apply the same condition repeatedly).
+  4. Skip AI Edit textarea — its content is generated fresh each time and stale content would be confusing.
+  5. Key namespace: `dm_<campaign_id>_form_<section>_<field>`.
+- **Deliverables**: Updated `templates/dm/campaign.html` only — no backend changes.
+- **Validation**: Type in narration textarea → refresh → text still there. Submit narration → textarea clears. Open Hot Seat, type action → refresh → panel still open, text preserved. Submit hot seat post → panel closes and text clears.
+- **Implementation notes**: Used `data-persist-key` attribute on textareas — same generic JS listener as Phase 36 picks them all up. HP adjust inputs and combat roll inputs (atk bonus, target AC, damage dice) were skipped — they are single-number entries that DMs type in seconds and stale values would be confusing. Condition selects also skipped — the full form is rarely left mid-entry. AI Edit textarea intentionally skipped (ephemeral). Narration textarea is cleared on narrate form submit. Hot seat textareas are cleared on their post form submit.
+- **Status**: Complete ✓ (2026-03-21)
+
+---
+
 ## Wishlist (Future Consideration)
 *Not prioritized for active development; revisit after Phase 13.*
 

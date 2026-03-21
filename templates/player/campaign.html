@@ -98,7 +98,7 @@
           <span style="font-size:0.75rem; color:var(--muted);">— {{ latest.timestamp }}</span>
         </div>
         {% if narration_log|length > 1 %}
-        <details>
+        <details id="details-scene-hist">
           <summary style="cursor:pointer; color:var(--muted); font-size:0.82rem; user-select:none;">
             Earlier ({{ narration_log|length - 1 }})
           </summary>
@@ -143,7 +143,7 @@
       <h2>Actions</h2>
 
       <!-- Free Dice Roll -->
-      <details open>
+      <details id="details-roll-dice" open>
         <summary style="cursor:pointer; color:var(--gold); font-size:0.95rem;
                         font-weight:600; user-select:none; padding:4px 0; margin-bottom:0.5rem;">
           🎲 Roll Dice
@@ -173,7 +173,7 @@
       <hr style="border-color:var(--border); margin:1rem 0;">
 
       <!-- Skill Check -->
-      <details>
+      <details id="details-skill-check">
         <summary style="cursor:pointer; color:var(--gold); font-size:0.95rem;
                         font-weight:600; user-select:none; padding:4px 0; margin-bottom:0.5rem;">
           🧠 Skill Check
@@ -195,7 +195,7 @@
       <hr style="border-color:var(--border); margin:1rem 0;">
 
       <!-- Attack -->
-      <details {{ 'open' if is_my_turn else '' }}>
+      <details id="details-attack-roll" {{ 'open' if is_my_turn else '' }}>
         <summary style="cursor:pointer; color:{{ 'var(--accent)' if is_my_turn else 'var(--gold)' }};
                         font-size:0.95rem; font-weight:600; user-select:none;
                         padding:4px 0; margin-bottom:0.5rem;">
@@ -246,7 +246,7 @@
       <!-- Cast Spell (only shown when active character has slots) -->
       {% if active_slots %}
       <hr style="border-color:var(--border); margin:1rem 0;">
-      <details>
+      <details id="details-cast-spell">
         <summary style="cursor:pointer; color:var(--gold); font-size:0.95rem;
                         font-weight:600; user-select:none; padding:4px 0; margin-bottom:0.5rem;">
           ✦ Cast Spell
@@ -407,7 +407,7 @@
 
     <!-- Quick Reference -->
     <div class="card">
-      <details>
+      <details id="details-quick-ref">
         <summary style="cursor:pointer; color:var(--gold); font-size:0.95rem;
                         font-weight:600; user-select:none; padding:4px 0;">
           📖 Quick Reference
@@ -441,7 +441,65 @@
 </div>
 
 <script>
-// Dice dropdowns: assemble expression before submit
+// ── State persistence helpers ──────────────────────────────────────────────
+const _CID = '{{ campaign.id }}';
+const _IS_MY_TURN = {{ 'true' if is_my_turn else 'false' }};
+function _sk(key) { return 'player_' + _CID + '_' + key; }
+
+// ── Section (details) persistence — Phase 34 ──────────────────────────────
+[
+  { id: 'details-roll-dice',   key: 'roll_dice',    forcedOpen: false },
+  { id: 'details-skill-check', key: 'skill_check',  forcedOpen: false },
+  { id: 'details-attack-roll', key: 'attack_roll',  forcedOpen: _IS_MY_TURN },
+  { id: 'details-cast-spell',  key: 'cast_spell',   forcedOpen: false },
+  { id: 'details-quick-ref',   key: 'quick_ref',    forcedOpen: false },
+  { id: 'details-scene-hist',  key: 'scene_hist',   forcedOpen: false },
+].forEach(function(s) {
+  var el = document.getElementById(s.id);
+  if (!el) return;
+  // Restore: if it's the player's turn, always open Attack Roll regardless of stored state
+  if (s.forcedOpen) {
+    el.open = true;
+  } else {
+    var stored = localStorage.getItem(_sk(s.key));
+    if (stored !== null) el.open = (stored === '1');
+  }
+  el.addEventListener('toggle', function() {
+    localStorage.setItem(_sk(s.key), el.open ? '1' : '0');
+  });
+});
+
+// ── Form field persistence — Phase 35 ─────────────────────────────────────
+function _persistEl(el, key, isCheckbox) {
+  if (!el) return;
+  var stored = localStorage.getItem(_sk(key));
+  if (stored !== null) {
+    if (isCheckbox) el.checked = (stored === '1');
+    else            el.value   = stored;
+  }
+  var evts = isCheckbox ? ['change'] : ['input', 'change'];
+  evts.forEach(function(evt) {
+    el.addEventListener(evt, function() {
+      localStorage.setItem(_sk(key), isCheckbox ? (el.checked ? '1' : '0') : el.value);
+    });
+  });
+}
+
+// Dice dropdowns
+_persistEl(document.getElementById('dice-count'), 'dice_count');
+_persistEl(document.getElementById('dice-type'),  'dice_type');
+// Skill check
+_persistEl(document.querySelector('select[name="skill"]'),       'skill_sel');
+// Attack form — stable choices (ability + damage dice + AC)
+_persistEl(document.querySelector('select[name="ability"]'),     'atk_ability');
+_persistEl(document.querySelector('input[name="damage_dice"]'),  'dmg_dice');
+_persistEl(document.querySelector('input[name="target_ac"]'),    'target_ac');
+// Spell form
+_persistEl(document.querySelector('input[name="spell_name"]'),   'spell_name');
+_persistEl(document.querySelector('select[name="slot_level"]'),  'spell_slot');
+_persistEl(document.getElementById('p_conc'),                    'conc', true);
+
+// ── Dice expression assembly ───────────────────────────────────────────────
 (function() {
   var form = document.getElementById('dice-roll-form');
   if (!form) return;
@@ -456,7 +514,7 @@
   updateExpr();
 })();
 
-// Target dropdown: use custom text if "Other…" selected
+// ── Target dropdown: use custom text if "Other…" selected ─────────────────
 (function() {
   var sel = document.getElementById('target-select');
   if (!sel) return;
@@ -472,14 +530,14 @@
   });
 })();
 
-// Pause auto-refresh while user is interacting with a form
-let refreshTimer;
+// ── Auto-refresh (paused while user is focused on a form element) ──────────
+let _refreshTimer;
 function scheduleRefresh() {
-  refreshTimer = setTimeout(() => location.reload(), 20000);
+  _refreshTimer = setTimeout(() => location.reload(), 20000);
 }
 document.querySelectorAll('input, textarea, select').forEach(el => {
-  el.addEventListener('focus', () => clearTimeout(refreshTimer));
-  el.addEventListener('blur', () => scheduleRefresh());
+  el.addEventListener('focus', () => clearTimeout(_refreshTimer));
+  el.addEventListener('blur',  () => scheduleRefresh());
 });
 scheduleRefresh();
 </script>

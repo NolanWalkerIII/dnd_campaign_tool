@@ -24,6 +24,7 @@
     🎭 DM takes control — type one action as <strong>{{ char.name }}</strong>:
   </div>
   <textarea id="hot-seat-text-{{ char.id }}" rows="2"
+            data-persist-key="dm_{{ campaign_id }}_hot_seat_{{ char.id }}"
             style="width:100%; font-size:0.85rem; resize:vertical; margin-bottom:6px;"
             placeholder="e.g. I draw my sword and demand to know who sent them…"></textarea>
   <form method="POST" action="/dm/characters/{{ char.id }}/ai-action/post" style="margin:0;">
@@ -46,6 +47,7 @@
 <div style="margin-top:0;">
   <div id="ai-form-{{ char.id }}" style="display:none; margin-top:8px;">
     <textarea id="ai-hint-{{ char.id }}" rows="2"
+              data-persist-key="dm_{{ campaign_id }}_ai_hint_{{ char.id }}"
               style="width:100%; font-size:0.82rem; resize:vertical; margin-bottom:6px;"
               placeholder="Optional scene hint (leave blank to use recent narration)…"></textarea>
     <button type="button" class="btn btn-outline"
@@ -136,8 +138,7 @@
     </a>
     <!-- Load -->
     <button type="button" class="btn btn-outline" style="font-size:0.85rem;"
-            onclick="document.getElementById('load-panel').style.display =
-                     document.getElementById('load-panel').style.display === 'none' ? 'flex' : 'none';"
+            onclick="toggleLoadPanel()"
             title="Restore campaign from a save file">
       📂 Load
     </button>
@@ -454,7 +455,7 @@
   </div>
   {% endfor %}
   {% if sms_log %}
-  <details style="margin-top:1rem;">
+  <details style="margin-top:1rem;" data-persist-key="dm_{{ campaign.id }}_sms_log">
     <summary style="cursor:pointer; color:var(--success); font-size:0.9rem; user-select:none;">
       📜 Recent SMS Activity ({{ sms_log|length // 2 }} exchanges)
     </summary>
@@ -738,7 +739,7 @@ function toggleGettingStarted() {
       {% endif %}
 
       <!-- Condition controls -->
-      <details style="margin-top:6px; margin-left:30px;">
+      <details style="margin-top:6px; margin-left:30px;" data-persist-key="dm_{{ campaign.id }}_cond_{{ loop.index0 }}">
         <summary style="cursor:pointer; font-size:0.78rem; color:var(--muted); user-select:none;">
           Manage conditions
         </summary>
@@ -762,7 +763,7 @@ function toggleGettingStarted() {
 
       <!-- NPC Attack (DM rolls for NPC) -->
       {% if entry.is_npc %}
-      <details style="margin-top:6px; margin-left:30px;">
+      <details style="margin-top:6px; margin-left:30px;" data-persist-key="dm_{{ campaign.id }}_npc_atk_{{ loop.index0 }}">
         <summary style="cursor:pointer; font-size:0.78rem; color:var(--accent); font-weight:600;
                         user-select:none;">
           ⚔ Roll Attack for {{ entry.name }}
@@ -850,7 +851,7 @@ function toggleGettingStarted() {
 
       <!-- DM Roll-for-Character (all PCs) -->
       {% if char %}
-      <details style="margin-top:6px; margin-left:30px;">
+      <details style="margin-top:6px; margin-left:30px;" data-persist-key="dm_{{ campaign.id }}_pc_roll_{{ char.id }}">
         <summary style="cursor:pointer; font-size:0.78rem; color:var(--muted); font-weight:600;
                         user-select:none;">
           🎲 DM Roll for {{ char.name }}
@@ -968,7 +969,7 @@ function toggleGettingStarted() {
   {% endif %}
 
   <!-- Add NPC -->
-  <details style="margin-top:0.5rem;">
+  <details style="margin-top:0.5rem;" data-persist-key="dm_{{ campaign.id }}_add_npc">
     <summary style="cursor:pointer; color:var(--muted); font-size:0.85rem; user-select:none; padding:4px 0;">
       + Add NPC to combat
     </summary>
@@ -1005,6 +1006,7 @@ function toggleGettingStarted() {
       <form method="POST" action="/dm/campaigns/{{ campaign.id }}/narrate" id="narrate-form">
         <div class="form-group" style="margin-bottom:0.75rem;">
           <textarea name="narration" id="narration-text" rows="4" required
+                    data-persist-key="dm_{{ campaign.id }}_narration"
                     placeholder="Describe the scene…"
                     style="resize:vertical;"></textarea>
         </div>
@@ -1468,7 +1470,7 @@ function toggleGettingStarted() {
           {% endif %}
 
           <!-- Expand for notes / forks -->
-          <details style="margin-top:4px;">
+          <details style="margin-top:4px;" data-persist-key="dm_{{ campaign.id }}_ch_{{ ch_idx }}">
             <summary style="cursor:pointer; font-size:0.78rem; color:var(--muted); user-select:none;
                             margin-left:24px;">Details &amp; Forks ▾</summary>
             <div style="margin-top:8px; margin-left:24px;">
@@ -1746,7 +1748,18 @@ function triggerAiCombatTurn(charId, campaignId) {
 
 function toggleHotSeat(charId) {
   var panel = document.getElementById('hot-seat-' + charId);
-  if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  if (!panel) return;
+  var opening = panel.style.display === 'none';
+  panel.style.display = opening ? 'block' : 'none';
+  localStorage.setItem('dm_{{ campaign.id }}_hs_open_' + charId, opening ? '1' : '0');
+}
+
+function toggleLoadPanel() {
+  var panel = document.getElementById('load-panel');
+  if (!panel) return;
+  var opening = panel.style.display === 'none';
+  panel.style.display = opening ? 'flex' : 'none';
+  localStorage.setItem('dm_{{ campaign.id }}_load_panel', opening ? '1' : '0');
 }
 
 function advanceParty() {
@@ -1829,5 +1842,72 @@ function dmRollTypeChange(charId) {
     if (el) el.style.display = (s === type) ? (s === 'custom' ? 'flex' : 'block') : 'none';
   });
 }
+</script>
+
+<script>
+/* ── DM Page State Persistence — Phase 36 & 37 ───────────────────────────── */
+(function() {
+  var CID = '{{ campaign.id }}';
+
+  // ── 1. <details> sections with data-persist-key ──────────────────────────
+  document.querySelectorAll('details[data-persist-key]').forEach(function(el) {
+    var key = el.dataset.persistKey;
+    var stored = localStorage.getItem(key);
+    if (stored !== null) el.open = (stored === '1');
+    el.addEventListener('toggle', function() {
+      localStorage.setItem(key, el.open ? '1' : '0');
+    });
+  });
+
+  // ── 2. Load panel visibility ──────────────────────────────────────────────
+  var loadPanel = document.getElementById('load-panel');
+  if (loadPanel && localStorage.getItem('dm_' + CID + '_load_panel') === '1') {
+    loadPanel.style.display = 'flex';
+  }
+
+  // ── 3. Hot seat panels (one per AI character) ────────────────────────────
+  document.querySelectorAll('[id^="hot-seat-"]').forEach(function(panel) {
+    var charId = panel.id.replace('hot-seat-', '');
+    if (!/^\d+$/.test(charId)) return; // skip hot-seat-text-* and hot-seat-post-*
+    if (localStorage.getItem('dm_' + CID + '_hs_open_' + charId) === '1') {
+      panel.style.display = 'block';
+    }
+  });
+
+  // ── 4. Textarea persistence (narration + AI hints + hot seat text) ───────
+  document.querySelectorAll('textarea[data-persist-key]').forEach(function(el) {
+    var key = el.dataset.persistKey;
+    var stored = localStorage.getItem(key);
+    if (stored !== null) el.value = stored;
+    el.addEventListener('input', function() {
+      localStorage.setItem(key, el.value);
+    });
+  });
+
+  // Clear narration textarea after the narrate form submits
+  var narrateForm = document.getElementById('narrate-form');
+  if (narrateForm) {
+    narrateForm.addEventListener('submit', function() {
+      localStorage.removeItem('dm_' + CID + '_narration');
+    });
+  }
+
+  // Clear hot seat textareas after their forms submit
+  document.querySelectorAll('[id^="hot-seat-text-"]').forEach(function(ta) {
+    var charId = ta.id.replace('hot-seat-text-', '');
+    var form = ta.closest('form') || ta.parentElement && ta.parentElement.querySelector('form');
+    // Find the nearest form (the post button's form is a sibling)
+    var container = ta.closest('div[id^="hot-seat-"]');
+    if (container) {
+      var f = container.querySelector('form');
+      if (f) {
+        f.addEventListener('submit', function() {
+          localStorage.removeItem('dm_' + CID + '_hot_seat_' + charId);
+          localStorage.setItem('dm_' + CID + '_hs_open_' + charId, '0');
+        });
+      }
+    }
+  });
+})();
 </script>
 {% endblock %}
