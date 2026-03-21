@@ -1053,13 +1053,97 @@ function toggleGettingStarted() {
 
     <!-- Narration Log -->
     <div class="card">
-      <h2>Narration Log</h2>
-      {% if narration_log %}
-        {% for entry in narration_log[-8:]|reverse %}
-        <div style="padding:8px 0; border-bottom:1px solid var(--border);">
-          <p style="font-size:0.88rem; line-height:1.6;">{{ entry.text }}</p>
-          <span style="font-size:0.75rem; color:var(--muted);">{{ entry.timestamp }}</span>
+      <div style="display:flex; align-items:center; justify-content:space-between;
+                  margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
+        <h2 style="margin:0;">Narration Log</h2>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <!-- Start Session -->
+          <form method="POST" action="/dm/campaigns/{{ campaign.id }}/narration/session/start"
+                style="display:flex; gap:4px;" id="session-start-form">
+            <input type="text" name="session_name" placeholder="Session name (opt)"
+                   style="padding:3px 8px; font-size:0.78rem; width:140px;">
+            <button type="submit" class="btn btn-outline"
+                    style="padding:3px 10px; font-size:0.78rem; white-space:nowrap;">
+              📅 New Session
+            </button>
+          </form>
+          <!-- Revert Last -->
+          <form method="POST" action="/dm/campaigns/{{ campaign.id }}/narration/revert"
+                onsubmit="return confirm('Remove the last narration entry?');" style="margin:0;">
+            <button type="submit" class="btn btn-outline"
+                    style="padding:3px 10px; font-size:0.78rem; color:var(--accent);">
+              ↩ Revert Last
+            </button>
+          </form>
         </div>
+      </div>
+      {% if narration_log %}
+        {% for entry in narration_log[-12:]|reverse %}
+        {% set entry_idx = (narration_log|length - 1) - loop.index0 %}
+        {% if entry.get('type') == 'session_start' %}
+        <!-- Session marker -->
+        <div style="border:1px solid var(--gold); border-radius:var(--radius);
+                    background:rgba(201,168,76,0.06); padding:10px 14px; margin-bottom:6px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+            <div>
+              <span style="color:var(--gold); font-weight:700; font-size:0.9rem;
+                           letter-spacing:1px;">{{ entry.text }}</span>
+              <span style="font-size:0.72rem; color:var(--muted); margin-left:8px;">{{ entry.timestamp }}</span>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button type="button" class="btn btn-outline"
+                      style="padding:2px 10px; font-size:0.75rem;"
+                      data-session-idx="{{ entry_idx }}"
+                      data-session-name="{{ entry.get('session_name', 'Session') }}"
+                      onclick="summarizeSession(this)">
+                ✨ AI Summary
+              </button>
+              <form method="POST" action="/dm/campaigns/{{ campaign.id }}/narration/delete"
+                    onsubmit="return confirm('Delete this session marker?');" style="margin:0;">
+                <input type="hidden" name="entry_idx" value="{{ entry_idx }}">
+                <button type="submit" class="btn btn-outline"
+                        style="padding:2px 8px; font-size:0.75rem; color:var(--accent);">✕</button>
+              </form>
+            </div>
+          </div>
+          {% if entry.get('summary') %}
+          <p id="session-summary-{{ entry_idx }}"
+             style="font-size:0.82rem; color:var(--muted); font-style:italic;
+                    border-left:2px solid var(--gold); padding-left:8px; margin:8px 0 0;">
+            {{ entry.summary }}
+          </p>
+          {% else %}
+          <p id="session-summary-{{ entry_idx }}"
+             style="display:none; font-size:0.82rem; color:var(--muted); font-style:italic;
+                    border-left:2px solid var(--gold); padding-left:8px; margin:8px 0 0;"></p>
+          {% endif %}
+          <span id="session-status-{{ entry_idx }}"
+                style="font-size:0.75rem; color:var(--muted); display:none;"></span>
+        </div>
+        {% else %}
+        <!-- Regular narration entry -->
+        <div style="padding:8px 0; border-bottom:1px solid var(--border);
+                    display:flex; align-items:flex-start; justify-content:space-between; gap:8px;">
+          <div style="flex:1;">
+            {% if entry.get('author') and entry.get('author') != 'DM' %}
+            <span style="font-size:0.75rem; font-weight:600; color:var(--text);">
+              {{ entry.author }}:
+            </span>
+            {% endif %}
+            <p style="font-size:0.88rem; line-height:1.6; margin:2px 0;">{{ entry.text }}</p>
+            <span style="font-size:0.75rem; color:var(--muted);">
+              {% if entry.get('author') %}{{ entry.author }} · {% endif %}{{ entry.timestamp }}
+            </span>
+          </div>
+          <form method="POST" action="/dm/campaigns/{{ campaign.id }}/narration/delete"
+                onsubmit="return confirm('Delete this entry?');" style="margin:0; flex-shrink:0;">
+            <input type="hidden" name="entry_idx" value="{{ entry_idx }}">
+            <button type="submit" class="btn btn-outline"
+                    style="padding:1px 7px; font-size:0.72rem; color:var(--muted);
+                           border-color:var(--border);">✕</button>
+          </form>
+        </div>
+        {% endif %}
         {% endfor %}
       {% else %}
         <p style="color:var(--muted); font-size:0.88rem;">No narrations yet.</p>
@@ -1845,6 +1929,34 @@ function dmRollTypeChange(charId) {
 </script>
 
 <script>
+/* ── Session AI Summary — Phase 41 ───────────────────────────────────────── */
+function summarizeSession(btn) {
+  var idx      = btn.getAttribute('data-session-idx');
+  var name     = btn.getAttribute('data-session-name');
+  var summaryEl = document.getElementById('session-summary-' + idx);
+  var statusEl  = document.getElementById('session-status-' + idx);
+  btn.disabled = true; btn.style.opacity = '0.5';
+  if (statusEl) { statusEl.textContent = 'Asking AI…'; statusEl.style.display = 'inline'; }
+  fetch('/dm/campaigns/{{ campaign.id }}/narration/session/summarize', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({session_idx: parseInt(idx)}),
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) {
+      if (statusEl) { statusEl.textContent = data.error; statusEl.style.color = 'var(--accent)'; }
+    } else {
+      if (summaryEl) { summaryEl.textContent = data.text; summaryEl.style.display = 'block'; }
+      if (statusEl) { statusEl.textContent = 'Summary saved.'; statusEl.style.color = 'var(--muted)'; }
+    }
+  })
+  .catch(function() {
+    if (statusEl) { statusEl.textContent = 'Network error.'; statusEl.style.color = 'var(--accent)'; }
+  })
+  .finally(function() { btn.disabled = false; btn.style.opacity = '1'; });
+}
+
 /* ── DM Page State Persistence — Phase 36 & 37 ───────────────────────────── */
 (function() {
   var CID = '{{ campaign.id }}';

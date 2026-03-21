@@ -91,23 +91,51 @@
       <h2>Scene</h2>
       {% if narration_log %}
         {% set latest = narration_log[-1] %}
-        <div style="background:var(--card); border-left:3px solid var(--gold);
+        {% if latest.get('type') == 'session_start' %}
+        <div style="text-align:center; padding:0.5rem 0 0.75rem; color:var(--gold);
+                    font-weight:600; font-size:0.9rem; letter-spacing:1px;">
+          {{ latest.text }}
+        </div>
+        {% else %}
+        <div style="background:var(--card); border-left:3px solid
+                    {{ 'var(--muted)' if latest.get('author') and latest.get('author') != 'DM' else 'var(--gold)' }};
                     padding:1rem 1.25rem; border-radius:0 var(--radius) var(--radius) 0;
                     margin-bottom:1rem;">
           <p style="font-size:0.95rem; line-height:1.7; font-style:italic;">"{{ latest.text }}"</p>
-          <span style="font-size:0.75rem; color:var(--muted);">— {{ latest.timestamp }}</span>
+          <span style="font-size:0.75rem; color:var(--muted);">
+            {% if latest.get('author') and latest.get('author') != 'DM' %}
+            {{ latest.author }} ·
+            {% endif %}
+            {{ latest.timestamp }}
+          </span>
         </div>
+        {% endif %}
         {% if narration_log|length > 1 %}
         <details id="details-scene-hist">
           <summary style="cursor:pointer; color:var(--muted); font-size:0.82rem; user-select:none;">
             Earlier ({{ narration_log|length - 1 }})
           </summary>
           {% for entry in narration_log[-9:-1]|reverse %}
+          {% if entry.get('type') == 'session_start' %}
+          <div style="text-align:center; padding:6px 0; color:var(--gold);
+                      font-size:0.8rem; font-weight:600; letter-spacing:1px;
+                      border-bottom:1px solid var(--border);">
+            {{ entry.text }}
+            {% if entry.get('summary') %}
+            <div style="font-size:0.78rem; color:var(--muted); font-weight:400;
+                        font-style:italic; margin-top:4px; letter-spacing:0;">{{ entry.summary }}</div>
+            {% endif %}
+          </div>
+          {% else %}
           <div style="padding:6px 0; border-bottom:1px solid var(--border);
                       font-size:0.83rem; color:var(--muted);">
-            <p>{{ entry.text }}</p>
+            {% if entry.get('author') and entry.get('author') != 'DM' %}
+            <span style="font-size:0.72rem; color:var(--text); font-weight:600;">{{ entry.author }}:</span>
+            {% endif %}
+            <p style="margin:2px 0;">{{ entry.text }}</p>
             <span style="font-size:0.72rem;">{{ entry.timestamp }}</span>
           </div>
+          {% endif %}
           {% endfor %}
         </details>
         {% endif %}
@@ -244,6 +272,34 @@
       </details>
 
       <!-- Cast Spell (only shown when active character has slots) -->
+      <!-- Post to Story -->
+      <hr style="border-color:var(--border); margin:1rem 0;">
+      <div>
+        <div style="color:var(--gold); font-size:0.95rem; font-weight:600; padding:4px 0; margin-bottom:0.5rem;">
+          📜 Post to Story
+        </div>
+        <form method="POST" action="/player/campaigns/{{ campaign.id }}/narrate" id="player-narrate-form">
+          <div class="form-group" style="margin-bottom:0.5rem;">
+            <textarea name="narration" id="player-narrate-text" rows="3" required
+                      data-persist-key="player_{{ campaign.id }}_story_draft"
+                      placeholder="Describe what {{ active_char.name if active_char else 'your character' }} does or says…"
+                      style="resize:vertical; font-size:0.88rem;"></textarea>
+          </div>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+            <button type="submit" class="btn btn-gold" style="padding:6px 16px;">Post</button>
+            <button type="button" class="btn btn-outline" id="p-btn-cleanup"
+                    style="font-size:0.85rem;" title="Polish your text with AI">
+              ✨ Clean Up
+            </button>
+            <button type="button" class="btn btn-outline" id="p-btn-generate"
+                    style="font-size:0.85rem;" title="Generate an action based on the current scene">
+              🎲 Generate
+            </button>
+            <span id="p-ai-status" style="font-size:0.8rem; color:var(--muted); display:none;"></span>
+          </div>
+        </form>
+      </div>
+
       {% if active_slots %}
       <hr style="border-color:var(--border); margin:1rem 0;">
       <details id="details-cast-spell">
@@ -527,6 +583,52 @@ _persistEl(document.getElementById('p_conc'),                    'conc', true);
     } else {
       document.getElementById('target-custom').name = '';
     }
+  });
+})();
+
+// ── Player AI narration (Phase 40) ────────────────────────────────────────
+(function() {
+  var textarea  = document.getElementById('player-narrate-text');
+  var statusEl  = document.getElementById('p-ai-status');
+  var btnClean  = document.getElementById('p-btn-cleanup');
+  var btnGen    = document.getElementById('p-btn-generate');
+  if (!textarea || !btnClean || !btnGen) return;
+
+  function setStatus(msg, isErr) {
+    statusEl.textContent = msg;
+    statusEl.style.color = isErr ? 'var(--accent)' : 'var(--muted)';
+    statusEl.style.display = msg ? 'inline' : 'none';
+  }
+  function setLoading(on) {
+    btnClean.disabled = on; btnGen.disabled = on;
+    btnClean.style.opacity = on ? '0.5' : '1';
+    btnGen.style.opacity   = on ? '0.5' : '1';
+  }
+  async function aiNarrate(url, body) {
+    setLoading(true); setStatus('Asking AI…');
+    try {
+      var resp = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      var data = await resp.json();
+      if (!resp.ok || data.error) { setStatus(data.error || 'Unknown error.', true); }
+      else { textarea.value = data.text; localStorage.setItem(_sk('story_draft'), data.text); setStatus('Done! Review and post.'); }
+    } catch(e) { setStatus('Network error.', true); }
+    finally { setLoading(false); }
+  }
+  btnClean.addEventListener('click', function() {
+    var text = textarea.value.trim();
+    if (!text) { setStatus('Write something first.', true); return; }
+    aiNarrate('/player/campaigns/{{ campaign.id }}/ai/narration/cleanup', {text: text});
+  });
+  btnGen.addEventListener('click', function() {
+    aiNarrate('/player/campaigns/{{ campaign.id }}/ai/narration/generate', {});
+  });
+  // Clear draft from localStorage when the narrate form submits
+  document.getElementById('player-narrate-form').addEventListener('submit', function() {
+    localStorage.removeItem(_sk('story_draft'));
   });
 })();
 

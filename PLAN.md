@@ -800,6 +800,70 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
+### Phase 38: Player Narration Submissions
+- **Source**: Player request (2026-03-21) — players want to post what their character does directly to the narration log, just like the DM narrates scenes.
+- **Objectives**: Give players a "Post to Story" form on their campaign page so they can contribute in-character actions and dialogue to the shared narration log.
+- **Data change**: Add an `author` field to every narration log entry (`"author": "DM"` for existing DM posts, `"author": "<character name>"` for player posts). Backwards-compatible — existing entries without `author` render as DM posts.
+- **Tasks**:
+  1. **New route** `POST /player/campaigns/<id>/narrate` — accepts `narration` text field; guards that the campaign is active and the player has a character; prepends `"<CharName>: "` label to the text; appends to `current_state['narration_log']` with `author` set to the character's name; redirects back.
+  2. **Player campaign page** — add a "Post to Story" form below the Actions card: a `<textarea>` with character name prefix label, a submit button. Keep it visually lighter than the DM's narration form so the hierarchy is clear (DM sets scenes; players react within them).
+  3. **Narration log rendering** (both DM and player pages) — display the `author` field next to each timestamp so everyone can see who posted each entry. DM posts render in gold; player posts render with the character name in a muted blue/white.
+  4. **Guard**: player narration does NOT consume a spell slot, HP, or any game resource — it is purely flavour text. Server enforces this by using the narrate route, not any action route.
+- **New routes**: `POST /player/campaigns/<id>/narrate`
+- **Updated files**: `app.py`, `templates/player/campaign.html`, `templates/dm/campaign.html`
+- **Validation**: Player posts "Aldric raises his lantern and peers into the darkness." → entry appears in the narration log on both DM and player views, labelled "Aldric" in a distinct colour. DM's existing narrations still render correctly without the author label (fallback to "DM").
+- **Status**: Complete ✓ (2026-03-21)
+
+---
+
+### Phase 39: DM Narration Log Management — Revert & Delete
+- **Source**: DM request (2026-03-21) — DMs need a way to undo mistakes or remove inappropriate player narration entries, just like the existing combat log revert.
+- **Objectives**: Give the DM a "Revert Last" button to pop the most recent entry, and a per-entry delete button for surgical removal anywhere in the log.
+- **Tasks**:
+  1. **Revert last** — `POST /dm/campaigns/<id>/narration/revert`: pops `current_state['narration_log'][-1]`; flashes what was removed; redirects back. Add a "↩ Revert Last" button next to the Narration Log header on the DM campaign page (same pattern as the combat log revert from Phase 16).
+  2. **Delete specific entry** — `POST /dm/campaigns/<id>/narration/delete`: accepts an `entry_idx` (integer index into the log); removes that entry; redirects back. Add a small "✕" button next to each narration log entry on the DM view only (not shown to players).
+  3. **Guard**: Both routes are DM-only (`@dm_required`). Index bounds are validated server-side to prevent out-of-range deletes.
+- **New routes**: `POST /dm/campaigns/<id>/narration/revert`, `POST /dm/campaigns/<id>/narration/delete`
+- **Updated files**: `app.py`, `templates/dm/campaign.html`
+- **Validation**: Post a narration → click "↩ Revert Last" → entry disappears from log on both pages. Post three entries → click ✕ on the middle one → only that entry is removed, the other two remain in order.
+- **Status**: Complete ✓ (2026-03-21)
+
+---
+
+### Phase 40: Player AI Narration Assistance
+- **Source**: Player request (2026-03-21) — players want the same AI writing help the DM has: a "Clean Up" button to polish their draft and a "Generate" button to get an in-character action suggestion based on the current scene.
+- **Objectives**: Add AI-assisted narration buttons to the player's "Post to Story" form.
+- **Prerequisites**: Phase 38 complete (player narrate form exists).
+- **Tasks**:
+  1. **`POST /player/campaigns/<id>/ai/narration/cleanup`** — takes the player's draft text from the request body; calls `services/ai.py` with a prompt instructing Grok to refine it in the character's voice (using name, race, class, and personality traits from `background_details` if present); returns `{"text": "..."}`.
+  2. **`POST /player/campaigns/<id>/ai/narration/generate`** — no draft text needed; builds context from: character name/race/class/background, recent narration log (last 5 entries), current scene; instructs Grok to write a short (2–3 sentence) in-character action or dialogue for the player to review; returns `{"text": "..."}`.
+  3. **Player campaign page** — add "✨ Clean Up" and "🎲 Generate" buttons below the Post to Story textarea (same visual pattern as DM page). Both use `fetch` to call the routes above and populate the textarea for the player to review before posting.
+  4. **Guard**: routes check that the requester has a character in this campaign. AI errors return graceful JSON `{"error": "..."}` and display inline without crashing the form.
+  5. **New AI functions** in `services/ai.py`: `cleanup_player_narration(text, character)` and `generate_player_narration(character, recent_log)` — both return `(text, error)` tuple via the existing `_call()` helper.
+- **New routes**: two `POST` player AI routes
+- **Updated files**: `services/ai.py`, `app.py`, `templates/player/campaign.html`
+- **Validation**: Player opens "Post to Story", types a rough sentence → clicks "✨ Clean Up" → textarea is replaced with polished prose. Clicks "🎲 Generate" with empty textarea → a contextual in-character action appears for review. Player edits and posts. Without an API key, a friendly inline error appears instead of a crash.
+- **Status**: Complete ✓ (2026-03-21)
+
+---
+
+### Phase 41: DM Session Markers & AI Session Summary
+- **Source**: DM request (2026-03-21) — DMs want to mark the start of each play session in the narration log and use AI to generate a recap they can share with players.
+- **Objectives**: Let the DM insert named session dividers into the narration log, then request an AI-generated summary of everything that happened within a session.
+- **Data model**: Session markers are special narration log entries with `type: "session_start"` and a `session_name` field (e.g. "Session 3 — The Haunted Mill"). Regular narration entries have no `type` field (backwards-compatible). Summaries are stored back into the session_start entry as a `summary` field.
+- **Tasks**:
+  1. **`POST /dm/campaigns/<id>/narration/session/start`** — accepts optional `session_name`; inserts a session marker entry at the end of `narration_log`; auto-numbers if name omitted (`"Session N"`).
+  2. **`POST /dm/campaigns/<id>/narration/session/summarize`** — accepts `session_idx` (the index of the session_start entry); collects all narration entries between that marker and the next session marker (or end of log); sends them to xAI Grok with a prompt to write a 3–5 sentence in-world recap; stores the result in `narration_log[session_idx]['summary']`; returns JSON for live update without page reload.
+  3. **DM campaign page** — "📅 Start New Session" button in the Narration Log card header creates a new session marker. Session markers render as a styled divider row ("── Session 3 — The Haunted Mill ──") with an "✨ AI Summary" button beside them. Once summarised, the summary displays beneath the divider in italics.
+  4. **Player campaign page** — session markers render as read-only dividers with any AI summary shown below them, giving players a clear per-session recap without the DM controls.
+  5. **New AI function** `summarize_session(entries, session_name)` in `services/ai.py` — returns `(text, error)` tuple.
+- **New routes**: `POST /dm/campaigns/<id>/narration/session/start`, `POST /dm/campaigns/<id>/narration/session/summarize`
+- **Updated files**: `services/ai.py`, `app.py`, `templates/dm/campaign.html`, `templates/player/campaign.html`
+- **Validation**: DM clicks "Start New Session" → a divider appears at the bottom of both DM and player narration logs. DM runs a session (players post actions, DM narrates). DM clicks "✨ AI Summary" on that session → a 4-sentence recap of the session's events appears below the divider on both views.
+- **Status**: Complete ✓ (2026-03-21)
+
+---
+
 ## Wishlist (Future Consideration)
 *Not prioritized for active development; revisit after Phase 13.*
 

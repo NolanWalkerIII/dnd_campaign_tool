@@ -422,3 +422,103 @@ def generate_narration(narration_log):
         },
     ]
     return _call(messages)
+
+
+def cleanup_player_narration(raw_text, char_name, race, class_name, personality_traits=''):
+    """
+    Polish a player's in-character narration draft in their character's voice.
+    Returns (cleaned_text, error).
+    """
+    trait_line = f"\nPersonality: {personality_traits}" if personality_traits else ""
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a creative writing assistant helping a D&D 5e player write in-character narration. "
+                "Refine the player's text: fix grammar, improve flow and atmosphere, and make it feel vivid "
+                "and true to their character — but keep the exact same meaning and events. "
+                "Write in first person if the original is, third person if the original is. "
+                "Return only the refined narration text, no commentary."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Character: {char_name}, a {race} {class_name}{trait_line}\n\n"
+                f"Please refine this in-character narration:\n\n{raw_text}"
+            ),
+        },
+    ]
+    return _call(messages)
+
+
+def generate_player_narration(char_name, race, class_name, personality_traits='', recent_log=None):
+    """
+    Generate a short in-character action or dialogue for a player based on the current scene.
+    Returns (text, error).
+    """
+    if recent_log:
+        context_lines = [
+            f"[{e.get('author', 'DM')}] {e.get('text', '')}"
+            for e in recent_log[-5:]
+            if e.get('type') != 'session_start'
+        ]
+        scene_context = "\n".join(context_lines) or "The adventure is just beginning."
+    else:
+        scene_context = "The adventure is just beginning."
+
+    trait_line = f"\nPersonality traits: {personality_traits}" if personality_traits else ""
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a creative writing assistant helping a D&D 5e player contribute in-character "
+                "narration to a shared story. Write a short, vivid 1-3 sentence description of what "
+                "their character does or says, consistent with their personality and the current scene. "
+                "Write in third person (e.g. 'Aldric steps forward...'). "
+                "Return only the narration text, no commentary."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Character: {char_name}, a {race} {class_name}{trait_line}\n\n"
+                f"Recent scene:\n{scene_context}\n\n"
+                "Generate a short in-character action or line of dialogue for this character."
+            ),
+        },
+    ]
+    return _call(messages)
+
+
+def summarize_session(entries, session_name):
+    """
+    Generate an AI recap of a play session from its narration log entries.
+    entries: list of narration_log dicts between session markers.
+    session_name: string label (e.g. "Session 3").
+    Returns (summary_text, error).
+    """
+    if not entries:
+        return None, "No narration entries found for this session."
+
+    log_text = "\n".join(
+        f"[{e.get('author', 'DM')}] {e.get('text', '')}"
+        for e in entries
+        if e.get('type') != 'session_start'
+    )
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a Dungeon Master writing a session recap for a D&D 5e campaign. "
+                "Read the narration log and write a vivid, engaging 3-5 sentence summary of what transpired. "
+                "Write in past tense, third-person. Capture key events, dramatic moments, and where "
+                "the party now stands. Return only the recap text, no title or commentary."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Summarize {session_name} from this narration log:\n\n{log_text}",
+        },
+    ]
+    return _call(messages, max_tokens=400)

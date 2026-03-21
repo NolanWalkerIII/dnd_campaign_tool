@@ -1312,7 +1312,7 @@ def dm_narrate(campaign_id):
     if text:
         state = campaign.current_state or {}
         log = state.get('narration_log', [])
-        log.append({'text': text, 'timestamp': datetime.now().strftime('%b %d, %H:%M')})
+        log.append({'text': text, 'timestamp': datetime.now().strftime('%b %d, %H:%M'), 'author': 'DM'})
         state['narration_log'] = log
         campaign.current_state = state
         from sqlalchemy.orm.attributes import flag_modified
@@ -3029,6 +3029,203 @@ def player_attack(campaign_id):
     _save_state(campaign)
     flash(f'Attack: {atk_total}{hit_tag}{crit_tag}', 'success')
     return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
+
+# ── Phase 38: Player Narration Submission ──────────────────────────────────────
+
+@app.route('/player/campaigns/<int:campaign_id>/narrate', methods=['POST'])
+@player_required
+def player_narrate(campaign_id):
+    blocked = _check_not_impersonating(campaign_id)
+    if blocked:
+        return blocked
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if session['user_id'] not in (campaign.players or []):
+        flash('Not in this campaign.', 'error')
+        return redirect(url_for('player_dashboard'))
+
+    text = request.form.get('narration', '').strip()
+    if not text:
+        return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
+    char = _get_player_active_char(campaign_id)
+    author = char.name if char else User.query.get(session['user_id']).username
+    state = campaign.current_state or {}
+    log = state.get('narration_log', [])
+    log.append({
+        'text': text,
+        'timestamp': datetime.now().strftime('%b %d, %H:%M'),
+        'author': author,
+    })
+    state['narration_log'] = log
+    campaign.current_state = state
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(campaign, 'current_state')
+    db.session.commit()
+    return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
+
+# ── Phase 39: DM Narration Revert & Delete ─────────────────────────────────────
+
+@app.route('/dm/campaigns/<int:campaign_id>/narration/revert', methods=['POST'])
+@dm_required
+def dm_narration_revert(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    state = campaign.current_state or {}
+    log = state.get('narration_log', [])
+    if log:
+        removed = log.pop()
+        state['narration_log'] = log
+        campaign.current_state = state
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(campaign, 'current_state')
+        db.session.commit()
+        preview = removed.get('text', '')[:60]
+        flash(f'Removed: "{preview}{"…" if len(removed.get("text","")) > 60 else ""}"', 'success')
+    else:
+        flash('Narration log is already empty.', 'error')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/narration/delete', methods=['POST'])
+@dm_required
+def dm_narration_delete(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    try:
+        idx = int(request.form.get('entry_idx', -1))
+    except (ValueError, TypeError):
+        flash('Invalid entry index.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    state = campaign.current_state or {}
+    log = state.get('narration_log', [])
+    if 0 <= idx < len(log):
+        log.pop(idx)
+        state['narration_log'] = log
+        campaign.current_state = state
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(campaign, 'current_state')
+        db.session.commit()
+        flash('Entry removed.', 'success')
+    else:
+        flash('Entry not found.', 'error')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+# ── Phase 40: Player AI Narration ──────────────────────────────────────────────
+
+@app.route('/player/campaigns/<int:campaign_id>/ai/narration/cleanup', methods=['POST'])
+@player_required
+def player_ai_narration_cleanup(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if session['user_id'] not in (campaign.players or []):
+        return jsonify({'error': 'Not in this campaign.'}), 403
+    raw = (request.json or {}).get('text', '').strip()
+    if not raw:
+        return jsonify({'error': 'No text to clean up.'}), 400
+    char = _get_player_active_char(campaign_id)
+    if not char:
+        return jsonify({'error': 'No active character found.'}), 400
+    from services.ai import cleanup_player_narration, sanitize_for_prompt
+    bg = (char.spells or {}).get('background_details', {})
+    personality = sanitize_for_prompt(bg.get('personality_traits', ''), 300)
+    text, error = cleanup_player_narration(
+        sanitize_for_prompt(raw), char.name, char.race, char.class_name, personality
+    )
+    if error:
+        return jsonify({'error': error}), 500
+    return jsonify({'text': text})
+
+
+@app.route('/player/campaigns/<int:campaign_id>/ai/narration/generate', methods=['POST'])
+@player_required
+def player_ai_narration_generate(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if session['user_id'] not in (campaign.players or []):
+        return jsonify({'error': 'Not in this campaign.'}), 403
+    char = _get_player_active_char(campaign_id)
+    if not char:
+        return jsonify({'error': 'No active character found.'}), 400
+    from services.ai import generate_player_narration
+    bg = (char.spells or {}).get('background_details', {})
+    personality = (bg.get('personality_traits', '') or '')[:300]
+    recent_log = (campaign.current_state or {}).get('narration_log', [])[-5:]
+    text, error = generate_player_narration(
+        char.name, char.race, char.class_name, personality, recent_log
+    )
+    if error:
+        return jsonify({'error': error}), 500
+    return jsonify({'text': text})
+
+
+# ── Phase 41: Session Markers & AI Summary ─────────────────────────────────────
+
+@app.route('/dm/campaigns/<int:campaign_id>/narration/session/start', methods=['POST'])
+@dm_required
+def dm_narration_session_start(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    session_name = request.form.get('session_name', '').strip()
+    state = campaign.current_state or {}
+    log = state.get('narration_log', [])
+    if not session_name:
+        existing = sum(1 for e in log if e.get('type') == 'session_start')
+        session_name = f'Session {existing + 1}'
+    log.append({
+        'type': 'session_start',
+        'session_name': session_name,
+        'text': f'── {session_name} ──',
+        'timestamp': datetime.now().strftime('%b %d, %H:%M'),
+        'author': 'DM',
+        'summary': '',
+    })
+    state['narration_log'] = log
+    campaign.current_state = state
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(campaign, 'current_state')
+    db.session.commit()
+    flash(f'Started "{session_name}".', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/narration/session/summarize', methods=['POST'])
+@dm_required
+def dm_narration_session_summarize(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        return jsonify({'error': 'Access denied.'}), 403
+    try:
+        session_idx = int((request.json or {}).get('session_idx', -1))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid session index.'}), 400
+    state = campaign.current_state or {}
+    log = state.get('narration_log', [])
+    if session_idx < 0 or session_idx >= len(log) or log[session_idx].get('type') != 'session_start':
+        return jsonify({'error': 'Session marker not found.'}), 400
+    session_name = log[session_idx].get('session_name', 'Session')
+    next_session = next(
+        (i for i in range(session_idx + 1, len(log)) if log[i].get('type') == 'session_start'),
+        len(log)
+    )
+    entries = log[session_idx + 1:next_session]
+    from services.ai import summarize_session
+    text, error = summarize_session(entries, session_name)
+    if error:
+        return jsonify({'error': error}), 500
+    log[session_idx]['summary'] = text
+    state['narration_log'] = log
+    campaign.current_state = state
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(campaign, 'current_state')
+    db.session.commit()
+    return jsonify({'text': text})
 
 
 # ── Admin Console ─────────────────────────────────────────────────────────────
