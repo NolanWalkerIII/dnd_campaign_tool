@@ -1048,6 +1048,16 @@ function toggleGettingStarted() {
                 {% endfor %}
                 {% endif %}
               </div>
+              <!-- Add to combat -->
+              {% if combat_active and not (order | selectattr('char_id', 'equalto', char.id) | list) %}
+              <form method="POST" action="/dm/campaigns/{{ campaign.id }}/combat/add-character" style="margin-top:6px;">
+                <input type="hidden" name="char_id" value="{{ char.id }}">
+                <button type="submit" class="btn btn-outline"
+                        style="padding:3px 10px; font-size:0.8rem; color:var(--accent);">
+                  ⚔ Add to Combat
+                </button>
+              </form>
+              {% endif %}
               {% if char_ai %}
               {{ ai_action_block(char, campaign.id) }}
               {% endif %}
@@ -1165,6 +1175,16 @@ function toggleGettingStarted() {
             {% endfor %}
             {% endif %}
           </div>
+          <!-- Add to combat -->
+          {% if combat_active and not (order | selectattr('char_id', 'equalto', char.id) | list) %}
+          <form method="POST" action="/dm/campaigns/{{ campaign.id }}/combat/add-character" style="margin-top:6px;">
+            <input type="hidden" name="char_id" value="{{ char.id }}">
+            <button type="submit" class="btn btn-outline"
+                    style="padding:3px 10px; font-size:0.8rem; color:var(--accent);">
+              ⚔ Add to Combat
+            </button>
+          </form>
+          {% endif %}
           {% if char_ai %}
           {{ ai_action_block(char, campaign.id) }}
           {% endif %}

@@ -922,6 +922,24 @@ def character_sheet(char_id):
     )
 
 
+@app.route('/characters/<int:char_id>/hp', methods=['POST'])
+@login_required
+def character_adjust_hp(char_id):
+    char = Character.query.get_or_404(char_id)
+    if char.user_id != session['user_id'] and session.get('role') != 'dm':
+        flash('Access denied.', 'error')
+        return redirect(url_for('character_sheet', char_id=char_id))
+    try:
+        delta = int(request.form.get('delta', 0))
+    except (ValueError, TypeError):
+        delta = 0
+    char.hp_current = max(0, min(char.hp_max, char.hp_current + delta))
+    db.session.commit()
+    action = f'Healed {delta} HP' if delta > 0 else f'Dealt {abs(delta)} damage'
+    flash(f'{char.name}: {action}. HP now {char.hp_current}/{char.hp_max}.', 'success')
+    return redirect(url_for('character_sheet', char_id=char_id))
+
+
 @app.route('/characters/<int:char_id>/temp_hp', methods=['POST'])
 @login_required
 def character_temp_hp(char_id):
@@ -2274,6 +2292,49 @@ def dm_npc_add(campaign_id):
     _add_combat_log(campaign, 'System', f'{name} joins combat (Initiative {initiative}).', 'system')
     _save_state(campaign)
     flash(f'{name} added to combat.', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/combat/add-character', methods=['POST'])
+@dm_required
+def dm_combat_add_character(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+
+    char_id = request.form.get('char_id', type=int)
+    if not char_id:
+        flash('No character selected.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+    char = Character.query.get_or_404(char_id)
+    state = campaign.current_state or {}
+    order = state.get('initiative_order', [])
+
+    already_in = any(e.get('char_id') == char_id for e in order)
+    if already_in:
+        flash(f'{char.name} is already in the initiative order.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+    dex_mod = ability_modifier((char.ability_scores or {}).get('DEX', 10))
+    roll, rolls, _ = DiceRoller.roll('1d20', modifier=dex_mod)
+    order.append({
+        'name': char.name,
+        'char_id': char_id,
+        'user_id': char.user_id,
+        'initiative': roll,
+        'roll_detail': f'd20({rolls[0]}){mod_str(dex_mod)}={roll}',
+        'is_npc': False,
+        'npc_hp': None, 'npc_hp_max': None, 'npc_ac': None,
+    })
+    order.sort(key=lambda x: x['initiative'], reverse=True)
+    state['initiative_order'] = order
+    campaign.current_state = state
+    _add_combat_log(campaign, 'System',
+                    f'{char.name} joins combat! Initiative: {roll}', 'system')
+    _save_state(campaign)
+    flash(f'{char.name} added to combat (initiative: {roll}).', 'success')
     return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
 
 
