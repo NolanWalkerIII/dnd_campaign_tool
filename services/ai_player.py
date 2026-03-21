@@ -8,7 +8,7 @@ Persona levels shape how the AI "plays":
 """
 import json
 import re
-from services.ai import _call
+from services.ai import _call, sanitize_for_prompt
 
 PERSONA_PROMPTS = {
     'novice': (
@@ -44,26 +44,26 @@ def generate_player_action(character, campaign, persona_level):
     narration_log = state.get('narration_log', [])
     recent = narration_log[-5:] if narration_log else []
     if recent:
-        scene = '\n'.join(e.get('text', '') for e in recent)
+        scene = '\n'.join(sanitize_for_prompt(e.get('text', '')) for e in recent)
     else:
         scene = 'The adventure is just beginning.'
 
-    # Character context
+    # Character context — sanitize all user-supplied fields
     char_ctx = (
-        f"Character: {character.name}, "
-        f"Level {character.level} {character.race} {character.class_name}\n"
-        f"Background: {character.background or 'Unknown'}\n"
+        f"Character: {sanitize_for_prompt(character.name)}, "
+        f"Level {character.level} {sanitize_for_prompt(character.race)} {sanitize_for_prompt(character.class_name)}\n"
+        f"Background: {sanitize_for_prompt(character.background or 'Unknown')}\n"
     )
     if bg.get('custom_background'):
-        char_ctx += f"Backstory: {bg['custom_background'][:400]}\n"
+        char_ctx += f"Backstory: {sanitize_for_prompt(bg['custom_background'], 400)}\n"
     if bg.get('personality_traits'):
-        char_ctx += f"Personality: {bg['personality_traits']}\n"
+        char_ctx += f"Personality: {sanitize_for_prompt(bg['personality_traits'])}\n"
     if bg.get('ideals'):
-        char_ctx += f"Ideals: {bg['ideals']}\n"
+        char_ctx += f"Ideals: {sanitize_for_prompt(bg['ideals'])}\n"
     if bg.get('bonds'):
-        char_ctx += f"Bonds: {bg['bonds']}\n"
+        char_ctx += f"Bonds: {sanitize_for_prompt(bg['bonds'])}\n"
     if bg.get('flaws'):
-        char_ctx += f"Flaws: {bg['flaws']}\n"
+        char_ctx += f"Flaws: {sanitize_for_prompt(bg['flaws'])}\n"
 
     level = persona_level if persona_level in PERSONA_PROMPTS else 'intermediate'
     system = PERSONA_PROMPTS[level].format(name=character.name)

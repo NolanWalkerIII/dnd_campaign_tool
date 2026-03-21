@@ -70,8 +70,8 @@ class DiceRoller:
         Returns (total, rolls, is_critical).
         """
         num, die = dice_str.lower().split('d')
-        num = int(num)
-        die = int(die)
+        num = max(1, min(int(num), 100))
+        die = max(2, min(int(die), 1000))
 
         if advantage and disadvantage:
             rolls = [random.randint(1, die) for _ in range(num)]

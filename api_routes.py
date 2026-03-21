@@ -35,7 +35,13 @@ def require_api_key(f):
         auth = request.headers.get('Authorization', '')
         token = auth.replace('Bearer ', '').strip()
         if not hmac.compare_digest(token.encode(), key.encode()):
+            _current_app.logger.warning(
+                f"AUDIT: api_auth_failure endpoint={request.endpoint} ip={request.remote_addr}"
+            )
             return jsonify(error="Unauthorized"), 401
+        _current_app.logger.info(
+            f"AUDIT: api_access endpoint={request.endpoint} ip={request.remote_addr}"
+        )
         return f(*args, **kwargs)
     return decorated
 
@@ -197,7 +203,7 @@ def api_action():
     Body: {campaign_id, character_id, message}
     The AI interprets intent, resolves mechanics, and narrates the result.
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     char_id = data.get('character_id')
     message = data.get('message', '')
@@ -243,7 +249,7 @@ def api_roll():
     Body: {dice, campaign_id (optional)}
     Example: {dice: "2d6+3"}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     dice_str = data.get('dice', '')
     cid = data.get('campaign_id')
 
@@ -272,7 +278,7 @@ def api_skill_check():
 
     Body: {campaign_id, character_id, skill}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     char_id = data.get('character_id')
     skill = data.get('skill', '')
@@ -305,7 +311,7 @@ def api_attack():
 
     Body: {campaign_id, character_id, target, ability (optional), damage_dice (optional)}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     char_id = data.get('character_id')
     target = data.get('target', 'target')
@@ -346,7 +352,7 @@ def api_saving_throw():
 
     Body: {character_id, ability}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     char_id = data.get('character_id')
     ability = data.get('ability', '')
 
@@ -378,7 +384,7 @@ def api_scene():
     Body: {campaign_id, text}
     Posts to narration log and Discord tavern channel.
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     text = data.get('text', '')
 
@@ -429,7 +435,7 @@ def api_npc_say():
 
     Body: {campaign_id, npc_name, text}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     npc_name = data.get('npc_name', '')
     text = data.get('text', '')
@@ -484,7 +490,7 @@ def api_combat_start():
 
     Body: {campaign_id}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     c, err = _get_campaign_or_404(cid)
     if err:
@@ -515,7 +521,7 @@ def api_combat_start():
 @require_api_key
 def api_combat_next():
     """Advance to the next turn."""
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     c, err = _get_campaign_or_404(cid)
     if err:
@@ -549,7 +555,7 @@ def api_combat_next():
 @require_api_key
 def api_combat_end():
     """End combat."""
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     c, err = _get_campaign_or_404(cid)
     if err:
@@ -573,7 +579,7 @@ def api_damage():
 
     Body: {campaign_id, target, amount}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     target = data.get('target', '')
     amount = data.get('amount', 0)
@@ -619,7 +625,7 @@ def api_heal():
 
     Body: {campaign_id, target, amount}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     target = data.get('target', '')
     amount = data.get('amount', 0)
@@ -668,7 +674,7 @@ def api_condition():
 
     Body: {campaign_id, target, condition, action: "add"|"remove"}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     target = data.get('target', '')
     condition = data.get('condition', '')
@@ -709,7 +715,7 @@ def api_loot():
     Body: {campaign_id, character_id (optional), text}
     If character_id given, adds to their equipment.
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     char_id = data.get('character_id')
     text = data.get('text', '')
@@ -752,7 +758,7 @@ def api_npc_add():
 
     Body: {campaign_id, name, hp, ac, initiative (optional)}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     name = data.get('name', '')
     hp = data.get('hp', 10)
@@ -797,7 +803,7 @@ def api_npc_remove():
 
     Body: {campaign_id, name}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     name = data.get('name', '')
 
@@ -830,7 +836,7 @@ def api_discord_send():
 
     Body: {campaign_id, channel ("tavern"|"combat"|"quests"|"lore"|"debug"|"dm_screen"), text}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     channel_name = data.get('channel', 'tavern')
     text = data.get('text', '')
@@ -880,7 +886,7 @@ def api_discord_embed():
 
     Body: {campaign_id, channel, title, description, color (hex int), fields [{name, value, inline}]}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     channel_name = data.get('channel', 'tavern')
     title = data.get('title', '')
@@ -1117,7 +1123,7 @@ def api_play():
 
     Returns the AI DM's response and updated character state.
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     char_id = data.get('character_id')
     message = data.get('message', '')
@@ -1277,7 +1283,7 @@ def api_whisper():
 
     Body: {campaign_id, username, text}
     """
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     cid = data.get('campaign_id')
     username = data.get('username', '')
     text = data.get('text', '')

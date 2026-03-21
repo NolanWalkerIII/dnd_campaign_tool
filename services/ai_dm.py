@@ -12,6 +12,7 @@ import os
 import requests
 
 from game_data import SKILLS
+from services.ai import sanitize_for_prompt
 from services.engine import (
     get_character_summary,
     get_combat_state_summary,
@@ -108,7 +109,7 @@ GAME STATE:
 RECENT EVENTS:
 {recent}
 
-The player says: "{player_message}"
+The player says: "{sanitize_for_prompt(player_message)}"
 
 Return ONLY valid JSON."""
 

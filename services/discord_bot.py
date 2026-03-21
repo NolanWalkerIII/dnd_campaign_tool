@@ -578,9 +578,11 @@ async def join_cmd(interaction: discord.Interaction, username: str):
         from models import db
         state = campaign.current_state or {}
         pending = state.get('discord_pending_verifications', {})
+        import time as _time
         pending[str(interaction.user.id)] = {
             'user_id': user.id,
             'username': username,
+            'expires_at': _time.time() + 300,  # 5-minute TTL
         }
         state['discord_pending_verifications'] = pending
         campaign.current_state = state
@@ -612,6 +614,18 @@ async def verify_cmd(interaction: discord.Interaction, code: str):
         if discord_id_str not in pending:
             await interaction.response.send_message(
                 "No pending join. Use `/join your_username` first.", ephemeral=True
+            )
+            return
+
+        import time as _time
+        entry = pending[discord_id_str]
+        if entry.get('expires_at', 0) < _time.time():
+            del pending[discord_id_str]
+            state['discord_pending_verifications'] = pending
+            flag_modified(campaign, 'current_state')
+            db.session.commit()
+            await interaction.response.send_message(
+                "Verification code expired. Use `/join your_username` again.", ephemeral=True
             )
             return
 

@@ -56,6 +56,7 @@ app.config['SESSION_COOKIE_SECURE'] = os.environ.get('COOKIE_SECURE', '').lower(
 app.config['SESSION_COOKIE_HTTPONLY'] = True           # block JS access
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'         # CSRF mitigation
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024    # 5 MB upload limit
 
 db.init_app(app)
 
@@ -330,6 +331,7 @@ def login():
             session['is_admin'] = bool(user.is_admin)
             flash(f'Welcome back, {user.username}!', 'success')
             return redirect(url_for('home'))
+        app.logger.warning(f"AUDIT: failed_login username={username!r} ip={request.remote_addr}")
         flash('Invalid username or password.', 'error')
     return render_template('login.html')
 

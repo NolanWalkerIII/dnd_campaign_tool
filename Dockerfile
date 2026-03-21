@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12.9-slim
 
 WORKDIR /app
 
@@ -7,8 +7,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Ensure the instance directory exists for SQLite
-RUN mkdir -p instance
+# Create non-root user and ensure instance dir is writable
+RUN useradd -m -u 1000 appuser \
+    && mkdir -p instance \
+    && chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 5000
 

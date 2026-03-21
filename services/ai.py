@@ -16,6 +16,21 @@ XAI_API_URL = "https://api.x.ai/v1/chat/completions"
 XAI_MODEL   = "grok-3-latest"
 TIMEOUT     = 30  # seconds
 
+# Characters that can be used to break out of prompt context or inject instructions
+_PROMPT_STRIP = str.maketrans('', '', '<>{}\\`')
+_MAX_USER_INPUT_LEN = 1000
+
+
+def sanitize_for_prompt(text, max_len=_MAX_USER_INPUT_LEN):
+    """
+    Strip characters that could be used for prompt injection before embedding
+    user-supplied strings in AI system/user messages.
+    Removes < > { } \\ ` and truncates to max_len.
+    """
+    if not text:
+        return ''
+    return str(text).translate(_PROMPT_STRIP)[:max_len]
+
 # In-memory ring buffer — last 500 API calls, resets on restart
 _usage_log = deque(maxlen=500)
 
