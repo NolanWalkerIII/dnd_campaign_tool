@@ -1,13 +1,20 @@
 import io
 import json
+import logging
+import logging.handlers
 import os
+import platform
 import random
 import string
+import sys
+import time as _time
 from datetime import datetime, timedelta
 from functools import wraps
 
 from dotenv import load_dotenv
 load_dotenv()
+
+APP_START_TIME = datetime.utcnow()
 
 from flask import (Flask, render_template, redirect, url_for,
                    request, flash, session, send_file, jsonify)
@@ -18,7 +25,7 @@ from parsers import parse_character_md, parse_campaign_md, CHARACTER_TEMPLATE, C
 from services.ai import (cleanup_narration, generate_narration,
                          cleanup_background, generate_background,
                          generate_trait_field, generate_appearance,
-                         generate_character)
+                         generate_character, get_usage_log)
 from services.ai_player import generate_player_action, generate_combat_decision, generate_practice_debrief
 import re as _re
 
@@ -33,6 +40,21 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///dnd.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'dnd-dev-secret-change-in-prod'
 db.init_app(app)
+
+# ── File logging setup ────────────────────────────────────────────────────────
+_log_dir = os.path.join(os.path.dirname(__file__), 'logs')
+os.makedirs(_log_dir, exist_ok=True)
+_log_path = os.path.join(_log_dir, 'app.log')
+_file_handler = logging.handlers.RotatingFileHandler(
+    _log_path, maxBytes=2 * 1024 * 1024, backupCount=3, encoding='utf-8'
+)
+_file_handler.setLevel(logging.INFO)
+_file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'
+))
+logging.getLogger().addHandler(_file_handler)
+logging.getLogger().setLevel(logging.INFO)
+app.logger.addHandler(_file_handler)
 
 # Register SMS blueprint
 from sms_routes import sms_bp
@@ -2908,6 +2930,112 @@ def admin_character_delete(chid):
     _admin_log('delete_character', 'character', chid, name)
     flash(f'Character "{name}" permanently deleted.', 'success')
     return redirect(url_for('admin_characters'))
+
+
+# ── Admin Console — Phase 31: System Health & Diagnostics ────────────────────
+
+import flask as _flask_module
+
+@app.route('/admin/system')
+@admin_required
+def admin_system():
+    # Uptime
+    uptime_delta = datetime.utcnow() - APP_START_TIME
+    total_seconds = int(uptime_delta.total_seconds())
+    uptime_str = f"{total_seconds // 3600}h {(total_seconds % 3600) // 60}m {total_seconds % 60}s"
+
+    # DB row counts
+    table_counts = {}
+    try:
+        with db.engine.connect() as conn:
+            for tbl in ('user', 'character', 'campaign', 'admin_audit_log'):
+                row = conn.execute(db.text(f"SELECT COUNT(*) FROM \"{tbl}\"")).fetchone()
+                table_counts[tbl] = row[0] if row else 0
+    except Exception:
+        pass
+
+    # DB file size
+    db_path = os.path.join(os.path.dirname(__file__), 'instance', 'dnd.db')
+    db_size = os.path.getsize(db_path) if os.path.exists(db_path) else 0
+
+    # Log file size
+    log_path = os.path.join(os.path.dirname(__file__), 'logs', 'app.log')
+    log_size = os.path.getsize(log_path) if os.path.exists(log_path) else 0
+
+    # Active users (last_seen within 30 min)
+    cutoff = datetime.utcnow() - timedelta(minutes=30)
+    active_users = User.query.filter(User.last_seen >= cutoff).count()
+
+    # AI usage summary
+    usage = get_usage_log()
+    total_calls = len(usage)
+    total_tokens = sum(e.get('total_tokens', 0) for e in usage)
+    failed_calls = sum(1 for e in usage if not e.get('success'))
+
+    return render_template('admin/system.html',
+        python_version=sys.version.split()[0],
+        flask_version=_flask_module.__version__,
+        platform_info=platform.platform(),
+        uptime=uptime_str,
+        start_time=APP_START_TIME.strftime('%Y-%m-%d %H:%M UTC'),
+        table_counts=table_counts,
+        db_size=db_size,
+        log_size=log_size,
+        active_users=active_users,
+        total_calls=total_calls,
+        total_tokens=total_tokens,
+        failed_calls=failed_calls,
+        discord_token_set=bool(os.environ.get('DISCORD_BOT_TOKEN')),
+        xai_key_set=bool(os.environ.get('XAI_API_KEY')),
+    )
+
+
+@app.route('/admin/logs')
+@admin_required
+def admin_logs():
+    log_path = os.path.join(os.path.dirname(__file__), 'logs', 'app.log')
+    level_filter = request.args.get('level', '').upper()
+    lines = []
+    if os.path.exists(log_path):
+        with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+            all_lines = f.readlines()
+        # last 200 lines
+        recent = all_lines[-200:]
+        if level_filter and level_filter in ('ERROR', 'WARNING', 'INFO', 'DEBUG'):
+            recent = [l for l in recent if level_filter in l]
+        lines = [l.rstrip() for l in recent]
+    return render_template('admin/logs.html', lines=lines, level_filter=level_filter)
+
+
+@app.route('/admin/logs/download')
+@admin_required
+def admin_logs_download():
+    log_path = os.path.join(os.path.dirname(__file__), 'logs', 'app.log')
+    if not os.path.exists(log_path):
+        flash('Log file not found.', 'error')
+        return redirect(url_for('admin_logs'))
+    _admin_log('download_log', detail='app.log')
+    return send_file(log_path, as_attachment=True, download_name='app.log',
+                     mimetype='text/plain')
+
+
+@app.route('/admin/ai-usage')
+@admin_required
+def admin_ai_usage():
+    usage = get_usage_log()  # newest first
+    # Daily totals
+    daily = {}
+    for e in usage:
+        day = e.get('ts', '')[:10]
+        if day:
+            if day not in daily:
+                daily[day] = {'calls': 0, 'tokens': 0, 'errors': 0}
+            daily[day]['calls'] += 1
+            daily[day]['tokens'] += e.get('total_tokens', 0)
+            if not e.get('success'):
+                daily[day]['errors'] += 1
+    daily_sorted = sorted(daily.items(), reverse=True)
+    return render_template('admin/ai_usage.html', usage=usage[:200], daily=daily_sorted)
 
 
 def _migrate():

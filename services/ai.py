@@ -6,11 +6,23 @@ If the key is missing or the request fails, functions return an error
 string rather than raising so the UI can show a graceful message.
 """
 import os
+import time
+from collections import deque
+from datetime import datetime
+
 import requests
 
 XAI_API_URL = "https://api.x.ai/v1/chat/completions"
 XAI_MODEL   = "grok-3-latest"
 TIMEOUT     = 30  # seconds
+
+# In-memory ring buffer — last 500 API calls, resets on restart
+_usage_log = deque(maxlen=500)
+
+
+def get_usage_log():
+    """Return a list of recent API call records (newest first)."""
+    return list(reversed(_usage_log))
 
 
 def _api_key():
@@ -26,6 +38,7 @@ def _call(messages, max_tokens=600):
     if not key:
         return None, "XAI_API_KEY is not set. Add it to your .env file."
 
+    t0 = time.time()
     try:
         resp = requests.post(
             XAI_API_URL,
@@ -42,16 +55,37 @@ def _call(messages, max_tokens=600):
             timeout=TIMEOUT,
         )
         resp.raise_for_status()
-        text = resp.json()["choices"][0]["message"]["content"].strip()
+        data = resp.json()
+        text = data["choices"][0]["message"]["content"].strip()
+        usage = data.get("usage", {})
+        _usage_log.append({
+            'ts': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+            'prompt_tokens': usage.get('prompt_tokens', 0),
+            'completion_tokens': usage.get('completion_tokens', 0),
+            'total_tokens': usage.get('total_tokens', 0),
+            'max_tokens': max_tokens,
+            'latency': round(time.time() - t0, 2),
+            'success': True,
+            'error': None,
+        })
         return text, None
     except requests.exceptions.Timeout:
+        _usage_log.append({'ts': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                           'latency': round(time.time() - t0, 2), 'success': False,
+                           'error': 'timeout', 'total_tokens': 0})
         return None, "xAI request timed out. Please try again."
     except requests.exceptions.HTTPError as e:
         status = e.response.status_code if e.response is not None else "?"
+        _usage_log.append({'ts': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                           'latency': round(time.time() - t0, 2), 'success': False,
+                           'error': f'http_{status}', 'total_tokens': 0})
         if status == 401:
             return None, "Invalid XAI_API_KEY. Check your .env file."
         return None, f"xAI API error ({status}). Please try again."
     except Exception as e:
+        _usage_log.append({'ts': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                           'latency': round(time.time() - t0, 2), 'success': False,
+                           'error': str(e)[:80], 'total_tokens': 0})
         return None, f"Unexpected error contacting xAI: {e}"
 
 

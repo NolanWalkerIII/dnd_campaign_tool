@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}AI Usage — Admin Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>🤖 AI Usage Log</h1>
+  <a href="/admin/system" class="btn btn-outline" style="font-size:0.85rem;">← System</a>
+</div>
+
+<p style="color:var(--muted); font-size:0.88rem; margin-bottom:1.5rem;">
+  In-memory log — shows up to 500 most recent xAI API calls since last restart.
+  Resets when the container restarts.
+</p>
+
+<!-- Daily totals -->
+{% if daily %}
+<div class="card">
+  <h2>Daily Totals</h2>
+  <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+    <thead>
+      <tr style="color:var(--muted); text-align:left;">
+        <th style="padding:8px 12px;">Date</th>
+        <th style="padding:8px 12px;">Calls</th>
+        <th style="padding:8px 12px;">Tokens</th>
+        <th style="padding:8px 12px;">Errors</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for day, stats in daily %}
+      <tr style="border-top:1px solid var(--border);">
+        <td style="padding:8px 12px; font-weight:600; color:var(--gold);">{{ day }}</td>
+        <td style="padding:8px 12px;">{{ stats.calls }}</td>
+        <td style="padding:8px 12px;">{{ stats.tokens }}</td>
+        <td style="padding:8px 12px;">
+          {% if stats.errors > 0 %}
+            <span style="color:var(--accent);">{{ stats.errors }}</span>
+          {% else %}
+            <span style="color:var(--success);">0</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Recent calls -->
+<div class="card" style="padding:0; overflow:hidden;">
+  <div style="padding:1rem 1.25rem 0.5rem; border-bottom:1px solid var(--border);">
+    <h2 style="margin-bottom:0;">Recent Calls ({{ usage|length }})</h2>
+  </div>
+  {% if usage %}
+  <table style="width:100%; border-collapse:collapse; font-size:0.84rem;">
+    <thead style="background:var(--card);">
+      <tr style="color:var(--muted); text-align:left;">
+        <th style="padding:8px 12px;">Timestamp</th>
+        <th style="padding:8px 12px;">Status</th>
+        <th style="padding:8px 12px;">Prompt</th>
+        <th style="padding:8px 12px;">Completion</th>
+        <th style="padding:8px 12px;">Total</th>
+        <th style="padding:8px 12px;">Max</th>
+        <th style="padding:8px 12px;">Latency</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in usage %}
+      <tr style="border-top:1px solid var(--border);">
+        <td style="padding:7px 12px; color:var(--muted); white-space:nowrap; font-size:0.8rem;">{{ e.ts }}</td>
+        <td style="padding:7px 12px;">
+          {% if e.success %}
+            <span style="color:var(--success);">✓</span>
+          {% else %}
+            <span style="color:var(--accent);" title="{{ e.error or '' }}">✗ {{ e.error or 'error' }}</span>
+          {% endif %}
+        </td>
+        <td style="padding:7px 12px;">{{ e.prompt_tokens or '—' }}</td>
+        <td style="padding:7px 12px;">{{ e.completion_tokens or '—' }}</td>
+        <td style="padding:7px 12px; font-weight:600; color:var(--gold);">{{ e.total_tokens or '—' }}</td>
+        <td style="padding:7px 12px; color:var(--muted);">{{ e.max_tokens or '—' }}</td>
+        <td style="padding:7px 12px; color:var(--muted);">{{ e.latency }}s</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state" style="padding:3rem;">
+    <p>No AI calls recorded yet this session.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

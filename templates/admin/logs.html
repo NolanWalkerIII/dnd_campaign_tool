@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}App Logs — Admin Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>📋 Application Logs</h1>
+  <div style="display:flex; gap:0.5rem;">
+    <a href="/admin/logs/download" class="btn btn-outline" style="font-size:0.85rem;">⬇ Download</a>
+    <a href="/admin/system" class="btn btn-outline" style="font-size:0.85rem;">← System</a>
+  </div>
+</div>
+
+<!-- Filter bar -->
+<form method="get" style="display:flex; gap:0.5rem; align-items:center; margin-bottom:1rem; flex-wrap:wrap;">
+  <span style="color:var(--muted); font-size:0.88rem;">Filter:</span>
+  {% for lvl in ['', 'ERROR', 'WARNING', 'INFO'] %}
+  <button type="submit" name="level" value="{{ lvl }}"
+          class="btn {% if level_filter == lvl %}btn-gold{% else %}btn-outline{% endif %}"
+          style="padding:4px 14px; font-size:0.82rem;">
+    {{ lvl if lvl else 'All' }}
+  </button>
+  {% endfor %}
+  <span style="color:var(--muted); font-size:0.82rem; margin-left:0.5rem;">
+    Showing last 200 lines{% if level_filter %} · filtered to {{ level_filter }}{% endif %}
+  </span>
+</form>
+
+<!-- Auto-refresh toggle -->
+<div style="margin-bottom:0.75rem; display:flex; align-items:center; gap:0.75rem;">
+  <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.88rem; color:var(--muted);">
+    <input type="checkbox" id="autoRefresh" style="accent-color:var(--gold);">
+    Auto-refresh every 10s
+  </label>
+</div>
+
+<div class="card" style="padding:0;">
+  {% if lines %}
+  <pre id="logPre" style="background:var(--card); padding:1rem; font-size:0.78rem; line-height:1.6;
+            overflow-x:auto; max-height:600px; overflow-y:auto; margin:0; border-radius:6px;
+            white-space:pre-wrap; word-break:break-all;">{% for line in lines %}<span class="log-line {% if 'ERROR' in line %}log-error{% elif 'WARNING' in line %}log-warn{% elif 'INFO' in line %}log-info{% endif %}">{{ line }}</span>
+{% endfor %}</pre>
+  {% else %}
+  <div class="empty-state">
+    <p>No log entries found{% if level_filter %} matching {{ level_filter }}{% endif %}.</p>
+  </div>
+  {% endif %}
+</div>
+
+<style>
+  .log-error { color: #ff7070; }
+  .log-warn  { color: var(--gold); }
+  .log-info  { color: var(--text); }
+</style>
+
+<script>
+  // Scroll to bottom of log on load
+  const pre = document.getElementById('logPre');
+  if (pre) pre.scrollTop = pre.scrollHeight;
+
+  // Auto-refresh
+  let timer = null;
+  document.getElementById('autoRefresh').addEventListener('change', function() {
+    if (this.checked) {
+      timer = setInterval(() => location.reload(), 10000);
+    } else {
+      clearInterval(timer);
+    }
+  });
+</script>
+{% endblock %}

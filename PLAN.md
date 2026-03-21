@@ -674,8 +674,9 @@ Full system health dashboard with one-click tests for: environment variables, xA
 - **Password reset email config** (`GET/POST /admin/settings`):
   - SMTP settings (host, port, from address) stored in DB — no restart needed to change
   - Test email button
-- **Updated files**: `app.py`, `models.py` (new `ApiUsageLog` model), `templates/admin/system.html`, `templates/admin/logs.html`, `templates/admin/ai_usage.html`
-- **Status**: Proposed
+- **Updated files**: `services/ai.py` (usage ring buffer), `app.py`, `templates/base.html`, `templates/admin/system.html`, `templates/admin/logs.html`, `templates/admin/ai_usage.html`
+- **Note**: AI usage tracked in-memory (deque of 500 calls in `services/ai.py`) — no DB model needed; resets on restart which is acceptable for operational monitoring. SMTP config deferred (no email infrastructure in place).
+- **Status**: Complete ✓ (2026-03-20)
 
 ---
 

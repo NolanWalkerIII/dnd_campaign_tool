@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}System Health — Admin Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>⚡ System Health</h1>
+  <a href="/admin" class="btn btn-outline" style="font-size:0.85rem;">← Dashboard</a>
+</div>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+
+  <!-- App Info -->
+  <div class="card">
+    <h2>Application</h2>
+    <table style="width:100%; font-size:0.9rem; border-collapse:collapse;">
+      <tr><td style="padding:6px 0; color:var(--muted); width:160px;">Status</td>
+          <td><span style="color:var(--success); font-weight:600;">✓ Running</span></td></tr>
+      <tr><td style="padding:6px 0; color:var(--muted);">Uptime</td>
+          <td style="font-weight:600; color:var(--gold);">{{ uptime }}</td></tr>
+      <tr><td style="padding:6px 0; color:var(--muted);">Started</td>
+          <td>{{ start_time }}</td></tr>
+      <tr><td style="padding:6px 0; color:var(--muted);">Python</td>
+          <td>{{ python_version }}</td></tr>
+      <tr><td style="padding:6px 0; color:var(--muted);">Flask</td>
+          <td>{{ flask_version }}</td></tr>
+      <tr><td style="padding:6px 0; color:var(--muted);">Platform</td>
+          <td style="font-size:0.82rem; color:var(--muted);">{{ platform_info }}</td></tr>
+    </table>
+  </div>
+
+  <!-- API Keys -->
+  <div class="card">
+    <h2>Configuration</h2>
+    <table style="width:100%; font-size:0.9rem; border-collapse:collapse;">
+      <tr>
+        <td style="padding:6px 0; color:var(--muted); width:160px;">XAI_API_KEY</td>
+        <td>{% if xai_key_set %}
+          <span style="color:var(--success);">✓ Set</span>
+        {% else %}
+          <span style="color:var(--accent);">✗ Missing — AI features disabled</span>
+        {% endif %}</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0; color:var(--muted);">Discord Bot</td>
+        <td>{% if discord_token_set %}
+          <span style="color:var(--success);">✓ Token set</span>
+        {% else %}
+          <span style="color:var(--muted);">— Token not configured</span>
+        {% endif %}</td>
+      </tr>
+    </table>
+    <div style="margin-top:1rem;">
+      <a href="/dm/diagnostics" class="btn btn-outline" style="font-size:0.85rem; padding:5px 14px;">
+        🔧 Full Diagnostics Page
+      </a>
+    </div>
+  </div>
+
+  <!-- Database -->
+  <div class="card">
+    <h2>Database</h2>
+    <table style="width:100%; font-size:0.9rem; border-collapse:collapse;">
+      <tr><td style="padding:6px 0; color:var(--muted); width:160px;">Engine</td>
+          <td>SQLite</td></tr>
+      <tr><td style="padding:6px 0; color:var(--muted);">File size</td>
+          <td>{{ "%.1f"|format(db_size / 1024) }} KB</td></tr>
+      {% for tbl, count in table_counts.items() %}
+      <tr>
+        <td style="padding:6px 0; color:var(--muted);">{{ tbl }}</td>
+        <td style="font-weight:600; color:var(--gold);">{{ count }} rows</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <!-- Activity & Logs -->
+  <div class="card">
+    <h2>Activity & Storage</h2>
+    <table style="width:100%; font-size:0.9rem; border-collapse:collapse;">
+      <tr><td style="padding:6px 0; color:var(--muted); width:160px;">Active Users</td>
+          <td style="font-weight:600; color:var(--gold);">{{ active_users }}
+            <span style="font-size:0.8rem; color:var(--muted); font-weight:400;">(last 30 min)</span>
+          </td></tr>
+      <tr><td style="padding:6px 0; color:var(--muted);">Log file size</td>
+          <td>{{ "%.1f"|format(log_size / 1024) }} KB</td></tr>
+    </table>
+    <div style="margin-top:1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <a href="/admin/logs" class="btn btn-outline" style="font-size:0.85rem; padding:5px 14px;">📋 View Logs</a>
+      <a href="/admin/ai-usage" class="btn btn-outline" style="font-size:0.85rem; padding:5px 14px;">🤖 AI Usage</a>
+    </div>
+  </div>
+
+  <!-- AI Usage summary -->
+  <div class="card" style="grid-column: 1 / -1;">
+    <h2>AI Usage (since last restart)</h2>
+    <div style="display:flex; gap:2rem; flex-wrap:wrap;">
+      <div style="text-align:center;">
+        <div style="font-size:2rem; font-weight:700; color:var(--gold);">{{ total_calls }}</div>
+        <div style="color:var(--muted); font-size:0.82rem; text-transform:uppercase; letter-spacing:1px;">Total Calls</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:2rem; font-weight:700; color:var(--gold);">{{ total_tokens }}</div>
+        <div style="color:var(--muted); font-size:0.82rem; text-transform:uppercase; letter-spacing:1px;">Total Tokens</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:2rem; font-weight:700; color:{% if failed_calls > 0 %}var(--accent){% else %}var(--success){% endif %};">{{ failed_calls }}</div>
+        <div style="color:var(--muted); font-size:0.82rem; text-transform:uppercase; letter-spacing:1px;">Failed Calls</div>
+      </div>
+    </div>
+    <div style="margin-top:1rem;">
+      <a href="/admin/ai-usage" class="btn btn-outline" style="font-size:0.85rem; padding:5px 14px;">View Full Usage Log →</a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
