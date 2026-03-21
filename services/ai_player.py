@@ -156,7 +156,10 @@ def generate_combat_decision(character, campaign, persona_level):
     # Character state
     extra = character.spells or {}
     slots = extra.get('slots', {})
-    slot_summary = ', '.join(f"L{k}:{v}" for k, v in slots.items() if v > 0) or 'none'
+    slot_summary = ', '.join(
+        f"L{k}:{v['current']}/{v['max']}" for k, v in slots.items()
+        if isinstance(v, dict) and v.get('current', 0) > 0
+    ) or 'none'
     cond_key = f'char_{character.id}'
     conditions = conditions_map.get(cond_key, [])
     cond_text = ', '.join(conditions) or 'none'
