@@ -422,17 +422,34 @@
 
   </div>
   <script>
-    // Auto-inject CSRF token into every HTML form so no template needs manual changes.
     (function() {
       var token = document.querySelector('meta[name="csrf-token"]');
       if (!token) return;
+      var csrfValue = token.content;
+
+      // 1. Auto-inject CSRF hidden input into every HTML form (handles standard submits).
       document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function(f) {
         if (!f.querySelector('input[name="csrf_token"]')) {
           var inp = document.createElement('input');
-          inp.type = 'hidden'; inp.name = 'csrf_token'; inp.value = token.content;
+          inp.type = 'hidden'; inp.name = 'csrf_token'; inp.value = csrfValue;
           f.appendChild(inp);
         }
       });
+
+      // 2. Patch window.fetch to add X-CSRFToken header on every POST request
+      //    (handles all fetch()-based AI actions without touching individual templates).
+      var _fetch = window.fetch;
+      window.fetch = function(url, opts) {
+        opts = opts || {};
+        if (opts.method && opts.method.toUpperCase() === 'POST') {
+          if (opts.headers instanceof Headers) {
+            opts.headers.set('X-CSRFToken', csrfValue);
+          } else {
+            opts.headers = Object.assign({}, opts.headers, {'X-CSRFToken': csrfValue});
+          }
+        }
+        return _fetch.call(this, url, opts);
+      };
     })();
   </script>
 </body>
