@@ -4,10 +4,36 @@ services:
     ports:
       - "5001:5000"
     volumes:
-      # Persist the SQLite database across container restarts
+      # Persist the SQLite database across container restarts (dev / no-Postgres mode)
       - ./instance:/app/instance
     env_file:
       - .env
     environment:
       - FLASK_ENV=production
     restart: unless-stopped
+    # Uncomment to use PostgreSQL — set DATABASE_URL in .env and enable 'db' service below:
+    #   DATABASE_URL=postgresql://quester:quester@db:5432/questerledger
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
+
+  # ── Optional PostgreSQL service ───────────────────────────────────────────
+  # Uncomment to enable. Requires DATABASE_URL in .env (see above).
+  #
+  # db:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: quester
+  #     POSTGRES_PASSWORD: quester
+  #     POSTGRES_DB: questerledger
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U quester -d questerledger"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+  #   restart: unless-stopped
+
+# volumes:
+#   pgdata:

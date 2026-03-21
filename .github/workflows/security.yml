@@ -1,0 +1,48 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run weekly on Monday at 08:00 UTC
+    - cron: '0 8 * * 1'
+
+jobs:
+  pip-audit:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit
+        run: pip-audit -r requirements.txt --output json --output-file audit-results.json || true
+
+      - name: Display results
+        run: |
+          if [ -f audit-results.json ]; then
+            python -c "
+import json, sys
+with open('audit-results.json') as f:
+    data = json.load(f)
+vulns = data.get('dependencies', [])
+found = [d for d in vulns if d.get('vulns')]
+if found:
+    print(f'VULNERABILITIES FOUND in {len(found)} package(s):')
+    for dep in found:
+        for v in dep['vulns']:
+            print(f\"  {dep['name']}=={dep['version']}: {v['id']} — {v['description'][:120]}\")
+    sys.exit(1)
+else:
+    print('No known vulnerabilities found.')
+"
+          fi

@@ -1,7 +1,9 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Column, Integer, String, Text, JSON, Boolean, ForeignKey, DateTime
+import hashlib
 import random
 import re
+import secrets
 
 db = SQLAlchemy()
 
@@ -29,6 +31,38 @@ class AdminAuditLog(db.Model):
     target_label = Column(String(100), nullable=True)
     detail = Column(Text, nullable=True)
     timestamp = Column(DateTime, nullable=False)
+
+
+class APIKey(db.Model):
+    """Per-client API keys for external REST access. Rotate without downtime."""
+    id          = Column(Integer, primary_key=True)
+    label       = Column(String(100), nullable=False)          # human name, e.g. "Claude Agent"
+    key_prefix  = Column(String(8),  nullable=False)           # first 8 chars for display
+    key_hash    = Column(String(64), nullable=False, unique=True)  # SHA-256 of full key
+    created_at  = Column(DateTime, nullable=False)
+    expires_at  = Column(DateTime, nullable=True)              # None = never expires
+    last_used_at = Column(DateTime, nullable=True)
+    is_active   = Column(Boolean, default=True)
+
+    @staticmethod
+    def generate():
+        """Return (raw_key, APIKey instance) — raw_key is shown once and never stored."""
+        raw = secrets.token_hex(32)
+        prefix = raw[:8]
+        key_hash = hashlib.sha256(raw.encode()).hexdigest()
+        return raw, prefix, key_hash
+
+    @staticmethod
+    def verify(raw_key):
+        """Return the matching active APIKey row, or None."""
+        from datetime import datetime as _dt
+        h = hashlib.sha256(raw_key.encode()).hexdigest()
+        key = APIKey.query.filter_by(key_hash=h, is_active=True).first()
+        if key is None:
+            return None
+        if key.expires_at and key.expires_at < _dt.utcnow():
+            return None
+        return key
 
 
 class Character(db.Model):

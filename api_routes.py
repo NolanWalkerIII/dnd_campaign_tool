@@ -18,7 +18,7 @@ from functools import wraps
 from flask import Blueprint, jsonify, request, current_app as _current_app
 from extensions import limiter
 
-from models import db, User, Character, Campaign, DiceRoller
+from models import db, User, Character, Campaign, DiceRoller, APIKey
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -26,23 +26,45 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 # ── Auth ────────────────────────────────────────────────────
 
 def require_api_key(f):
-    """Decorator: require valid API key in Authorization header."""
+    """
+    Decorator: require valid API key in Authorization header.
+
+    Checks in order:
+    1. Per-client DB keys (APIKey table) — supports rotation & expiry
+    2. CLAUDE_API_KEY env var — legacy fallback for backward compatibility
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
-        key = os.environ.get('CLAUDE_API_KEY', '')
-        if not key:
-            return jsonify(error="API not configured — set CLAUDE_API_KEY in .env"), 503
-        auth = request.headers.get('Authorization', '')
+        auth  = request.headers.get('Authorization', '')
         token = auth.replace('Bearer ', '').strip()
-        if not hmac.compare_digest(token.encode(), key.encode()):
-            _current_app.logger.warning(
-                f"AUDIT: api_auth_failure endpoint={request.endpoint} ip={request.remote_addr}"
-            )
+
+        if not token:
             return jsonify(error="Unauthorized"), 401
-        _current_app.logger.info(
-            f"AUDIT: api_access endpoint={request.endpoint} ip={request.remote_addr}"
+
+        # 1. Check DB per-client keys
+        matched_key = APIKey.verify(token)
+        if matched_key:
+            matched_key.last_used_at = datetime.utcnow()
+            db.session.commit()
+            _current_app.logger.info(
+                f"AUDIT: api_access key={matched_key.label!r} "
+                f"endpoint={request.endpoint} ip={request.remote_addr}"
+            )
+            return f(*args, **kwargs)
+
+        # 2. Fall back to legacy CLAUDE_API_KEY env var
+        env_key = os.environ.get('CLAUDE_API_KEY', '')
+        if env_key and hmac.compare_digest(token.encode(), env_key.encode()):
+            _current_app.logger.info(
+                f"AUDIT: api_access key=env_legacy "
+                f"endpoint={request.endpoint} ip={request.remote_addr}"
+            )
+            return f(*args, **kwargs)
+
+        _current_app.logger.warning(
+            f"AUDIT: api_auth_failure endpoint={request.endpoint} ip={request.remote_addr}"
         )
-        return f(*args, **kwargs)
+        return jsonify(error="Unauthorized"), 401
     return decorated
 
 

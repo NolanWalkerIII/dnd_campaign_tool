@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}API Keys — Admin Console{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>🔑 API Keys</h1>
+  <a href="/admin" class="btn btn-outline" style="font-size:0.85rem;">← Admin</a>
+</div>
+
+{% if new_key %}
+<div style="background:rgba(46,204,113,0.12); border:1px solid var(--success);
+            border-radius:var(--radius); padding:1rem 1.25rem; margin-bottom:1.5rem;">
+  <strong style="color:var(--success);">New API key created — copy it now. It will not be shown again.</strong>
+  <div style="margin-top:0.5rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+    <code style="background:var(--card); padding:6px 12px; border-radius:6px;
+                 font-size:0.9rem; word-break:break-all; flex:1;">{{ new_key }}</code>
+    <button onclick="navigator.clipboard.writeText('{{ new_key }}'); this.textContent='Copied!';"
+            class="btn btn-gold" style="white-space:nowrap; padding:5px 14px; font-size:0.85rem;">
+      Copy
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<!-- Create new key -->
+<div class="card" style="margin-bottom:1.5rem;">
+  <h2 style="margin:0 0 1rem;">Create New Key</h2>
+  <form method="POST" action="/admin/api-keys/create"
+        style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+    <div class="form-group" style="min-width:200px;">
+      <label>Label <span style="color:var(--accent);">*</span></label>
+      <input type="text" name="label" placeholder="e.g. Claude Agent, Discord Bot"
+             required style="width:220px;">
+    </div>
+    <div class="form-group" style="width:130px;">
+      <label>Expires in (days)</label>
+      <input type="number" name="expires_days" placeholder="never" min="1"
+             style="width:120px;">
+    </div>
+    <button type="submit" class="btn btn-gold" style="padding:8px 20px;">Generate Key</button>
+  </form>
+</div>
+
+<!-- Existing keys -->
+<div class="card">
+  <h2 style="margin:0 0 1rem;">Active & Revoked Keys</h2>
+  {% if keys %}
+  <div style="overflow-x:auto;">
+    <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border); color:var(--muted); text-align:left;">
+          <th style="padding:6px 10px;">Label</th>
+          <th style="padding:6px 10px;">Prefix</th>
+          <th style="padding:6px 10px;">Created</th>
+          <th style="padding:6px 10px;">Expires</th>
+          <th style="padding:6px 10px;">Last Used</th>
+          <th style="padding:6px 10px;">Status</th>
+          <th style="padding:6px 10px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for k in keys %}
+        <tr style="border-bottom:1px solid var(--border);
+                   opacity:{{ '1' if k.is_active else '0.5' }};">
+          <td style="padding:8px 10px; font-weight:600;">{{ k.label }}</td>
+          <td style="padding:8px 10px; font-family:monospace; color:var(--gold);">
+            {{ k.key_prefix }}…</td>
+          <td style="padding:8px 10px; color:var(--muted);">
+            {{ k.created_at.strftime('%Y-%m-%d') if k.created_at else '—' }}</td>
+          <td style="padding:8px 10px; color:var(--muted);">
+            {% if k.expires_at %}
+              {{ k.expires_at.strftime('%Y-%m-%d') }}
+            {% else %}
+              Never
+            {% endif %}
+          </td>
+          <td style="padding:8px 10px; color:var(--muted);">
+            {{ k.last_used_at.strftime('%Y-%m-%d %H:%M') if k.last_used_at else 'Never' }}</td>
+          <td style="padding:8px 10px;">
+            {% if k.is_active %}
+            <span style="color:var(--success); font-size:0.8rem;">Active</span>
+            {% else %}
+            <span style="color:var(--muted); font-size:0.8rem;">Revoked</span>
+            {% endif %}
+          </td>
+          <td style="padding:8px 10px;">
+            {% if k.is_active %}
+            <form method="POST" action="/admin/api-keys/{{ k.id }}/revoke" style="margin:0;"
+                  onsubmit="return confirm('Revoke key {{ k.label }}? This cannot be undone.');">
+              <button type="submit" class="btn btn-outline"
+                      style="padding:2px 10px; font-size:0.78rem; color:var(--accent);">
+                Revoke
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p style="color:var(--muted);">No API keys yet. Create one above.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -38,7 +38,11 @@ from game_data import (
 )
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///dnd.db'
+_db_url = os.environ.get('DATABASE_URL', 'sqlite:///dnd.db')
+# Heroku / some PaaS providers emit postgres:// which SQLAlchemy 1.4+ requires as postgresql://
+if _db_url.startswith('postgres://'):
+    _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 _secret_key = os.environ.get('SECRET_KEY')
@@ -94,15 +98,16 @@ app.register_blueprint(api_bp)
 
 with app.app_context():
     db.create_all()
-    # Phase 7 migration: add last_seen column if the DB predates it
-    with db.engine.connect() as _conn:
-        _cols = [r[1] for r in _conn.execute(db.text("PRAGMA table_info('user')"))]
-        if 'last_seen' not in _cols:
-            _conn.execute(db.text("ALTER TABLE user ADD COLUMN last_seen DATETIME"))
-            _conn.commit()
-        if 'discord_id' not in _cols:
-            _conn.execute(db.text("ALTER TABLE user ADD COLUMN discord_id VARCHAR(30)"))
-            _conn.commit()
+    # SQLite-only column migrations (PRAGMA is not available on PostgreSQL)
+    if db.engine.dialect.name == 'sqlite':
+        with db.engine.connect() as _conn:
+            _cols = [r[1] for r in _conn.execute(db.text("PRAGMA table_info('user')"))]
+            if 'last_seen' not in _cols:
+                _conn.execute(db.text("ALTER TABLE user ADD COLUMN last_seen DATETIME"))
+                _conn.commit()
+            if 'discord_id' not in _cols:
+                _conn.execute(db.text("ALTER TABLE user ADD COLUMN discord_id VARCHAR(30)"))
+                _conn.commit()
 
 # Start Discord bot in background thread
 # In debug mode with reloader, only start in the child process
@@ -118,6 +123,14 @@ def _get_discord_invite():
         return url if url.startswith('http') else None
     except Exception:
         return None
+
+
+@app.before_request
+def enforce_https():
+    """Redirect HTTP → HTTPS when running in production (COOKIE_SECURE=true)."""
+    if os.environ.get('COOKIE_SECURE', '').lower() == 'true':
+        if request.headers.get('X-Forwarded-Proto', 'https') == 'http':
+            return redirect(request.url.replace('http://', 'https://', 1), code=301)
 
 
 @app.before_request
@@ -284,6 +297,17 @@ def security_headers(response):
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     if os.environ.get('COOKIE_SECURE', '').lower() == 'true':
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    # CSP in Report-Only mode — collects violations without blocking.
+    # Switch to Content-Security-Policy once violations are resolved.
+    response.headers['Content-Security-Policy-Report-Only'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none';"
+    )
     return response
 
 
@@ -3384,6 +3408,61 @@ def admin_logs_download():
     _admin_log('download_log', detail='app.log')
     return send_file(log_path, as_attachment=True, download_name='app.log',
                      mimetype='text/plain')
+
+
+@app.route('/admin/api-keys')
+@admin_required
+def admin_api_keys():
+    from models import APIKey
+    keys = APIKey.query.order_by(APIKey.created_at.desc()).all()
+    new_key = session.pop('_new_api_key', None)  # shown once after creation
+    return render_template('admin/api_keys.html', keys=keys, new_key=new_key)
+
+
+@app.route('/admin/api-keys/create', methods=['POST'])
+@admin_required
+def admin_api_key_create():
+    from models import APIKey
+    label = request.form.get('label', '').strip()
+    if not label:
+        flash('Label is required.', 'error')
+        return redirect(url_for('admin_api_keys'))
+    expires_days = request.form.get('expires_days', '').strip()
+    expires_at = None
+    if expires_days:
+        try:
+            expires_at = datetime.utcnow() + timedelta(days=int(expires_days))
+        except (ValueError, TypeError):
+            flash('Invalid expiry days.', 'error')
+            return redirect(url_for('admin_api_keys'))
+
+    raw, prefix, key_hash = APIKey.generate()
+    key = APIKey(
+        label=label,
+        key_prefix=prefix,
+        key_hash=key_hash,
+        created_at=datetime.utcnow(),
+        expires_at=expires_at,
+        is_active=True,
+    )
+    db.session.add(key)
+    db.session.commit()
+    session['_new_api_key'] = raw   # stored in session, shown once on redirect
+    _admin_log('create_api_key', detail=f'label={label}')
+    flash(f'API key "{label}" created. Copy it now — it will not be shown again.', 'success')
+    return redirect(url_for('admin_api_keys'))
+
+
+@app.route('/admin/api-keys/<int:key_id>/revoke', methods=['POST'])
+@admin_required
+def admin_api_key_revoke(key_id):
+    from models import APIKey
+    key = APIKey.query.get_or_404(key_id)
+    key.is_active = False
+    db.session.commit()
+    _admin_log('revoke_api_key', detail=f'label={key.label} prefix={key.key_prefix}')
+    flash(f'API key "{key.label}" revoked.', 'success')
+    return redirect(url_for('admin_api_keys'))
 
 
 @app.route('/admin/ai-usage')
