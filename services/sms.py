@@ -52,8 +52,12 @@ def validate_webhook(request):
     """
     token = os.environ.get('TWILIO_AUTH_TOKEN', '')
     if not token:
-        # Dev mode: skip validation
-        return True
+        # No token configured — fail closed to prevent unauthenticated webhook abuse
+        import logging
+        logging.getLogger(__name__).warning(
+            "TWILIO_AUTH_TOKEN not set — rejecting SMS webhook request"
+        )
+        return False
 
     try:
         from twilio.request_validator import RequestValidator

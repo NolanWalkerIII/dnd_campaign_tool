@@ -1533,7 +1533,7 @@ def run_bot(flask_app, token):
     _bot_loop = loop
     asyncio.set_event_loop(loop)
     try:
-        print(f'[Discord] Connecting with token {token[:20]}...', flush=True)
+        print('[Discord] Connecting...', flush=True)
         loop.run_until_complete(bot.start(token))
     except Exception as e:
         print(f'[Discord] Bot error: {e}', file=sys.stderr, flush=True)

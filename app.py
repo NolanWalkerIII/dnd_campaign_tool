@@ -38,7 +38,21 @@ from game_data import (
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///dnd.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.secret_key = 'dnd-dev-secret-change-in-prod'
+
+_secret_key = os.environ.get('SECRET_KEY')
+if not _secret_key:
+    raise RuntimeError(
+        "SECRET_KEY environment variable is not set. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+app.secret_key = _secret_key
+
+# ── Session cookie security ───────────────────────────────────────────────────
+app.config['SESSION_COOKIE_SECURE'] = True      # HTTPS-only transmission
+app.config['SESSION_COOKIE_HTTPONLY'] = True    # block JS access
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF mitigation
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
+
 db.init_app(app)
 
 # ── File logging setup ────────────────────────────────────────────────────────

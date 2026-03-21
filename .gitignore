@@ -1,6 +1,7 @@
 # Environment / secrets
 .env
 keys
+*.token.env
 
 # Python
 __pycache__/
@@ -20,6 +21,9 @@ instance/
 # OS
 .DS_Store
 Thumbs.db
+
+# Security planning (contains vulnerability details — keep private)
+SECURITY_PLAN.md
 
 # Internal / non-public folders
 Feedback/

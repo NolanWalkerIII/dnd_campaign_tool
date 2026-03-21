@@ -8,6 +8,7 @@ Usage:
   curl -H "Authorization: Bearer <CLAUDE_API_KEY>" https://questerledger.johnbest.ai/api/campaigns
 """
 
+import hmac
 import json
 import os
 import traceback
@@ -32,7 +33,7 @@ def require_api_key(f):
             return jsonify(error="API not configured — set CLAUDE_API_KEY in .env"), 503
         auth = request.headers.get('Authorization', '')
         token = auth.replace('Bearer ', '').strip()
-        if token != key:
+        if not hmac.compare_digest(token.encode(), key.encode()):
             return jsonify(error="Unauthorized"), 401
         return f(*args, **kwargs)
     return decorated
