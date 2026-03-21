@@ -18,7 +18,9 @@ APP_START_TIME = datetime.utcnow()
 
 from flask import (Flask, render_template, redirect, url_for,
                    request, flash, session, send_file, jsonify)
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash, check_password_hash
+from extensions import csrf, limiter
 
 from models import db, User, Character, Campaign, DiceRoller, AdminAuditLog
 from parsers import parse_character_md, parse_campaign_md, CHARACTER_TEMPLATE, CAMPAIGN_TEMPLATE
@@ -48,12 +50,21 @@ if not _secret_key:
 app.secret_key = _secret_key
 
 # ── Session cookie security ───────────────────────────────────────────────────
-app.config['SESSION_COOKIE_SECURE'] = True      # HTTPS-only transmission
-app.config['SESSION_COOKIE_HTTPONLY'] = True    # block JS access
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF mitigation
+# SESSION_COOKIE_SECURE requires HTTPS — only enforce when explicitly behind HTTPS in prod.
+# Set COOKIE_SECURE=true in .env on the production server; leave unset locally/in Docker.
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('COOKIE_SECURE', '').lower() == 'true'
+app.config['SESSION_COOKIE_HTTPONLY'] = True           # block JS access
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'         # CSRF mitigation
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
 
 db.init_app(app)
+
+# ── CSRF + rate limiting ──────────────────────────────────────────────────────
+csrf.init_app(app)
+limiter.init_app(app)
+
+# ── Trusted proxy headers ─────────────────────────────────────────────────────
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # ── File logging setup ────────────────────────────────────────────────────────
 _log_dir = os.path.join(os.path.dirname(__file__), 'logs')
@@ -70,12 +81,14 @@ logging.getLogger().addHandler(_file_handler)
 logging.getLogger().setLevel(logging.INFO)
 app.logger.addHandler(_file_handler)
 
-# Register SMS blueprint
+# Register SMS blueprint (CSRF exempt — Twilio uses its own signature validation)
 from sms_routes import sms_bp
+csrf.exempt(sms_bp)
 app.register_blueprint(sms_bp)
 
-# Register API blueprint
+# Register API blueprint (CSRF exempt — Bearer token auth, not cookie-based)
 from api_routes import api_bp
+csrf.exempt(api_bp)
 app.register_blueprint(api_bp)
 
 with app.app_context():
@@ -260,6 +273,19 @@ def inject_globals():
     )
 
 
+# ── Security headers ──────────────────────────────────────────────────────────
+
+@app.after_request
+def security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    if os.environ.get('COOKIE_SECURE', '').lower() == 'true':
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
+
+
 # ── Root ──────────────────────────────────────────────────────────────────────
 
 @app.route('/')
@@ -274,6 +300,7 @@ def home():
 # ── Auth routes ───────────────────────────────────────────────────────────────
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute", methods=["POST"], exempt_when=lambda: app.testing)
 def login():
     if 'user_id' in session:
         return redirect(url_for('home'))
@@ -321,8 +348,8 @@ def register():
             flash('Username and password are required.', 'error')
         elif len(username) < 3:
             flash('Username must be at least 3 characters.', 'error')
-        elif len(password) < 4:
-            flash('Password must be at least 4 characters.', 'error')
+        elif len(password) < 12:
+            flash('Password must be at least 12 characters.', 'error')
         elif password != confirm:
             flash('Passwords do not match.', 'error')
         elif role not in ('dm', 'player'):
@@ -355,8 +382,8 @@ def change_password():
     if request.method == 'POST':
         new_pw = request.form.get('password', '')
         confirm = request.form.get('confirm', '')
-        if len(new_pw) < 6:
-            flash('Password must be at least 6 characters.', 'error')
+        if len(new_pw) < 12:
+            flash('Password must be at least 12 characters.', 'error')
         elif new_pw != confirm:
             flash('Passwords do not match.', 'error')
         else:

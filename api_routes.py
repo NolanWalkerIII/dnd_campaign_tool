@@ -15,7 +15,8 @@ import traceback
 from datetime import datetime
 from functools import wraps
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app as _current_app
+from extensions import limiter
 
 from models import db, User, Character, Campaign, DiceRoller
 
@@ -218,7 +219,9 @@ def api_action():
         response = process_player_sms(message, ch, c)
     except Exception as e:
         _post_debug(c, f"[API] action error: {e}")
-        return jsonify(error=str(e)), 500
+        import logging as _logging
+        _logging.getLogger(__name__).error("api_play error", exc_info=True)
+        return jsonify(error="Internal server error"), 500
 
     # Bridge to Discord
     try:
@@ -1102,6 +1105,7 @@ def api_log(cid):
 
 @api_bp.route('/play', methods=['POST'])
 @require_api_key
+@limiter.limit("60 per minute", exempt_when=lambda: _current_app.testing)
 def api_play():
     """
     Play as a character — designed for external AI agents (e.g. Claude).

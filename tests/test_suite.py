@@ -21,6 +21,8 @@ flask_app.config.update({
     'TESTING': True,
     'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
     'SECRET_KEY': 'test-only-secret',
+    'WTF_CSRF_ENABLED': False,    # disable CSRF tokens in test client POSTs
+    'RATELIMIT_ENABLED': False,   # disable rate limiting in tests
 })
 
 
@@ -33,7 +35,7 @@ def make_client():
     return client
 
 
-def register(client, username, password='pass123', role='player'):
+def register(client, username, password='TestPass!2024!', role='player'):
     """Register an account and then log in. Returns the login response."""
     client.post('/register', data={
         'username': username, 'password': password,
@@ -44,7 +46,7 @@ def register(client, username, password='pass123', role='player'):
     }, follow_redirects=True)
 
 
-def login(client, username, password='pass123'):
+def login(client, username, password='TestPass!2024!'):
     return client.post('/login', data={
         'username': username, 'password': password,
     }, follow_redirects=True)
