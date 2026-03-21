@@ -255,6 +255,32 @@ Requires `XAI_API_KEY`. Enables the DM to assign AI-controlled personas to chara
 - **⏭ Advance Party** — generates actions for every AI character in sequence; each result shown for DM review before posting
 - **📊 Session Summary** — dedicated page showing all AI characters, narration log, combat log, and an AI-generated coaching debrief (what each persona did well, what a real player at that level might do differently, and 2–3 actionable tips for the DM)
 
+### Admin Console
+
+Accessible to accounts with the `is_admin` flag. Promote a user via the Docker CLI (see below). The **🛡 Admin Console** link appears in the sidebar for admins after login.
+
+- **Dashboard** — stats cards (total users, campaigns, characters), recent signups, recent admin action history
+- **User list** — searchable/filterable table of all accounts with role, last-seen, and ban status
+- **User detail** — full profile: linked characters, DM campaigns, action history; all management actions available in one place
+- **Reset password** — generates a secure 12-character temporary password displayed to the admin; the user is forced to change it on next login
+- **Ban / Unban** — suspended accounts see "Account suspended" on login and cannot log in
+- **Set role** — promote Player → DM or demote DM → Player without touching the database
+- **Grant / Revoke admin** — delegate admin access to other users
+- **Delete user** — soft-deletes the account; their characters are orphaned (kept for campaign history) rather than cascade-deleted
+- **Audit log** — every admin action is recorded (who, what, when, on which account) and shown on the dashboard and user detail pages
+
+**Promoting the first admin:**
+```bash
+docker exec dndidea-dnd-1 python -c "
+from app import app
+from models import db, User
+with app.app_context():
+    u = User.query.filter_by(username='YOUR_USERNAME').first()
+    u.is_admin = True
+    db.session.commit()
+"
+```
+
 ### Character Assignment (DM Tool)
 
 - DM dashboard shows each character's current owner or ⚠ Unassigned
@@ -289,7 +315,7 @@ Requires `XAI_API_KEY`. Enables the DM to assign AI-controlled personas to chara
 ```
 .
 ├── app.py                  # Flask application, routes, game logic
-├── models.py               # SQLAlchemy models (User, Character, Campaign)
+├── models.py               # SQLAlchemy models (User, Character, Campaign, AdminAuditLog)
 ├── parsers.py              # Markdown parsers + v2 template strings for import/export
 ├── api_routes.py           # REST API Blueprint (27 endpoints, Bearer token auth)
 ├── sms_routes.py           # Twilio SMS play-by-text Blueprint
@@ -309,7 +335,7 @@ Requires `XAI_API_KEY`. Enables the DM to assign AI-controlled personas to chara
 ├── docker-compose.yml
 ├── docker-compose.prod.yml # Production docker-compose
 ├── DOCKER.md               # Docker operations reference
-├── PLAN.md                 # Full project plan and phase history (Phases 1–28, all complete)
+├── PLAN.md                 # Full project plan and phase history (Phases 1–29, all complete)
 ├── instance/
 │   └── dnd.db              # SQLite database (created at runtime)
 ├── static/
@@ -323,11 +349,16 @@ Requires `XAI_API_KEY`. Enables the DM to assign AI-controlled personas to chara
 │   ├── index.html
 │   ├── login.html
 │   ├── register.html
+│   ├── change_password.html     # Forced password change after admin reset
 │   ├── character_sheet.html
 │   ├── character_create.html    # Two-path: AI generator or manual form
 │   ├── character_generate.html  # AI generator wizard form
 │   ├── character_preview.html   # AI character preview + approve/regenerate
 │   ├── rules.html
+│   ├── admin/
+│   │   ├── dashboard.html       # Stats overview + recent users + audit log
+│   │   ├── users.html           # Searchable user list
+│   │   └── user_detail.html     # User profile, actions, characters, campaigns
 │   ├── dm/
 │   │   ├── dashboard.html
 │   │   ├── campaign.html
@@ -392,6 +423,15 @@ Requires `XAI_API_KEY`. Enables the DM to assign AI-controlled personas to chara
 | `/dm/characters/<id>/ai-combat-execute` | DM | Execute approved AI combat action |
 | `/player/dashboard` | Player | Dashboard — campaigns + characters |
 | `/player/campaigns/<id>` | Player | Play in campaign |
+| `/change-password` | Any | Change own password (forced after admin reset) |
+| `/admin` | Admin | Admin dashboard — stats + recent activity |
+| `/admin/users` | Admin | User list with search |
+| `/admin/users/<id>` | Admin | User detail + management actions |
+| `/admin/users/<id>/reset-password` | Admin | Generate temporary password |
+| `/admin/users/<id>/toggle-ban` | Admin | Ban or unban account |
+| `/admin/users/<id>/set-role` | Admin | Change user role |
+| `/admin/users/<id>/toggle-admin` | Admin | Grant or revoke admin access |
+| `/admin/users/<id>/delete` | Admin | Delete user (orphans characters) |
 
 ---
 
