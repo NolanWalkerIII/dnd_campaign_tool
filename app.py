@@ -3733,6 +3733,20 @@ DM_DOCS = [
     ('campaign-template',  '14_CAMPAIGN_TEMPLATE.md',  'Campaign Template'),
 ]
 
+# Expansion content — XGtE, TCoE, MotM (available to both players and DMs)
+# Each tuple: (slug, filename, title, source_tag)
+EXPANSION_DOCS = [
+    ('xge-subclasses',        '20_XANATHARS_SUBCLASSES.md',    "XGtE Subclasses",         'XGtE'),
+    ('tce-subclasses',        '21_TASHAS_SUBCLASSES.md',        "TCoE Subclasses",         'TCoE'),
+    ('tce-optional-features', '22_TASHAS_OPTIONAL_FEATURES.md', "TCoE Optional Features",  'TCoE'),
+    ('multiverse-races',      '23_MULTIVERSE_RACES.md',         "Multiverse Races",        'MotM'),
+    ('expansion-spells',      '24_EXPANSION_SPELLS.md',         "Expansion Spells",        'XGtE/TCoE'),
+    ('expansion-feats',       '25_EXPANSION_FEATS.md',          "Expansion Feats",         'XGtE/TCoE'),
+    ('multiverse-monsters',   '26_MULTIVERSE_MONSTERS.md',      "Multiverse Monsters",     'MotM'),
+    ('expansion-magic-items', '27_EXPANSION_MAGIC_ITEMS.md',    "Expansion Magic Items",   'XGtE/TCoE'),
+    ('expansion-dm-tools',    '28_EXPANSION_DM_TOOLS.md',       "Expansion DM Tools",      'XGtE/TCoE'),
+]
+
 def _render_doc(filename):
     path = os.path.join(_DOC_DIR, filename)
     try:
@@ -3752,11 +3766,16 @@ def rules_index():
 @login_required
 def rules_section(slug):
     entry = next((e for e in PLAYER_DOCS if e[0] == slug), None)
+    is_expansion = False
+    if not entry:
+        entry = next((e for e in EXPANSION_DOCS if e[0] == slug), None)
+        is_expansion = entry is not None
     if not entry:
         return redirect(url_for('rules_section', slug='core-mechanics'))
     content_html = _render_doc(entry[1])
     return render_template('rules.html',
                            docs=PLAYER_DOCS,
+                           expansion_docs=EXPANSION_DOCS,
                            active_slug=slug,
                            active_title=entry[2],
                            content_html=content_html,
@@ -3774,10 +3793,13 @@ def dm_guide_index():
 def dm_guide_section(slug):
     entry = next((e for e in DM_DOCS if e[0] == slug), None)
     if not entry:
+        entry = next((e for e in EXPANSION_DOCS if e[0] == slug), None)
+    if not entry:
         return redirect(url_for('dm_guide_section', slug='dm-guide'))
     content_html = _render_doc(entry[1])
     return render_template('rules.html',
                            docs=DM_DOCS,
+                           expansion_docs=EXPANSION_DOCS,
                            active_slug=slug,
                            active_title=entry[2],
                            content_html=content_html,

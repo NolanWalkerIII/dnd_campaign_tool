@@ -1,8 +1,8 @@
 # D&D 5e — LLM Reference Documentation
 
-Reference documents for running and assisting with Dungeons & Dragons 5th Edition games via LLM. All content based on the 5e SRD (Systems Reference Document) released under Creative Commons.
+Reference documents for running and assisting with Dungeons & Dragons 5th Edition games via LLM. Core content based on the 5e SRD (Systems Reference Document). Expansion content covers material from Xanathar's Guide to Everything, Tasha's Cauldron of Everything, and Mordenkainen Presents: Monsters of the Multiverse.
 
-## Document Map
+## Document Map — Core Rules (SRD/PHB)
 
 | File | Contents |
 |------|----------|
@@ -24,12 +24,39 @@ Reference documents for running and assisting with Dungeons & Dragons 5th Editio
 | `16_ENCOUNTER_TEMPLATE.md` | Encounter design template — setup, monsters, terrain, rewards |
 | `17_LLM_INSTRUCTIONS.md` | How an LLM should use these docs during play |
 
+## Document Map — Expansion Content
+
+| File | Source | Contents |
+|------|--------|----------|
+| `20_XANATHARS_SUBCLASSES.md` | XGtE | All 31 subclasses from Xanathar's Guide — 3 per class (Barbarian through Wizard) |
+| `21_TASHAS_SUBCLASSES.md` | TCoE | All 24 subclasses from Tasha's Cauldron — 2 per class |
+| `22_TASHAS_OPTIONAL_FEATURES.md` | TCoE | Optional class features, new fighting styles, new maneuvers, new metamagic, new invocations, Pact of the Talisman |
+| `23_MULTIVERSE_RACES.md` | MotM/TCoE | 31 revised MotM races + Custom Lineage, flexible ASI system |
+| `24_EXPANSION_SPELLS.md` | XGtE/TCoE | New spells cantrip through 9th level — Booming Blade, Absorb Elements, Shadow Blade, Summon spells, Synaptic Static, Psychic Scream, etc. |
+| `25_EXPANSION_FEATS.md` | XGtE/TCoE | TCoE general feats (Fey Touched, Crusher, Telekinetic, etc.) + XGtE racial feats (Elven Accuracy, etc.) |
+| `26_MULTIVERSE_MONSTERS.md` | MotM/XGtE | Revised MotM monsters by CR, expanded devils/demons/mind flayers, encounter tables by environment |
+| `27_EXPANSION_MAGIC_ITEMS.md` | XGtE/TCoE | Common magic items, magical tattoos, class-specific focus items, artifacts |
+| `28_EXPANSION_DM_TOOLS.md` | XGtE/TCoE | Group patrons, sidekick rules, puzzles, complex traps, downtime activities, tool proficiencies, supernatural environments |
+
 ## Usage Notes
 
 These docs are designed for retrieval-augmented generation (RAG) or direct context injection. Each file is self-contained — you can load individual files based on what the current game situation requires.
 
 For LLM integration, start with `17_LLM_INSTRUCTIONS.md` to understand the intended workflow, then load rules files as needed during play.
 
-## SRD Scope
+### Loading Priority
+- Always load core rules files (01-08) for the topic at hand
+- Load expansion files (20-28) when the game uses content from XGtE, TCoE, or MotM
+- For character creation: load 03 + 04 + 20 + 21 + 22 + 23 + 25
+- For combat/spells: load 05 + 06 + 07 + 24
+- For monsters/encounters: load 11 + 26 + 16
+- For DM tools: load 13 + 28
 
-This reference covers content available in the 5e SRD. Some PHB content (certain subclasses, spells, races) is not included due to licensing. Where SRD content is limited, the docs note what additional options exist in the full sourcebooks.
+## Source Coverage
+
+| Source | Abbreviation | Coverage |
+|--------|-------------|----------|
+| Player's Handbook / SRD | PHB | Files 01-17 (core rules) |
+| Xanathar's Guide to Everything | XGtE | Files 20, 24, 25, 26, 27, 28 |
+| Tasha's Cauldron of Everything | TCoE | Files 21, 22, 23, 24, 25, 27, 28 |
+| Mordenkainen Presents: Monsters of the Multiverse | MotM | Files 23, 26 |

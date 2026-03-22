@@ -864,6 +864,102 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
+### Phase 42: Expansion Content in Rules Reference
+- **Source**: User request (2026-03-21) — 9 new expansion docs (files 20-28) added to `Documentation/`; need to surface them in the in-app rules browser.
+- **Objectives**: Add all expansion docs to the player and DM rules reference pages with clear source grouping (Core SRD vs. Expansion).
+- **Tasks**:
+  1. **`app.py`** — add an `EXPANSION_DOCS` list (separate from `PLAYER_DOCS`/`DM_DOCS`) containing tuples for files 20-28, then pass it as a template variable to both `/rules` and `/dm/guide` routes.
+  2. **`templates/player/rules.html`** — update the sidebar to render a "Core Rules" section (existing `PLAYER_DOCS`) and an "Expansion Content" section (new `EXPANSION_DOCS`). Use a subtle visual separator (e.g., small header label) between the two groups.
+  3. **`templates/dm/guide.html`** — same sidebar grouping treatment; DM sees both `DM_DOCS` and `EXPANSION_DOCS`.
+  4. **Route handling** — the existing `_render_doc(filename)` helper already reads any `.md` file from `Documentation/`; no backend change needed beyond adding tuples to the list.
+  5. **Source badge** — optionally render a small source tag (XGtE / TCoE / MotM) next to each expansion doc link in the sidebar using the file number as a key.
+- **New routes**: None (reuse existing `/rules/<slug>` and `/dm/guide/<slug>` routes)
+- **Updated files**: `app.py`, `templates/player/rules.html`, `templates/dm/guide.html`
+- **Validation**: Player navigates to Rules → sees "Expansion Content" section in sidebar → clicks "XGtE Subclasses" → full doc renders. DM guide shows the same expansion sidebar.
+- **Status**: Complete ✓ (2026-03-22)
+
+---
+
+### Phase 43: Expansion Races in Character Creation
+- **Source**: User request (2026-03-21) — `23_MULTIVERSE_RACES.md` contains 31 MotM revised races + Custom Lineage, all using the flexible ASI model (+2/+1 anywhere or +1/+1/+1).
+- **Objectives**: Add MotM races to the character creation wizard with full flexible ASI support and a source filter so DMs can enable/disable expansion content per campaign.
+- **Tasks**:
+  1. **`game_data.py`** — add a `MULTIVERSE_RACES` dict (parallel to `RACES`) with all 31 MotM races + Custom Lineage. Each entry uses `"flex_asi": True` (or a numeric budget) rather than a fixed `asi` dict, reflecting the "put your +2 and +1 anywhere" rule.
+  2. **`app.py`** — update character creation route to merge `RACES` and `MULTIVERSE_RACES` into a single options list, tagging each with `source: "PHB"` or `source: "MotM"`. Pass a flag for which sources the campaign allows (default: PHB only; DM can toggle per campaign in `current_state['allowed_sources']`).
+  3. **`templates/player/character_create.html`** — update race `<select>` to group options into `<optgroup>` elements ("Core Races" / "Multiverse Races"). When a MotM race is selected, show flexible ASI inputs instead of the fixed ASI display.
+  4. **`templates/dm/campaign.html`** — add a Campaign Settings card (or expand existing settings) with checkboxes to allow PHB-only, XGtE, TCoE, MotM races. Stored in `campaign.current_state['allowed_sources']`.
+  5. **AI character generator** — update prompt in `services/ai.py` to list MotM races when allowed, noting they use the flexible ASI rule.
+- **New routes**: `POST /dm/campaigns/<id>/settings/sources` (or fold into existing campaign settings route)
+- **Updated files**: `game_data.py`, `app.py`, `services/ai.py`, `templates/player/character_create.html`, `templates/dm/campaign.html`
+- **Validation**: DM enables MotM races. Player creates a character, selects "Astral Elf" from Multiverse Races group, sees flexible ASI inputs, distributes +2 and +1 freely. PHB race creation is unchanged.
+- **Status**: Pending
+
+---
+
+### Phase 44: Subclass Tracking & Expansion Subclasses
+- **Source**: User request (2026-03-21) — files 20 (XGtE) and 21 (TCoE) contain 55 combined subclasses not yet tracked in character data.
+- **Objectives**: Store a character's subclass in character data and surface XGtE/TCoE subclasses in character creation and the AI character generator.
+- **Tasks**:
+  1. **`game_data.py`** — add a `SUBCLASSES` dict keyed by class name, each value a list of `{"name": str, "source": str, "description": str}` entries covering all PHB, XGtE, and TCoE subclasses. PHB subclasses are already implied by the classes reference; expand from files 20 and 21.
+  2. **`models.py` / character data** — subclass is stored in `character.spells['subclass']` (already exists as a field in some characters). No schema migration needed; use `flag_modified` pattern after writes.
+  3. **`templates/player/character_create.html`** — after the class `<select>`, add a subclass `<select>` populated via JS from `SUBCLASSES[selected_class]`. Subclasses from expansion sources show a source badge. "Choose at Level 3" note for classes that pick subclass at level 3.
+  4. **`templates/player/character_sheet.html`** (or equivalent) — display selected subclass name and source prominently on the character sheet.
+  5. **AI DM / AI character generator** — inject the character's subclass name and its key features into AI prompts (from `game_data.SUBCLASSES`) so the AI can reference subclass abilities during play.
+- **New routes**: None (subclass stored with existing character update routes)
+- **Updated files**: `game_data.py`, `app.py`, `services/ai_dm.py`, `templates/player/character_create.html`
+- **Validation**: Player creates a Fighter, selects "Echo Knight" (TCoE) as subclass. Character sheet shows "Echo Knight (Fighter — TCoE)". AI DM narrates combat referencing Manifest Echo ability.
+- **Status**: Pending
+
+---
+
+### Phase 45: Expansion Spells & Feats in Character Data
+- **Source**: User request (2026-03-21) — `24_EXPANSION_SPELLS.md` (cantrips through 9th level) and `25_EXPANSION_FEATS.md` (TCoE general feats + XGtE racial feats) not yet available in the app.
+- **Objectives**: Make expansion spells searchable in spell reference and add feat tracking to character sheets.
+- **Tasks**:
+  1. **`game_data.py`** — add `EXPANSION_SPELLS` list (name, level, school, classes, source) mirroring structure of any existing spell list. Add `FEATS` dict (feat name → description, prerequisites, source).
+  2. **`templates/player/rules.html`** (spell reference view) — merge `EXPANSION_SPELLS` into the spell list display when viewing `24_EXPANSION_SPELLS.md`, or add a separate "Expansion Spells" tab on the spellcasting reference page.
+  3. **Character sheet / spells** — when a player prepares or knows expansion spells, the AI DM's prompt should include the spell's description from `EXPANSION_SPELLS` so it can adjudicate correctly.
+  4. **Feat tracking** — add a `feats` list to `character.spells` (same JSON column). Character creation and a future character editor route allow adding feats from `FEATS`. Display on character sheet.
+  5. **AI context** — `services/ai_dm.py` inject any feats the character has into the AI prompt with their mechanical effects so the AI can apply them during skill checks and combat.
+- **New routes**: None critical; optionally `POST /player/characters/<id>/feats` for feat management
+- **Updated files**: `game_data.py`, `services/ai_dm.py`, `templates/player/character_sheet.html`
+- **Validation**: Character with "Fey Touched" feat — AI applies Misty Step and +1 to one mental stat automatically. Expansion spell "Shadow Blade" shows in spell reference with school and classes listed.
+- **Status**: Pending
+
+---
+
+### Phase 46: DM Group Patrons & Campaign Downtime
+- **Source**: User request (2026-03-21) — `28_EXPANSION_DM_TOOLS.md` contains group patron rules (guilds, military, etc.) and downtime activity system.
+- **Objectives**: Let the DM assign a group patron to the campaign and track player downtime activities between sessions.
+- **Tasks**:
+  1. **`game_data.py`** — add `GROUP_PATRONS` dict (patron type → perks, contact NPC template, sample quests) and `DOWNTIME_ACTIVITIES` dict (activity → description, check, outcome) from the expansion DM tools doc.
+  2. **Campaign settings** — store `patron_type` and `downtime_log` (list of `{character, activity, result, session}`) in `campaign.current_state`. Add DM route `POST /dm/campaigns/<id>/patron` to set/change patron type.
+  3. **`templates/dm/campaign.html`** — add a "Group Patron" card in the DM panel: patron name, perks summary, and a button to generate AI quest hooks tailored to that patron. Add a "Downtime" card listing each character's declared downtime activity for the current between-session period.
+  4. **AI quest hook generator** — new route `POST /dm/campaigns/<id>/patron/quest` calls xAI Grok with patron type, party composition, and recent narration log to generate 2-3 thematic quest hooks in JSON. Rendered on the DM page.
+  5. **Player downtime** — optional: allow players to submit their downtime activity via the player page; DM sees submissions in the Downtime card.
+- **New routes**: `POST /dm/campaigns/<id>/patron`, `POST /dm/campaigns/<id>/patron/quest`, optionally `POST /player/campaigns/<id>/downtime`
+- **Updated files**: `game_data.py`, `app.py`, `services/ai.py`, `templates/dm/campaign.html`, optionally `templates/player/campaign.html`
+- **Validation**: DM sets patron to "Thieves' Guild". DM page shows patron card with guild perks. DM clicks "Generate Quest Hooks" → 3 guild-flavored hooks appear. Players submit downtime activities; DM sees "Aria — Carousing", "Theron — Training".
+- **Status**: Pending
+
+---
+
+### Phase 47: AI Context Enrichment with Expansion Content
+- **Source**: User request (2026-03-21) — the AI DM currently works from PHB rules only; expansion subclasses, spells, feats, and patron perks should inform its narration and rulings.
+- **Objectives**: Dynamically inject relevant expansion reference text into AI prompts based on what content each character actually uses, without bloating every prompt with all 9 expansion files.
+- **Tasks**:
+  1. **Context selector** (`services/ai_dm.py`) — before building AI prompts, inspect each character's data: if they have an XGtE/TCoE subclass, pull that subclass's feature blurb from `game_data.SUBCLASSES`; if they have expansion spells prepared, pull those spell descriptions from `game_data.EXPANSION_SPELLS`; if they have feats, pull feat mechanics from `game_data.FEATS`.
+  2. **Patron context** — if the campaign has a patron type set, inject a short patron description and its quest-hook flavor into scene-building and NPC-generation prompts.
+  3. **MotM race traits** — if a character is a MotM race, inject that race's traits (from `game_data.MULTIVERSE_RACES`) into combat and skill-check prompts so the AI knows about abilities like Astral Elf's Astral Fire cantrip swap.
+  4. **Token budget guard** — cap injected expansion content at ~400 tokens per prompt to avoid context bloat. Prioritize: (a) active character's subclass features, (b) spells being cast, (c) feats relevant to the action type, (d) patron flavor.
+  5. **`17_LLM_INSTRUCTIONS.md` reference** — optionally update this doc to note that expansion content is injected selectively, not wholesale, so future LLM integrations can follow the same pattern.
+- **New routes**: None (internal prompt-building change)
+- **Updated files**: `services/ai_dm.py`, `services/ai.py`, `Documentation/17_LLM_INSTRUCTIONS.md`
+- **Validation**: Fighter with Echo Knight subclass takes an attack action → AI narration mentions the Manifest Echo. Warlock casts Shadow Blade (TCoE) → AI describes the psychic blade correctly. Token count of AI requests stays under the model's practical limit.
+- **Status**: Pending
+
+---
+
 ## Wishlist (Future Consideration)
 *Not prioritized for active development; revisit after Phase 13.*
 

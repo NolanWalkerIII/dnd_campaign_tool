@@ -21,6 +21,10 @@
   <!-- ── Sidebar nav ── -->
   <div class="card" style="padding:0.75rem; position:sticky; top:1rem;">
     {% set base_url = '/rules' if section == 'rules' else '/dm/guide' %}
+
+    <!-- Core Rules -->
+    <p style="font-size:0.7rem; text-transform:uppercase; letter-spacing:1px;
+              color:var(--muted); font-weight:600; padding:4px 12px 6px; margin:0;">Core Rules</p>
     {% for slug, _, title in docs %}
     <a href="{{ base_url }}/{{ slug }}"
        style="display:block; padding:7px 12px; border-radius:var(--radius);
@@ -34,6 +38,29 @@
       {{ title }}
     </a>
     {% endfor %}
+
+    <!-- Expansion Content -->
+    {% if expansion_docs %}
+    <hr style="border:none; border-top:1px solid var(--border); margin:0.75rem 0 0.5rem;">
+    <p style="font-size:0.7rem; text-transform:uppercase; letter-spacing:1px;
+              color:var(--muted); font-weight:600; padding:4px 12px 6px; margin:0;">Expansion Content</p>
+    {% for slug, _, title, source in expansion_docs %}
+    <a href="{{ base_url }}/{{ slug }}"
+       style="display:block; padding:7px 12px; border-radius:var(--radius);
+              text-decoration:none; font-size:0.88rem; margin-bottom:2px;
+              background:{{ 'var(--card)' if slug == active_slug else 'transparent' }};
+              color:{{ 'var(--gold)' if slug == active_slug else 'var(--text)' }};
+              border-left:{{ '3px solid var(--gold)' if slug == active_slug else '3px solid transparent' }};
+              font-weight:{{ '600' if slug == active_slug else '400' }};"
+       onmouseover="if('{{ slug }}'!='{{ active_slug }}') this.style.background='var(--border)'"
+       onmouseout="if('{{ slug }}'!='{{ active_slug }}') this.style.background='transparent'">
+      {{ title }}
+      <span style="float:right; font-size:0.68rem; color:var(--muted);
+                   background:var(--bg); border:1px solid var(--border);
+                   border-radius:3px; padding:1px 5px; line-height:1.6;">{{ source }}</span>
+    </a>
+    {% endfor %}
+    {% endif %}
   </div>
 
   <!-- ── Content ── -->
