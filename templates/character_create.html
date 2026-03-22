@@ -88,9 +88,16 @@
         <label for="race">Race</label>
         <select id="race" name="race" required onchange="onRaceChange()">
           <option value="">— Choose a Race —</option>
-          {% for race_name, race in races.items() %}
-            <option value="{{ race_name }}">{{ race_name }}</option>
-          {% endfor %}
+          <optgroup label="Core Races (PHB)">
+            {% for race_name in races %}
+              <option value="{{ race_name }}">{{ race_name }}</option>
+            {% endfor %}
+          </optgroup>
+          <optgroup label="Multiverse Races (MotM / TCoE)">
+            {% for race_name in multiverse_races %}
+              <option value="{{ race_name }}">{{ race_name }}</option>
+            {% endfor %}
+          </optgroup>
         </select>
         <div id="race-traits" style="margin-top:8px; font-size:0.82rem; color:var(--muted);"></div>
       </div>
@@ -156,22 +163,26 @@
       {% endfor %}
     </div>
 
-    <!-- Half-Elf flex ASI -->
+    <!-- Flexible ASI (Half-Elf, MotM races, Custom Lineage) -->
     <div id="flex-asi-section" style="display:none; margin-top:1rem;">
-      <p style="font-size:0.85rem; color:var(--gold); margin-bottom:0.5rem;">Half-Elf: Choose two ability scores to gain +1 each.</p>
+      <p id="flex-asi-title" style="font-size:0.85rem; color:var(--gold); margin-bottom:0.5rem;"></p>
       <div class="form-grid">
         <div class="form-group">
-          <label>First +1 bonus goes to</label>
+          <label id="flex-asi-1-label">Bonus goes to</label>
           <select name="flex_asi_1" id="flex_asi_1" onchange="onScoreChange()">
             <option value="">— Choose —</option>
-            {% for ab in ability_scores %}{% if ab != 'CHA' %}<option value="{{ ab }}">{{ ab }} ({{ ability_names[ab] }})</option>{% endif %}{% endfor %}
+            {% for ab in ability_scores %}
+            <option value="{{ ab }}" class="ab-opt">{{ ab }} ({{ ability_names[ab] }})</option>
+            {% endfor %}
           </select>
         </div>
-        <div class="form-group">
-          <label>Second +1 bonus goes to</label>
+        <div class="form-group" id="flex-asi-2-group">
+          <label id="flex-asi-2-label">Second bonus goes to</label>
           <select name="flex_asi_2" id="flex_asi_2" onchange="onScoreChange()">
             <option value="">— Choose —</option>
-            {% for ab in ability_scores %}{% if ab != 'CHA' %}<option value="{{ ab }}">{{ ab }} ({{ ability_names[ab] }})</option>{% endif %}{% endfor %}
+            {% for ab in ability_scores %}
+            <option value="{{ ab }}" class="ab-opt">{{ ab }} ({{ ability_names[ab] }})</option>
+            {% endfor %}
           </select>
         </div>
       </div>
@@ -228,18 +239,65 @@ function onRaceChange() {
   const race = RACES[raceName];
   const traitEl = document.getElementById('race-traits');
   const flexSec = document.getElementById('flex-asi-section');
+  const flexTitle = document.getElementById('flex-asi-title');
+  const label1 = document.getElementById('flex-asi-1-label');
+  const label2 = document.getElementById('flex-asi-2-label');
+  const group2 = document.getElementById('flex-asi-2-group');
+  const sel1 = document.getElementById('flex_asi_1');
+  const sel2 = document.getElementById('flex_asi_2');
 
   if (race) {
     traitEl.innerHTML = '<strong>Traits:</strong> ' + race.traits.join(', ')
-      + '<br><strong>Speed:</strong> ' + race.speed + ' ft'
+      + '<br><strong>Speed:</strong> ' + race.speed
       + '<br><strong>Languages:</strong> ' + race.languages.join(', ');
-    flexSec.style.display = (race.flex_asi && race.flex_asi > 0) ? 'block' : 'none';
+
+    const fm = race.flex_asi;
+    if (fm === 'motm') {
+      // MotM: +2 to one, +1 to another — all abilities available
+      flexTitle.textContent = 'Multiverse Race: place your +2 and +1 ability score bonuses freely.';
+      label1.textContent = '+2 bonus goes to';
+      label2.textContent = '+1 bonus goes to';
+      group2.style.display = '';
+      _setAbOptions(sel1, null); // all abilities
+      _setAbOptions(sel2, null);
+      flexSec.style.display = 'block';
+    } else if (fm === 'custom') {
+      // Custom Lineage: +2 to one ability — all abilities available
+      flexTitle.textContent = 'Custom Lineage: place your +2 ability score bonus freely.';
+      label1.textContent = '+2 bonus goes to';
+      group2.style.display = 'none';
+      sel2.value = '';
+      _setAbOptions(sel1, null);
+      flexSec.style.display = 'block';
+    } else if (typeof fm === 'number' && fm > 0) {
+      // Half-Elf: two +1 bonuses, not to CHA
+      flexTitle.textContent = 'Half-Elf: choose two ability scores to gain +1 each (not CHA).';
+      label1.textContent = 'First +1 bonus goes to';
+      label2.textContent = 'Second +1 bonus goes to';
+      group2.style.display = '';
+      _setAbOptions(sel1, 'CHA'); // exclude CHA
+      _setAbOptions(sel2, 'CHA');
+      flexSec.style.display = 'block';
+    } else {
+      flexSec.style.display = 'none';
+    }
   } else {
     traitEl.innerHTML = '';
     flexSec.style.display = 'none';
   }
   onScoreChange();
   refreshSkills();
+}
+
+// Rebuild the options of a select, optionally excluding one ability score
+function _setAbOptions(sel, excludeAb) {
+  const cur = sel.value;
+  Array.from(sel.options).forEach(opt => {
+    if (opt.value === '') return;
+    opt.style.display = (opt.value === excludeAb) ? 'none' : '';
+  });
+  if (sel.value === excludeAb) sel.value = '';
+  else sel.value = cur;
 }
 
 // ── Class changed ──
@@ -280,8 +338,10 @@ function onScoreChange() {
   const raceName = document.getElementById('race').value;
   const race = RACES[raceName] || {};
   const asi = race.asi || {};
+  const fm = race.flex_asi || 0;
   const flex1 = document.getElementById('flex_asi_1')?.value || '';
-  const flex2 = document.getElementById('flex_asi_2')?.value || '';
+  const flex2 = (document.getElementById('flex-asi-2-group')?.style.display !== 'none')
+                ? (document.getElementById('flex_asi_2')?.value || '') : '';
 
   // Collect chosen base values
   const chosen = {};
@@ -304,8 +364,16 @@ function onScoreChange() {
   ABILITY_SCORES.forEach(ab => {
     const base = chosen[ab];
     let racial = asi[ab] || 0;
-    if (ab === flex1) racial += 1;
-    if (ab === flex2) racial += 1;
+    if (fm === 'motm') {
+      if (ab === flex1) racial += 2;
+      if (ab === flex2) racial += 1;
+    } else if (fm === 'custom') {
+      if (ab === flex1) racial += 2;
+    } else {
+      // Half-Elf or numeric flex_asi: two +1s
+      if (ab === flex1) racial += 1;
+      if (ab === flex2) racial += 1;
+    }
 
     const racialEl = document.getElementById('racial_' + ab);
     const finalEl  = document.getElementById('final_' + ab);

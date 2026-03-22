@@ -892,7 +892,7 @@ Full system health dashboard with one-click tests for: environment variables, xA
 - **New routes**: `POST /dm/campaigns/<id>/settings/sources` (or fold into existing campaign settings route)
 - **Updated files**: `game_data.py`, `app.py`, `services/ai.py`, `templates/player/character_create.html`, `templates/dm/campaign.html`
 - **Validation**: DM enables MotM races. Player creates a character, selects "Astral Elf" from Multiverse Races group, sees flexible ASI inputs, distributes +2 and +1 freely. PHB race creation is unchanged.
-- **Status**: Pending
+- **Status**: Complete ✓ (2026-03-22) — DM source-filter toggle deferred; all races globally available as a simpler first pass.
 
 ---
 

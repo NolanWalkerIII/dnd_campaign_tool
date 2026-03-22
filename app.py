@@ -32,10 +32,13 @@ from services.ai_player import generate_player_action, generate_combat_decision,
 import re as _re
 
 from game_data import (
-    RACES, CLASSES, BACKGROUNDS, STANDARD_ARRAY,
+    RACES, MULTIVERSE_RACES, CLASSES, BACKGROUNDS, STANDARD_ARRAY,
     ABILITY_SCORES, ABILITY_NAMES, SKILLS,
     get_spell_slots, SPELLCASTING_TYPE,
 )
+
+# Merged lookup: check PHB races first, then MotM
+_ALL_RACES = {**RACES, **MULTIVERSE_RACES}
 
 app = Flask(__name__)
 _db_url = os.environ.get('DATABASE_URL', 'sqlite:///dnd.db')
@@ -194,13 +197,26 @@ def calculate_hp(class_name, ability_scores):
 
 def apply_racial_asi(base_scores, race_name, flex1=None, flex2=None):
     scores = dict(base_scores)
-    race = RACES.get(race_name, {})
+    race = _ALL_RACES.get(race_name, {})
     for ab, bonus in race.get('asi', {}).items():
         scores[ab] = scores.get(ab, 8) + bonus
-    if flex1 and flex1 in scores:
-        scores[flex1] += 1
-    if flex2 and flex2 in scores:
-        scores[flex2] += 1
+    flex_mode = race.get('flex_asi', 0)
+    if flex_mode == 'motm':
+        # +2 to flex1, +1 to flex2
+        if flex1 and flex1 in scores:
+            scores[flex1] += 2
+        if flex2 and flex2 in scores:
+            scores[flex2] += 1
+    elif flex_mode == 'custom':
+        # +2 to flex1 only
+        if flex1 and flex1 in scores:
+            scores[flex1] += 2
+    elif isinstance(flex_mode, int) and flex_mode > 0:
+        # Half-Elf: +1 to each of flex1 and flex2
+        if flex1 and flex1 in scores:
+            scores[flex1] += 1
+        if flex2 and flex2 in scores:
+            scores[flex2] += 1
     return scores
 
 def current_user():
@@ -443,6 +459,7 @@ def character_new():
     return render_template(
         'character_create.html',
         races=RACES,
+        multiverse_races=MULTIVERSE_RACES,
         classes=CLASSES,
         backgrounds=BACKGROUNDS,
         standard_array=STANDARD_ARRAY,
@@ -456,7 +473,7 @@ def character_new():
                 'traits': data['traits'],
                 'languages': data['languages'],
             }
-            for name, data in RACES.items()
+            for name, data in _ALL_RACES.items()
         }),
         classes_json=json.dumps({
             name: {
@@ -785,7 +802,7 @@ def _create_character():
 
     errors = []
     if not name:             errors.append('Character name is required.')
-    if race_name not in RACES:   errors.append('Invalid race selected.')
+    if race_name not in _ALL_RACES: errors.append('Invalid race selected.')
     if class_name not in CLASSES: errors.append('Invalid class selected.')
     if background not in BACKGROUNDS: errors.append('Invalid background selected.')
 
@@ -803,8 +820,17 @@ def _create_character():
     if len(base_scores) == 6 and sorted(base_scores.values()) != sorted(STANDARD_ARRAY):
         errors.append('Each standard array value must be used exactly once.')
 
-    race_data = RACES.get(race_name, {})
-    if race_data.get('flex_asi', 0) > 0:
+    race_data = _ALL_RACES.get(race_name, {})
+    flex_mode = race_data.get('flex_asi', 0)
+    if flex_mode == 'motm':
+        if not flex1 or not flex2:
+            errors.append('Choose ability scores for your +2 and +1 bonuses.')
+        elif flex1 == flex2:
+            errors.append('Your +2 and +1 bonuses must go to different ability scores.')
+    elif flex_mode == 'custom':
+        if not flex1:
+            errors.append('Choose an ability score for your +2 bonus.')
+    elif isinstance(flex_mode, int) and flex_mode > 0:
         if not flex1 or not flex2:
             errors.append('Half-Elf: choose two ability scores for your +1 bonuses.')
         elif flex1 == flex2:
@@ -874,7 +900,7 @@ def _create_character():
 def character_sheet(char_id):
     char = Character.query.get_or_404(char_id)
     cls_data  = CLASSES.get(char.class_name, {})
-    race_data = RACES.get(char.race, {})
+    race_data = _ALL_RACES.get(char.race, {})
     extra     = char.spells or {}
     sc_ability = extra.get('spellcasting')
 

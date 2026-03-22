@@ -121,6 +121,216 @@ RACES = {
     },
 }
 
+# MotM / TCoE races: flex_asi = "motm" means +2 to one score and +1 to a different score (player's choice).
+# Custom Lineage: flex_asi = "custom" means +2 to one score of your choice.
+# All MotM races have asi: {} (no fixed bonus).
+MULTIVERSE_RACES = {
+    "Aarakocra": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft / 30 ft flying", "size": "Medium",
+        "traits": ["Flight 30 ft (no medium/heavy armor)", "Talons (1d6+STR slashing)", "Wind Caller (Gust of Wind 1/long rest)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Aasimar": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium or Small",
+        "traits": ["Darkvision 60 ft", "Celestial Resistance (necrotic & radiant)", "Healing Hands (PB HP, PB/long rest)", "Light Bearer (Light cantrip)", "Celestial Revelation at Level 3 (Necrotic Shroud / Radiant Consumption / Radiant Soul)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Bugbear": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium",
+        "traits": ["Darkvision 60 ft", "Fey Ancestry", "Long-Limbed (+5 ft melee reach on your turn)", "Powerful Build", "Sneaky (Stealth proficiency)", "Surprise Attack (2d6 extra vs. creatures that haven't acted, 1/combat)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Centaur": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "40 ft", "size": "Medium",
+        "traits": ["Charge (bonus action hooves attack after 30 ft straight move)", "Equine Build (Powerful Build; climbing costs 4× movement)", "Hooves (1d6+STR bludgeoning)", "Natural Affinity (one skill: Animal Handling, Medicine, Nature, or Survival)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Changeling": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium or Small",
+        "traits": ["Shapechanger (appear as any humanoid, action)", "Changeling Instincts (2 skills from: Deception, Insight, Intimidation, Persuasion)"],
+        "languages": ["Common", "Two of your choice"],
+    },
+    "Deep Gnome": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Small",
+        "traits": ["Darkvision 120 ft", "Gnome Cunning (advantage on INT/WIS/CHA saves vs. magic)", "Gift of the Svirfneblin (Disguise Self 1/lr; Nondetection at 3rd; Blindness/Deafness at 5th)", "Svirfneblin Camouflage (advantage on Stealth in rocky terrain)"],
+        "languages": ["Common", "Gnomish", "Undercommon"],
+    },
+    "Duergar": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium",
+        "traits": ["Darkvision 120 ft", "Duergar Resilience (advantage vs. poison/charmed/stunned; resist poison)", "Psionic Fortitude (advantage vs. charmed/stunned)", "Duergar Magic (Enlarge at 3rd; Invisibility at 5th; 1/lr)", "Sunlight Sensitivity"],
+        "languages": ["Common", "Dwarvish"],
+    },
+    "Eladrin": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium",
+        "traits": ["Darkvision 60 ft", "Fey Ancestry", "Trance (4-hour rest)", "Keen Senses (Perception proficiency)", "Fey Step (teleport 30 ft, PB/lr; seasonal rider: Autumn/Winter/Spring/Summer)"],
+        "languages": ["Common", "Elvish"],
+    },
+    "Fairy": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft / 30 ft flying", "size": "Small",
+        "traits": ["Flight 30 ft (no medium/heavy armor)", "Fairy Magic (Druidcraft cantrip; Faerie Fire at 3rd; Enlarge/Reduce at 5th; 1/lr)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Firbolg": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium",
+        "traits": ["Firbolg Magic (Detect Magic & Disguise Self 1/lr; appear up to 3 ft shorter)", "Hidden Step (invisible until next turn start, PB/lr)", "Powerful Build", "Speech of Beast and Leaf"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Genasi (Air)": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "35 ft", "size": "Medium or Small",
+        "traits": ["Unending Breath (hold breath indefinitely)", "Lightning Resistance", "Mingle with the Wind (Shocking Grasp cantrip; Feather Fall at 3rd; Levitate at 5th; 1/lr)"],
+        "languages": ["Common", "Primordial"],
+    },
+    "Genasi (Earth)": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium or Small",
+        "traits": ["Earth Walk (ignore difficult terrain of earth/stone)", "Merge with Stone (Blade Ward cantrip; Pass Without Trace at 5th; 1/lr)"],
+        "languages": ["Common", "Primordial"],
+    },
+    "Genasi (Fire)": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium or Small",
+        "traits": ["Darkvision 60 ft", "Fire Resistance", "Reach to the Blaze (Produce Flame cantrip; Burning Hands at 3rd; Flame Blade at 5th; 1/lr)"],
+        "languages": ["Common", "Primordial"],
+    },
+    "Genasi (Water)": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft / 30 ft swimming", "size": "Medium or Small",
+        "traits": ["Amphibious (breathe air and water)", "Acid Resistance", "Call to the Wave (Acid Splash cantrip; Create/Destroy Water at 3rd; Water Walk at 5th; 1/lr)"],
+        "languages": ["Common", "Primordial"],
+    },
+    "Githyanki": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium",
+        "traits": ["Astral Knowledge (one skill + one weapon/tool proficiency per long rest)", "Githyanki Psionics (Mage Hand cantrip; Jump at 3rd; Misty Step at 5th; 1/lr)", "Psychic Resilience (resist psychic damage)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Githzerai": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium",
+        "traits": ["Githzerai Psionics (Mage Hand cantrip; Shield at 3rd; Detect Thoughts at 5th; 1/lr)", "Mental Discipline (advantage vs. charmed and frightened)", "Psychic Resilience (resist psychic damage)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Goblin": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Small",
+        "traits": ["Darkvision 60 ft", "Fey Ancestry", "Fury of the Small (extra PB damage vs. larger creatures, PB/lr)", "Nimble Escape (Disengage or Hide as bonus action, unlimited)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Goliath": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium",
+        "traits": ["Little Giant (Powerful Build + Athletics proficiency)", "Mountain Born (cold resistance; no altitude sickness)", "Stone's Endurance (reduce damage by 1d12+CON as reaction, PB/lr)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Harengon": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium or Small",
+        "traits": ["Hare-Trigger (+PB to initiative rolls)", "Leporine Senses (Perception proficiency)", "Lucky Footwork (add 1d4 to failed DEX save, PB/lr)", "Rabbit Hop (jump 5×PB ft as bonus action without OA, PB/lr)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Hobgoblin": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium",
+        "traits": ["Darkvision 60 ft", "Fey Ancestry", "Fey Gift (Help as bonus action, PB/lr; riders at 3rd: temp HP / speed / save advantage)", "Fortune from the Many (add 1d6 to failed attack/check/save if ally nearby, PB/lr)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Kenku": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium or Small",
+        "traits": ["Expert Duplication (advantage on forgery/duplicate checks)", "Kenku Recall (advantage on one proficient skill check, PB/lr)", "Mimicry (mimic sounds and voices heard)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Kobold": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Small",
+        "traits": ["Darkvision 60 ft", "Draconic Cry (party advantage vs. enemies within 10 ft, bonus action, PB/lr)", "Kobold Legacy (choose one: Craftiness / Defiance / Draconic Sorcery)"],
+        "languages": ["Common", "Draconic"],
+    },
+    "Lizardfolk": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft / 30 ft swimming", "size": "Medium",
+        "traits": ["Bite (1d6+STR slashing)", "Hold Breath (15 minutes)", "Hungry Jaws (bonus action bite + temp HP equal to PB, PB/lr)", "Natural Armor (AC 13+DEX; stack with shield)", "Nature's Intuition (2 skills: Animal Handling, Medicine, Nature, Perception, Stealth, or Survival)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Minotaur": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium",
+        "traits": ["Horns (1d6+STR piercing)", "Goring Rush (bonus action horn attack after Dash)", "Hammering Horns (bonus action shove after melee hit)", "Labyrinthine Recall (always know north; advantage vs. getting lost)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Orc": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium",
+        "traits": ["Darkvision 60 ft", "Adrenaline Rush (Dash as bonus action + temp HP equal to PB, PB/lr)", "Powerful Build", "Relentless Endurance (drop to 1 HP instead of 0, 1/long rest)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Satyr": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "35 ft", "size": "Medium",
+        "traits": ["Ram (1d6+STR bludgeoning)", "Magic Resistance (advantage on saves vs. spells)", "Mirthful Leaps (+1d8 ft to long/high jumps)", "Reveler (Persuasion & Performance proficiency)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Sea Elf": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft / 30 ft swimming", "size": "Medium",
+        "traits": ["Darkvision 60 ft", "Fey Ancestry", "Trance (4-hour rest)", "Keen Senses (Perception proficiency)", "Child of the Sea (breathe water)", "Friend of the Sea (communicate with swimming beasts)"],
+        "languages": ["Common", "Elvish", "One of your choice"],
+    },
+    "Shadar-kai": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium",
+        "traits": ["Darkvision 60 ft", "Fey Ancestry", "Trance (4-hour rest)", "Keen Senses (Perception proficiency)", "Necrotic Resistance", "Blessing of the Raven Queen (teleport 30 ft + resist all damage until next turn, PB/lr)"],
+        "languages": ["Common", "Elvish", "One of your choice"],
+    },
+    "Shifter": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium",
+        "traits": ["Bestial Instincts (one skill: Acrobatics, Athletics, Intimidation, or Survival)", "Darkvision 60 ft", "Shifting (temp HP + 1-min transformation, PB/lr; subtype rider: Beasthide / Longtooth / Swiftstride / Wildhunt)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Tabaxi": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft / 20 ft climbing", "size": "Medium or Small",
+        "traits": ["Cat's Claws (1d6+STR slashing; 20 ft climb speed)", "Cat's Talent (Perception & Stealth proficiency)", "Darkvision 60 ft", "Feline Agility (double speed 1/turn; reset by spending a turn with 0 movement)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Tortle": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium or Small",
+        "traits": ["Claws (1d6+STR slashing)", "Hold Breath (1 hour)", "Natural Armor (AC 17 flat; no DEX bonus; can use shield)", "Shell Defense (action: +4 AC, advantage STR/CON saves, speed 0, can't react)", "Nature's Intuition (one skill: Animal Handling, Medicine, Nature, Perception, or Survival)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Triton": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft / 30 ft swimming", "size": "Medium",
+        "traits": ["Amphibious (breathe air and water)", "Control Air and Water (Fog Cloud; Gust of Wind at 3rd; Water Walk at 5th; 1/lr)", "Darkvision 60 ft", "Emissary of the Sea (communicate with swimming creatures)", "Guardian of the Depths (cold resistance; ignore deep underwater drawbacks)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Yuan-ti": {
+        "asi": {}, "flex_asi": "motm",
+        "speed": "30 ft", "size": "Medium or Small",
+        "traits": ["Darkvision 60 ft", "Magic Resistance (advantage on saves vs. spells and magic)", "Poison Resilience (resist poison damage; advantage vs. poisoned condition)", "Serpentine Spellcasting (Poison Spray cantrip; Animal Friendship (snakes only) at 3rd; Suggestion at 5th; 1/lr)"],
+        "languages": ["Common", "One of your choice"],
+    },
+    "Custom Lineage": {
+        "asi": {}, "flex_asi": "custom",
+        "speed": "30 ft", "size": "Small or Medium",
+        "traits": ["+2 to one ability score of your choice", "One feat at Level 1 (must meet prerequisites)", "Darkvision 60 ft OR one skill proficiency (your choice)", "Extra Language"],
+        "languages": ["Common", "One of your choice"],
+    },
+}
+
 # ac_base / ac_type: how to compute starting AC from class equipment
 #   "heavy"  → fixed base, DEX ignored
 #   "medium" → base + min(DEX mod, 2)
