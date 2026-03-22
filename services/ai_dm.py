@@ -22,6 +22,7 @@ from services.engine import (
     resolve_roll,
     resolve_saving_throw,
     apply_damage_to_npc,
+    build_expansion_context,
 )
 
 XAI_API_URL = "https://api.x.ai/v1/chat/completions"
@@ -100,6 +101,9 @@ def interpret_action(player_message, character, campaign):
     combat_summary = get_combat_state_summary(campaign)
     recent = get_recent_log(campaign)
 
+    expansion_ctx = build_expansion_context(character, campaign)
+    expansion_block = f"\n\nEXPANSION CONTENT (use when resolving this action):\n{expansion_ctx}" if expansion_ctx else ""
+
     user_prompt = f"""PLAYER CHARACTER:
 {char_summary}
 
@@ -107,7 +111,7 @@ GAME STATE:
 {combat_summary}
 
 RECENT EVENTS:
-{recent}
+{recent}{expansion_block}
 
 The player says: "{sanitize_for_prompt(player_message)}"
 
@@ -155,12 +159,14 @@ def narrate_result(action_type, params, engine_result, character, campaign):
     combat_summary = get_combat_state_summary(campaign)
 
     mechanic_text = engine_result.get('text', '')
+    expansion_ctx = build_expansion_context(character, campaign)
+    expansion_block = f"\nExpansion content: {expansion_ctx}" if expansion_ctx else ""
 
     user_prompt = f"""Character: {char_name}
 Action: {action_type}
 Mechanic result: {mechanic_text}
 Game state: {combat_summary}
-Context: {params.get('narration_context', '')}
+Context: {params.get('narration_context', '')}{expansion_block}
 
 Write a brief, atmospheric D&D narration of this result. MUST be under 280 characters.
 Include the mechanical result naturally (e.g., the roll total).
@@ -189,6 +195,9 @@ def answer_question(player_message, character, campaign):
     char_summary = get_character_summary(character)
     combat_summary = get_combat_state_summary(campaign)
 
+    expansion_ctx = build_expansion_context(character, campaign)
+    expansion_block = f"\nExpansion content: {expansion_ctx}" if expansion_ctx else ""
+
     messages = [
         {
             "role": "system",
@@ -199,7 +208,7 @@ def answer_question(player_message, character, campaign):
         },
         {
             "role": "user",
-            "content": f"Character: {char_summary}\nGame: {combat_summary}\n\nQuestion: {player_message}",
+            "content": f"Character: {char_summary}\nGame: {combat_summary}{expansion_block}\n\nQuestion: {player_message}",
         },
     ]
 

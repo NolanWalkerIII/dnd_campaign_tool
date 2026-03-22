@@ -77,6 +77,17 @@ Don't load all docs into context at once. Load based on the current situation.
 - `04_RACES_REFERENCE.md` — racial traits
 - `12_MAGIC_ITEMS.md` — if distributing or identifying loot
 
+### Expansion Content (Injected Selectively — Phase 48)
+
+The AI DM **does not** load all expansion docs into every prompt. Instead, `services/engine.build_expansion_context()` selectively injects only what applies to the active character, in this priority order (capped at ~400 tokens total):
+
+1. **Subclass description** (`game_data.SUBCLASSES`) — always injected if the character has a subclass, since subclass features shape nearly every action.
+2. **Feat mechanics** (`game_data.FEATS`) — injected for each feat the character has taken, so the AI correctly applies effects like Crusher's push or Fey Touched's Misty Step.
+3. **MotM race traits** (`game_data.MULTIVERSE_RACES`) — injected if the character is a Monsters of the Multiverse race, enabling the AI to narrate abilities like Astral Elf's Astral Fire or Bugbear's Surprise Attack.
+4. **Group Patron flavor** (`game_data.GROUP_PATRONS`) — injected as atmospheric/quest context when a campaign has an active patron set.
+
+**Future LLM integrations should follow this same pattern**: look up what the character actually has, inject only the relevant snippets, and enforce a token budget. Do not wholesale-load expansion books.
+
 ### Load for Session Prep
 - `13_DM_GUIDE.md` — encounter building, NPC creation, session structure
 - `14_CAMPAIGN_TEMPLATE.md` — campaign organization

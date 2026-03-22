@@ -7,7 +7,7 @@ request/session/flash dependencies.
 """
 import re
 from models import DiceRoller
-from game_data import SKILLS, CLASSES, ABILITY_SCORES
+from game_data import SKILLS, CLASSES, ABILITY_SCORES, SUBCLASSES, FEATS, MULTIVERSE_RACES, GROUP_PATRONS
 
 
 def ability_modifier(score):
@@ -257,3 +257,69 @@ def apply_damage_to_npc(campaign, npc_name, damage):
             }
 
     return {'error': f'NPC "{npc_name}" not found in combat.'}
+
+
+def build_expansion_context(character, campaign):
+    """
+    Build a ~400-token expansion content snippet for AI prompts.
+    Injects subclass features, feats, MotM race traits, and patron info
+    based on what this character/campaign actually uses.
+    Priority: subclass > feats > race traits > patron flavor.
+    Returns an empty string if no expansion content applies.
+    """
+    parts = []
+    CHAR_BUDGET = 1600  # ~400 tokens in characters
+
+    spells_data = character.spells or {}
+
+    # 1. Subclass features (highest priority — most action-relevant)
+    subclass_name = spells_data.get('subclass', '')
+    if subclass_name:
+        class_subclasses = SUBCLASSES.get(character.class_name, [])
+        for sc in class_subclasses:
+            if sc['name'] == subclass_name:
+                tag = f" [{sc['source']}]" if sc['source'] != 'PHB' else ''
+                parts.append(
+                    f"SUBCLASS — {subclass_name}{tag} ({character.class_name}): {sc['description']}"
+                )
+                break
+
+    # 2. Feats the character has taken
+    char_feats = spells_data.get('feats', [])
+    if char_feats:
+        feat_lines = []
+        for feat_name in char_feats:
+            feat = FEATS.get(feat_name)
+            if feat:
+                feat_lines.append(f"  • {feat_name} [{feat['source']}]: {feat['description']}")
+        if feat_lines:
+            parts.append("FEATS:\n" + "\n".join(feat_lines))
+
+    # 3. MotM race traits (only if character is a Multiverse race)
+    race_data = MULTIVERSE_RACES.get(character.race)
+    if race_data:
+        traits = race_data.get('traits', [])
+        if traits:
+            parts.append(
+                f"RACE TRAITS — {character.race} (MotM): " + "; ".join(traits)
+            )
+
+    # 4. Group Patron flavor (lowest priority — atmosphere/quest context)
+    state = campaign.current_state or {}
+    patron_type = state.get('patron_type')
+    if patron_type:
+        patron = GROUP_PATRONS.get(patron_type)
+        if patron:
+            perks = "; ".join(patron.get('perks', [])[:3])
+            parts.append(
+                f"GROUP PATRON — {patron_type}: {patron['description']} Perks: {perks}"
+            )
+
+    if not parts:
+        return ''
+
+    full = "\n\n".join(parts)
+    if len(full) > CHAR_BUDGET:
+        full = full[:CHAR_BUDGET].rsplit(' ', 1)[0] + '…'
+
+    return full
