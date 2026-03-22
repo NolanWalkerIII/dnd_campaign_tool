@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+{% block title %}Level Up — {{ character.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom:1.5rem;">
+  <div>
+    <h1 style="margin:0 0 4px;">
+      🎲 Level Up — {{ character.name }}
+    </h1>
+    <p style="color:var(--muted); font-size:0.88rem; margin:0;">
+      {{ character.race }} {{ character.class_name }} ·
+      Level {{ character.level }} → <strong style="color:var(--gold);">Level {{ new_level }}</strong>
+    </p>
+  </div>
+  <a href="/characters/{{ character.id }}" class="btn btn-outline">← Cancel</a>
+</div>
+
+{% if char_xp < xp_threshold %}
+<div style="background:rgba(255,100,80,0.1); border:1px solid var(--accent); border-radius:6px;
+            padding:0.75rem 1rem; margin-bottom:1.25rem; font-size:0.88rem;">
+  ⚠️ You have <strong>{{ char_xp|int }} XP</strong> but Level {{ new_level }} requires
+  <strong>{{ xp_threshold|int }} XP</strong>.
+  {% if session.get('role') == 'dm' %}DM override is active.{% else %}Ask your DM to award XP first.{% endif %}
+</div>
+{% endif %}
+
+<form method="POST" action="/characters/{{ character.id }}/levelup" id="levelup-form">
+  {% if session.get('role') == 'dm' %}
+  <input type="hidden" name="force" value="1">
+  {% endif %}
+
+  <div style="display:grid; grid-template-columns:1fr 340px; gap:1.5rem; align-items:start;">
+
+    <!-- ── LEFT: choices ── -->
+    <div>
+
+      <!-- Proficiency Bump -->
+      {% if prof_changed %}
+      <div style="background:rgba(201,168,76,0.1); border:1px solid rgba(201,168,76,0.4);
+                  border-radius:6px; padding:0.7rem 1rem; margin-bottom:1.25rem;">
+        <strong style="color:var(--gold);">⬆ Proficiency Bonus increases!</strong>
+        <span style="font-size:0.85rem; color:var(--text); margin-left:6px;">
+          +{{ character.proficiency_bonus }} → +{{ new_prof }}
+        </span>
+        <p style="font-size:0.82rem; color:var(--muted); margin:4px 0 0;">
+          All proficient skills, saving throws, attack rolls, and spell DCs improve automatically.
+        </p>
+      </div>
+      {% endif %}
+
+      <!-- HP -->
+      <div class="card" style="margin-bottom:1.25rem;">
+        <h2 style="margin:0 0 1rem; font-size:1rem; color:var(--gold);">❤️ Hit Points</h2>
+        <p style="font-size:0.85rem; color:var(--muted); margin:0 0 0.75rem;">
+          Roll your hit die or take the guaranteed average. Current max: <strong>{{ character.hp_max }}</strong>
+        </p>
+        <div style="display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.9rem;">
+            <input type="radio" name="hp_method" value="average" checked
+                   onchange="updateHpPreview()">
+            Take average
+            <span id="hp-avg-val" style="font-weight:700; color:var(--gold);">
+              +{{ hp_average }} HP
+            </span>
+            <span style="font-size:0.75rem; color:var(--muted);">
+              ({{ hit_die // 2 + 1 }} + CON {{ con_mod }})
+            </span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.9rem;">
+            <input type="radio" name="hp_method" value="roll"
+                   onchange="updateHpPreview()">
+            Roll 1d{{ hit_die }} + CON
+            <span style="font-size:0.75rem; color:var(--muted);">(revealed on submit)</span>
+          </label>
+        </div>
+        <div id="hp-preview" style="font-size:0.82rem; color:var(--muted);">
+          New HP max will be at least {{ character.hp_max + [hp_average, 1]|max }}.
+        </div>
+      </div>
+
+      <!-- Subclass -->
+      {% if needs_subclass %}
+      <div class="card" style="margin-bottom:1.25rem; border-color:var(--gold);">
+        <h2 style="margin:0 0 0.5rem; font-size:1rem; color:var(--gold);">⚔ Choose Your Subclass</h2>
+        <p style="font-size:0.85rem; color:var(--muted); margin:0 0 1rem;">
+          At Level {{ new_level }}, {{ character.class_name }}s choose their subclass. This shapes your abilities for the rest of your career.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+          {% for sc in subclass_options %}
+          <label style="display:flex; gap:0.75rem; align-items:flex-start; cursor:pointer;
+                        background:var(--card); border:1px solid var(--border); border-radius:6px;
+                        padding:0.65rem 0.85rem; transition:border-color 0.15s;"
+                 class="subclass-option">
+            <input type="radio" name="subclass" value="{{ sc.name }}" required
+                   style="margin-top:3px; flex-shrink:0;">
+            <div>
+              <div style="font-weight:600; font-size:0.9rem;">
+                {{ sc.name }}
+                <span style="font-size:0.72rem; background:var(--card); border:1px solid var(--border);
+                             border-radius:3px; padding:1px 5px; margin-left:4px; color:var(--muted);">
+                  {{ sc.source }}
+                </span>
+              </div>
+              <p style="font-size:0.8rem; color:var(--muted); margin:3px 0 0;">{{ sc.description }}</p>
+            </div>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- ASI / Feat -->
+      {% if is_asi_level %}
+      <div class="card" style="margin-bottom:1.25rem; border-color:var(--gold);">
+        <h2 style="margin:0 0 0.5rem; font-size:1rem; color:var(--gold);">⭐ Ability Score Improvement</h2>
+        <p style="font-size:0.85rem; color:var(--muted); margin:0 0 1rem;">
+          Choose one: boost two ability scores, or gain a feat.
+        </p>
+
+        <!-- Mode selector -->
+        <div style="display:flex; gap:0.75rem; flex-wrap:wrap; margin-bottom:1rem;">
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.88rem;">
+            <input type="radio" name="asi_choice" value="stat_plus2" required
+                   onchange="showAsiMode('plus2')"> +2 to one score
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.88rem;">
+            <input type="radio" name="asi_choice" value="stat_split"
+                   onchange="showAsiMode('split')"> +1 / +1 to two scores
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.88rem;">
+            <input type="radio" name="asi_choice" value="feat"
+                   onchange="showAsiMode('feat')"> Take a feat
+          </label>
+        </div>
+
+        <!-- +2 to one -->
+        <div id="asi-plus2" style="display:none;">
+          <label style="font-size:0.85rem; margin-bottom:4px; display:block;">
+            Choose ability score (+2):
+          </label>
+          <select name="asi_stat1" id="asi-stat1-plus2" style="min-width:180px; font-size:0.85rem;">
+            <option value="">— Choose —</option>
+            {% for ab in ability_score_keys %}
+            {% set cur = ability_scores.get(ab, 10) %}
+            <option value="{{ ab }}" {% if cur >= 20 %}disabled{% endif %}>
+              {{ ability_names[ab] }} ({{ ab }}) — {{ cur }}{{ ' (max)' if cur >= 20 else ' → ' + ([cur+2, 20]|min)|string }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- +1 / +1 -->
+        <div id="asi-split" style="display:none;">
+          <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+            <div>
+              <label style="font-size:0.85rem; margin-bottom:4px; display:block;">First score (+1):</label>
+              <select name="asi_stat1" id="asi-stat1-split" style="min-width:180px; font-size:0.85rem;"
+                      onchange="refreshSplitSelects()">
+                <option value="">— Choose —</option>
+                {% for ab in ability_score_keys %}
+                {% set cur = ability_scores.get(ab, 10) %}
+                <option value="{{ ab }}" {% if cur >= 20 %}disabled{% endif %}>
+                  {{ ability_names[ab] }} ({{ ab }}) — {{ cur }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label style="font-size:0.85rem; margin-bottom:4px; display:block;">Second score (+1):</label>
+              <select name="asi_stat2" id="asi-stat2-split" style="min-width:180px; font-size:0.85rem;"
+                      onchange="refreshSplitSelects()">
+                <option value="">— Choose —</option>
+                {% for ab in ability_score_keys %}
+                {% set cur = ability_scores.get(ab, 10) %}
+                <option value="{{ ab }}" {% if cur >= 20 %}disabled{% endif %}>
+                  {{ ability_names[ab] }} ({{ ab }}) — {{ cur }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feat -->
+        <div id="asi-feat" style="display:none;">
+          <label style="font-size:0.85rem; margin-bottom:4px; display:block;">Choose a feat:</label>
+          <select name="feat_name" style="min-width:240px; max-width:400px; font-size:0.85rem;">
+            <option value="">— Choose a feat —</option>
+            <optgroup label="TCoE General Feats">
+              {% for fname, fdata in all_feats.items() if fdata.source == 'TCoE' %}
+              <option value="{{ fname }}" {% if fname in char_feats %}disabled{% endif %}>
+                {{ fname }}{% if fdata.prereq %} ({{ fdata.prereq }}){% endif %}
+                {{ ' ✓ already taken' if fname in char_feats else '' }}
+              </option>
+              {% endfor %}
+            </optgroup>
+            <optgroup label="XGtE Racial Feats">
+              {% for fname, fdata in all_feats.items() if fdata.source == 'XGtE' %}
+              <option value="{{ fname }}" {% if fname in char_feats %}disabled{% endif %}>
+                {{ fname }}{% if fdata.prereq %} ({{ fdata.prereq }}){% endif %}
+                {{ ' ✓ already taken' if fname in char_feats else '' }}
+              </option>
+              {% endfor %}
+            </optgroup>
+          </select>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- New Spells Known -->
+      {% if spells_to_pick > 0 %}
+      <div class="card" style="margin-bottom:1.25rem; border-color:var(--gold);">
+        <h2 style="margin:0 0 0.5rem; font-size:1rem; color:var(--gold);">
+          ✨ New Spells Known
+          <span id="spell-count-badge" style="font-size:0.78rem; font-weight:400;
+                color:var(--muted); margin-left:6px;">
+            ({{ spells_to_pick }} to choose)
+          </span>
+        </h2>
+        <p style="font-size:0.85rem; color:var(--muted); margin:0 0 0.75rem;">
+          Enter the name of each new spell. Check the Rules Reference for your class spell list.
+        </p>
+        <div id="spell-inputs" style="display:flex; flex-direction:column; gap:0.5rem;">
+          {% for i in range(spells_to_pick) %}
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <span style="font-size:0.82rem; color:var(--muted); min-width:20px;">{{ loop.index }}.</span>
+            <input type="text" name="new_spells" placeholder="Spell name…"
+                   style="flex:1; max-width:320px; font-size:0.85rem;">
+          </div>
+          {% endfor %}
+        </div>
+        <a href="/rules" target="_blank"
+           style="font-size:0.8rem; color:var(--gold); display:inline-block; margin-top:0.6rem;">
+          📖 Open Rules Reference →
+        </a>
+      </div>
+      {% endif %}
+
+      <!-- Submit -->
+      <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+        <button type="submit" class="btn btn-gold"
+                style="padding:10px 28px; font-size:1rem; font-weight:700;">
+          ✅ Confirm Level {{ new_level }}
+        </button>
+        <a href="/characters/{{ character.id }}" class="btn btn-outline">Cancel</a>
+      </div>
+
+    </div>
+
+    <!-- ── RIGHT: What's New ── -->
+    <div>
+      <div class="card" style="border-color:rgba(201,168,76,0.4); position:sticky; top:1rem;">
+        <h2 style="margin:0 0 1rem; font-size:1rem; color:var(--gold);">
+          🌟 Level {{ new_level }} Features
+        </h2>
+        {% if new_features %}
+        <ul style="margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:0.6rem;">
+          {% for feature in new_features %}
+          <li style="display:flex; gap:0.5rem; align-items:flex-start; font-size:0.84rem;">
+            <span style="color:var(--gold); flex-shrink:0; margin-top:1px;">✦</span>
+            <span>{{ feature }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p style="font-size:0.85rem; color:var(--muted); margin:0;">
+          Consult your class description for Level {{ new_level }} details.
+        </p>
+        {% endif %}
+
+        {% if new_slots %}
+        <hr style="border:none; border-top:1px solid var(--border); margin:1rem 0;">
+        <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                    letter-spacing:0.5px; margin-bottom:0.5rem;">Updated Spell Slots</div>
+        <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
+          {% for sl, data in new_slots.items() %}
+          <div style="background:var(--card); border:1px solid var(--border); border-radius:4px;
+                      padding:3px 8px; font-size:0.8rem; text-align:center;">
+            <div style="color:var(--gold); font-weight:600;">
+              {% set n = sl|int %}
+              {% if n == 1 %}1st{% elif n == 2 %}2nd{% elif n == 3 %}3rd{% else %}{{ n }}th{% endif %}
+            </div>
+            <div style="color:var(--muted);">×{{ data.max }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <hr style="border:none; border-top:1px solid var(--border); margin:1rem 0;">
+        <div style="font-size:0.78rem; color:var(--muted);">
+          <div style="margin-bottom:4px;">
+            <span style="color:var(--text);">HP</span>
+            {{ character.hp_max }} → ~{{ character.hp_max + hp_average }}
+          </div>
+          <div style="margin-bottom:4px;">
+            <span style="color:var(--text);">Proficiency</span>
+            +{{ character.proficiency_bonus }}{% if prof_changed %} → +{{ new_prof }}{% endif %}
+          </div>
+          <div>
+            <span style="color:var(--text);">XP</span>
+            {{ char_xp|int }} / {{ xp_threshold|int }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</form>
+
+<style>
+.subclass-option:has(input:checked) {
+  border-color: var(--gold);
+  background: rgba(201,168,76,0.07);
+}
+</style>
+
+<script>
+function showAsiMode(mode) {
+  ['plus2','split','feat'].forEach(function(m) {
+    var el = document.getElementById('asi-' + m);
+    if (el) el.style.display = (m === mode) ? '' : 'none';
+  });
+  // Reset irrelevant selects to avoid sending stale data
+  if (mode !== 'plus2') {
+    var s1 = document.getElementById('asi-stat1-plus2');
+    if (s1) s1.value = '';
+  }
+  if (mode !== 'split') {
+    var s1s = document.getElementById('asi-stat1-split');
+    var s2s = document.getElementById('asi-stat2-split');
+    if (s1s) s1s.value = '';
+    if (s2s) s2s.value = '';
+  }
+}
+
+function refreshSplitSelects() {
+  var sel1 = document.getElementById('asi-stat1-split');
+  var sel2 = document.getElementById('asi-stat2-split');
+  if (!sel1 || !sel2) return;
+  var v1 = sel1.value, v2 = sel2.value;
+  Array.from(sel2.options).forEach(function(opt) {
+    opt.disabled = opt.value && opt.value === v1;
+  });
+  Array.from(sel1.options).forEach(function(opt) {
+    opt.disabled = opt.value && opt.value === v2;
+  });
+}
+
+function updateHpPreview() {
+  var roll   = document.querySelector('input[name="hp_method"][value="roll"]');
+  var prev   = document.getElementById('hp-preview');
+  var curMax = {{ character.hp_max }};
+  var avg    = {{ hp_average }};
+  if (roll && roll.checked) {
+    prev.textContent = 'HP gain revealed after submit (1d{{ hit_die }} + CON modifier, minimum 1).';
+  } else {
+    prev.textContent = 'New HP max will be at least ' + (curMax + Math.max(1, avg)) + '.';
+  }
+}
+</script>
+{% endblock %}

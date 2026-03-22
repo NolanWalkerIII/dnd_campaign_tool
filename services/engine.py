@@ -185,11 +185,13 @@ def get_character_summary(character):
     subclass_str = f' ({subclass})' if subclass else ''
     feats = spells_data.get('feats', [])
     feats_str = f', Feats: {", ".join(feats)}' if feats else ''
+    char_xp  = spells_data.get('xp', 0)
+    xp_str   = f', XP: {char_xp}'
 
     return (
         f'{character.name}, Lv{character.level} {character.race} {character.class_name}{subclass_str}, '
         f'HP {character.hp_current}/{character.hp_max}, AC {character.ac}, '
-        f'{score_str}{spells_str}{equip_str}{feats_str}'
+        f'{score_str}{spells_str}{equip_str}{feats_str}{xp_str}'
     )
 
 

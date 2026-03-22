@@ -36,6 +36,8 @@ from game_data import (
     RACES, MULTIVERSE_RACES, CLASSES, BACKGROUNDS, STANDARD_ARRAY,
     ABILITY_SCORES, ABILITY_NAMES, SKILLS, SUBCLASSES, FEATS,
     GROUP_PATRONS, DOWNTIME_ACTIVITIES,
+    XP_THRESHOLDS, PROFICIENCY_BONUS_BY_LEVEL, ASI_LEVELS,
+    SUBCLASS_LEVEL, KNOWN_SPELLS_GAINED, CLASS_FEATURES,
     get_spell_slots, SPELLCASTING_TYPE,
 )
 
@@ -976,6 +978,17 @@ def character_sheet(char_id):
     senses = [t for t in race_data.get('traits', [])
               if any(k in t.lower() for k in sense_keywords)]
 
+    # XP and leveling
+    char_xp      = extra.get('xp', 0)
+    new_level    = min(char.level + 1, 20)
+    xp_for_next  = XP_THRESHOLDS[new_level] if char.level < 20 else None
+    xp_prev      = XP_THRESHOLDS[char.level]
+    can_level_up = (char.level < 20 and char_xp >= XP_THRESHOLDS[char.level + 1])
+    if xp_for_next and xp_for_next > xp_prev:
+        xp_pct = min(100, int((char_xp - xp_prev) / (xp_for_next - xp_prev) * 100))
+    else:
+        xp_pct = 100 if char.level >= 20 else 0
+
     return render_template(
         'character_sheet.html',
         character=char,
@@ -1007,7 +1020,209 @@ def character_sheet(char_id):
         subclass_source=subclass_source,
         feats_data=feats_data,
         all_feats=FEATS,
+        char_xp=char_xp,
+        xp_for_next=xp_for_next,
+        xp_prev=xp_prev,
+        xp_pct=xp_pct,
+        can_level_up=can_level_up,
     )
+
+
+@app.route('/characters/<int:char_id>/xp', methods=['POST'])
+@login_required
+def character_award_xp(char_id):
+    char = Character.query.get_or_404(char_id)
+    if session.get('role') != 'dm':
+        flash('Only DMs can award XP.', 'error')
+        return redirect(url_for('character_sheet', char_id=char_id))
+    try:
+        award = max(0, int(request.form.get('xp_award', 0)))
+    except (ValueError, TypeError):
+        award = 0
+    if award == 0:
+        flash('Enter a positive XP amount.', 'error')
+        return redirect(url_for('character_sheet', char_id=char_id))
+    extra = char.spells or {}
+    old_xp = extra.get('xp', 0)
+    new_xp = old_xp + award
+    extra['xp'] = new_xp
+    char.spells = extra
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(char, 'spells')
+    db.session.commit()
+    flash(f'Awarded {award:,} XP to {char.name}. Total: {new_xp:,} XP.', 'success')
+    if char.level < 20 and new_xp >= XP_THRESHOLDS[char.level + 1]:
+        flash(f'🎉 {char.name} has enough XP to level up to Level {char.level + 1}!', 'success')
+    return redirect(url_for('character_sheet', char_id=char_id))
+
+
+@app.route('/characters/<int:char_id>/levelup', methods=['GET'])
+@login_required
+def character_levelup_get(char_id):
+    char = Character.query.get_or_404(char_id)
+    if char.user_id != session.get('user_id') and session.get('role') != 'dm':
+        flash('Access denied.', 'error')
+        return redirect(url_for('character_sheet', char_id=char_id))
+    if char.level >= 20:
+        flash('Already at maximum level (20).', 'info')
+        return redirect(url_for('character_sheet', char_id=char_id))
+
+    new_level   = char.level + 1
+    class_name  = char.class_name or ''
+    scores      = char.ability_scores or {}
+    extra       = char.spells or {}
+    subclass    = extra.get('subclass', '')
+
+    new_prof    = PROFICIENCY_BONUS_BY_LEVEL.get(new_level, 2)
+    prof_changed = new_prof != char.proficiency_bonus
+    cls_data    = CLASSES.get(class_name, {})
+    hit_die     = cls_data.get('hit_die', 8)
+    con_mod     = ability_modifier(scores.get('CON', 10))
+    hp_average  = hit_die // 2 + 1 + con_mod
+
+    needs_subclass   = (not subclass) and (new_level == SUBCLASS_LEVEL.get(class_name, 99))
+    is_asi_level     = new_level in ASI_LEVELS.get(class_name, [])
+    spells_to_pick   = KNOWN_SPELLS_GAINED.get(class_name, {}).get(new_level, 0)
+    new_features     = CLASS_FEATURES.get(class_name, {}).get(new_level, [])
+    new_slots        = get_spell_slots(class_name, new_level)
+
+    return render_template('character_levelup.html',
+                           character=char,
+                           new_level=new_level,
+                           new_prof=new_prof,
+                           prof_changed=prof_changed,
+                           hit_die=hit_die,
+                           con_mod=con_mod,
+                           hp_average=hp_average,
+                           needs_subclass=needs_subclass,
+                           subclass_options=SUBCLASSES.get(class_name, []) if needs_subclass else [],
+                           is_asi_level=is_asi_level,
+                           spells_to_pick=spells_to_pick,
+                           new_features=new_features,
+                           new_slots=new_slots,
+                           ability_scores=scores,
+                           ability_names=ABILITY_NAMES,
+                           ability_score_keys=ABILITY_SCORES,
+                           all_feats=FEATS,
+                           char_feats=extra.get('feats', []),
+                           xp_threshold=XP_THRESHOLDS[new_level],
+                           char_xp=extra.get('xp', 0))
+
+
+@app.route('/characters/<int:char_id>/levelup', methods=['POST'])
+@login_required
+def character_levelup_post(char_id):
+    char = Character.query.get_or_404(char_id)
+    if char.user_id != session.get('user_id') and session.get('role') != 'dm':
+        flash('Access denied.', 'error')
+        return redirect(url_for('character_sheet', char_id=char_id))
+    if char.level >= 20:
+        flash('Already at maximum level.', 'error')
+        return redirect(url_for('character_sheet', char_id=char_id))
+
+    force = request.form.get('force') == '1'
+    new_level  = char.level + 1
+    class_name = char.class_name or ''
+    scores     = dict(char.ability_scores or {})
+    extra      = dict(char.spells or {})
+    subclass   = extra.get('subclass', '')
+
+    # XP gate (DM can force)
+    char_xp = extra.get('xp', 0)
+    if not force and session.get('role') != 'dm' and char_xp < XP_THRESHOLDS[new_level]:
+        flash(f'Not enough XP to reach Level {new_level} ({char_xp:,} / {XP_THRESHOLDS[new_level]:,}).', 'error')
+        return redirect(url_for('character_levelup_get', char_id=char_id))
+
+    # HP
+    hp_method = request.form.get('hp_method', 'average')
+    cls_data  = CLASSES.get(class_name, {})
+    hit_die   = cls_data.get('hit_die', 8)
+    con_mod   = ability_modifier(scores.get('CON', 10))
+    if hp_method == 'roll':
+        roll_total, _, _ = DiceRoller.roll(f'1d{hit_die}', modifier=con_mod)
+        hp_gain = max(1, roll_total)
+        flash(f'HP roll: 1d{hit_die}{mod_str(con_mod)} = {hp_gain} HP gained!', 'success')
+    else:
+        hp_gain = max(1, hit_die // 2 + 1 + con_mod)
+
+    char.hp_max     += hp_gain
+    char.hp_current += hp_gain
+
+    # Proficiency bonus
+    char.proficiency_bonus = PROFICIENCY_BONUS_BY_LEVEL.get(new_level, char.proficiency_bonus)
+
+    # Subclass
+    needs_subclass = (not subclass) and (new_level == SUBCLASS_LEVEL.get(class_name, 99))
+    if needs_subclass:
+        new_subclass = request.form.get('subclass', '').strip()
+        valid_names  = [s['name'] for s in SUBCLASSES.get(class_name, [])]
+        if new_subclass and new_subclass in valid_names:
+            extra['subclass'] = new_subclass
+            flash(f'Subclass chosen: {new_subclass}.', 'success')
+
+    # ASI / Feat
+    is_asi_level = new_level in ASI_LEVELS.get(class_name, [])
+    if is_asi_level:
+        asi_choice = request.form.get('asi_choice', '')
+        if asi_choice == 'stat_plus2':
+            ab = request.form.get('asi_stat1', '')
+            if ab in scores and scores[ab] < 20:
+                scores[ab] = min(20, scores[ab] + 2)
+                flash(f'ASI: {ab} +2 → {scores[ab]}.', 'success')
+        elif asi_choice == 'stat_split':
+            ab1 = request.form.get('asi_stat1', '')
+            ab2 = request.form.get('asi_stat2', '')
+            if ab1 in scores and ab2 in scores and ab1 != ab2:
+                scores[ab1] = min(20, scores[ab1] + 1)
+                scores[ab2] = min(20, scores[ab2] + 1)
+                flash(f'ASI: {ab1} +1 → {scores[ab1]}, {ab2} +1 → {scores[ab2]}.', 'success')
+        elif asi_choice == 'feat':
+            feat_name = request.form.get('feat_name', '').strip()
+            if feat_name in FEATS and feat_name not in extra.get('feats', []):
+                feats = extra.get('feats', [])
+                feats.append(feat_name)
+                extra['feats'] = feats
+                flash(f'Feat gained: {feat_name}.', 'success')
+
+    char.ability_scores = scores
+
+    # Known spells (for Bard/Ranger/Sorcerer/Warlock)
+    spells_to_pick = KNOWN_SPELLS_GAINED.get(class_name, {}).get(new_level, 0)
+    if spells_to_pick > 0:
+        new_spell_names = [s.strip() for s in request.form.getlist('new_spells') if s.strip()]
+        known = extra.get('known', [])
+        for sp in new_spell_names[:spells_to_pick]:
+            if sp and sp not in known:
+                known.append(sp)
+        extra['known'] = known
+        if new_spell_names:
+            flash(f'New spells added: {", ".join(new_spell_names[:spells_to_pick])}.', 'success')
+
+    # Spell slots
+    new_slots = get_spell_slots(class_name, new_level)
+    if new_slots:
+        current_slots = extra.get('slots', {})
+        merged = {}
+        for sl, slot_data in new_slots.items():
+            old_cur = current_slots.get(sl, {}).get('current', 0)
+            merged[sl] = {
+                'max':     slot_data['max'],
+                'current': min(old_cur + (slot_data['max'] - current_slots.get(sl, {}).get('max', 0)), slot_data['max'])
+                           if sl in current_slots else slot_data['max'],
+            }
+        extra['slots'] = merged
+
+    # Increment level
+    char.level = new_level
+    char.spells = extra
+
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(char, 'spells')
+    flag_modified(char, 'ability_scores')
+    db.session.commit()
+
+    flash(f'{char.name} is now Level {new_level}! +{hp_gain} HP max.', 'success')
+    return redirect(url_for('character_sheet', char_id=char_id))
 
 
 @app.route('/characters/<int:char_id>/hp', methods=['POST'])
