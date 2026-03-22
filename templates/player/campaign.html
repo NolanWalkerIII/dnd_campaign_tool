@@ -461,6 +461,109 @@
     </div>
     {% endif %}
 
+    <!-- Between Sessions: Patron & Downtime -->
+    <div class="card">
+      <details id="details-downtime">
+        <summary style="cursor:pointer; color:var(--gold); font-size:0.95rem;
+                        font-weight:600; user-select:none; padding:4px 0;">
+          🏛️ Between Sessions
+          {% if my_downtime %}
+          <span style="font-size:0.75rem; color:var(--success); font-weight:400;
+                       margin-left:8px;">✓ {{ my_downtime.activity }}</span>
+          {% endif %}
+        </summary>
+        <div style="margin-top:0.85rem;">
+
+          {% if patron_type %}
+          <div style="background:rgba(201,168,76,0.07); border:1px solid rgba(201,168,76,0.25);
+                      border-radius:6px; padding:0.6rem 0.8rem; margin-bottom:0.85rem;">
+            <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                        letter-spacing:0.5px; margin-bottom:4px;">Group Patron</div>
+            <div style="font-weight:600; font-size:0.9rem; margin-bottom:2px;">
+              {{ patron_data.icon }} {{ patron_type }}
+            </div>
+            <p style="font-size:0.8rem; color:var(--muted); margin:0 0 0.4rem;">
+              {{ patron_data.description }}
+            </p>
+            <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                        letter-spacing:0.5px; margin-bottom:3px;">Party Perks</div>
+            <ul style="margin:0; padding-left:1.1rem; font-size:0.8rem; color:var(--text);">
+              {% for perk in patron_data.perks %}
+              <li>{{ perk }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+
+          <!-- Submitted downtime display -->
+          {% if my_downtime %}
+          <div style="background:rgba(56,201,106,0.07); border:1px solid rgba(56,201,106,0.25);
+                      border-radius:6px; padding:0.6rem 0.8rem; margin-bottom:0.85rem;">
+            <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                        letter-spacing:0.5px; margin-bottom:4px;">Your Downtime Activity</div>
+            {% set act = downtime_activities.get(my_downtime.activity, {}) %}
+            <div style="font-weight:600; font-size:0.88rem;">
+              {{ act.icon or '🎭' }} {{ my_downtime.activity }}
+            </div>
+            {% if my_downtime.notes %}
+            <p style="font-size:0.8rem; color:var(--muted); margin:4px 0 0;
+                      white-space:pre-line;">{{ my_downtime.notes }}</p>
+            {% endif %}
+            <div style="font-size:0.73rem; color:var(--muted); margin-top:4px;">
+              Submitted {{ my_downtime.submitted }}
+              {% if act.duration %} · ⏱ {{ act.duration }}{% endif %}
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- Downtime submission form -->
+          <div style="font-size:0.78rem; color:var(--muted); margin-bottom:0.4rem; font-weight:600;">
+            {{ 'Change' if my_downtime else 'Submit' }} Downtime Activity
+          </div>
+          <form method="POST" action="/player/campaigns/{{ campaign.id }}/downtime">
+            <div class="form-group" style="margin-bottom:0.6rem;">
+              <select name="activity" required style="font-size:0.85rem; width:100%;">
+                <option value="">— Choose an activity —</option>
+                {% for aname, adata in downtime_activities.items() %}
+                <option value="{{ aname }}"
+                  {{ 'selected' if my_downtime and my_downtime.activity == aname }}>
+                  {{ adata.icon }} {{ aname }} ({{ adata.duration }})
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0.6rem;">
+              <textarea name="notes" rows="2" style="font-size:0.82rem; resize:vertical; width:100%;"
+                        placeholder="Optional notes for your DM (goal, specifics, who you're working with…)">{{ my_downtime.notes if my_downtime else '' }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-gold" style="font-size:0.85rem; padding:6px 14px;">
+              Submit
+            </button>
+          </form>
+
+          <!-- Quick activity reference -->
+          <details style="margin-top:0.85rem;">
+            <summary style="font-size:0.78rem; color:var(--muted); cursor:pointer; user-select:none;">
+              📖 What do these activities do?
+            </summary>
+            <div style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.5rem;">
+              {% for aname, adata in downtime_activities.items() %}
+              <div style="font-size:0.8rem; padding:5px 0; border-bottom:1px solid var(--border);">
+                <div style="font-weight:600;">{{ adata.icon }} {{ aname }}</div>
+                <div style="color:var(--muted); font-size:0.75rem; margin:2px 0;">
+                  {{ adata.duration }} · {{ adata.cost }}
+                  {% if adata.skill_check %} · <em>{{ adata.skill_check }}</em>{% endif %}
+                </div>
+                <p style="color:var(--text); margin:2px 0 0; font-size:0.78rem;">{{ adata.description }}</p>
+              </div>
+              {% endfor %}
+            </div>
+          </details>
+
+        </div>
+      </details>
+    </div>
+
     <!-- Quick Reference -->
     <div class="card">
       <details id="details-quick-ref">

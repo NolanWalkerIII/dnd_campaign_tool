@@ -27,13 +27,15 @@ from parsers import parse_character_md, parse_campaign_md, CHARACTER_TEMPLATE, C
 from services.ai import (cleanup_narration, generate_narration,
                          cleanup_background, generate_background,
                          generate_trait_field, generate_appearance,
-                         generate_character, get_usage_log)
+                         generate_character, get_usage_log,
+                         generate_patron_quests, sanitize_for_prompt)
 from services.ai_player import generate_player_action, generate_combat_decision, generate_practice_debrief
 import re as _re
 
 from game_data import (
     RACES, MULTIVERSE_RACES, CLASSES, BACKGROUNDS, STANDARD_ARRAY,
     ABILITY_SCORES, ABILITY_NAMES, SKILLS, SUBCLASSES, FEATS,
+    GROUP_PATRONS, DOWNTIME_ACTIVITIES,
     get_spell_slots, SPELLCASTING_TYPE,
 )
 
@@ -1391,6 +1393,12 @@ def dm_campaign_detail(campaign_id):
         if (char.spells or {}).get('ai_player'):
             all_ai_chars.append({'id': char.id, 'name': char.name})
 
+    # Patron & downtime
+    patron_type      = state.get('patron_type', '')
+    patron_data      = GROUP_PATRONS.get(patron_type, {})
+    downtime_log     = state.get('downtime_log', [])
+    patron_quests    = state.get('patron_quests', [])
+
     return render_template('dm/campaign.html',
                            campaign=campaign,
                            players=players,
@@ -1404,7 +1412,13 @@ def dm_campaign_detail(campaign_id):
                            conditions=CONDITIONS,
                            skills_sorted=sorted(SKILLS.keys()),
                            twilio_number=os.environ.get('TWILIO_PHONE_NUMBER', ''),
-                           discord_invite=_get_discord_invite())
+                           discord_invite=_get_discord_invite(),
+                           group_patrons=GROUP_PATRONS,
+                           patron_type=patron_type,
+                           patron_data=patron_data,
+                           downtime_log=downtime_log,
+                           patron_quests=patron_quests,
+                           downtime_activities=DOWNTIME_ACTIVITIES)
 
 
 @app.route('/dm/campaigns/<int:campaign_id>/narrate', methods=['POST'])
@@ -1473,6 +1487,135 @@ def dm_onboarding_dismiss(campaign_id):
     flag_modified(campaign, 'current_state')
     db.session.commit()
     return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/patron', methods=['POST'])
+@dm_required
+def dm_set_patron(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    patron_type = request.form.get('patron_type', '').strip()
+    state = campaign.current_state or {}
+    if patron_type and patron_type not in GROUP_PATRONS:
+        flash('Invalid patron type.', 'error')
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    state['patron_type'] = patron_type
+    if not patron_type:
+        state.pop('patron_quests', None)
+    campaign.current_state = state
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(campaign, 'current_state')
+    db.session.commit()
+    if patron_type:
+        flash(f'Group patron set: {GROUP_PATRONS[patron_type]["icon"]} {patron_type}.', 'success')
+    else:
+        flash('Group patron cleared.', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id) + '#patron-card')
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/patron/quests', methods=['POST'])
+@dm_required
+def dm_patron_quests(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        return jsonify({'error': 'Access denied.'}), 403
+    state = campaign.current_state or {}
+    patron_type = state.get('patron_type', '')
+    if not patron_type:
+        return jsonify({'error': 'No patron set for this campaign.'}), 400
+    patron_data = GROUP_PATRONS.get(patron_type, {})
+
+    # Build party summary
+    player_ids = campaign.players or []
+    party_chars = []
+    for uid in player_ids:
+        char = Character.query.filter_by(user_id=uid).order_by(Character.id.desc()).first()
+        if char:
+            party_chars.append(f'{char.name} ({char.race} {char.class_name} Lv{char.level})')
+    dm_managed = [Character.query.get(cid) for cid in state.get('dm_managed_chars', [])
+                  if Character.query.get(cid)]
+    for char in dm_managed:
+        party_chars.append(f'{char.name} ({char.race} {char.class_name} Lv{char.level})')
+    party_summary = ', '.join(party_chars) if party_chars else 'Unknown party'
+
+    recent_log = state.get('narration_log', [])
+    log_text = '\n'.join(
+        f'[{e.get("author","DM")}] {e.get("text","")}'
+        for e in recent_log[-6:]
+        if e.get('type') != 'session_start'
+    )
+
+    quests, error = generate_patron_quests(
+        patron_type=patron_type,
+        quest_flavor=patron_data.get('quest_flavor', ''),
+        party_summary=party_summary,
+        recent_log_text=sanitize_for_prompt(log_text, max_len=800),
+    )
+    if error:
+        return jsonify({'error': error}), 502
+
+    state['patron_quests'] = quests
+    campaign.current_state = state
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(campaign, 'current_state')
+    db.session.commit()
+    return jsonify({'quests': quests})
+
+
+@app.route('/player/campaigns/<int:campaign_id>/downtime', methods=['POST'])
+@player_required
+def player_downtime_submit(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    uid = _effective_uid()
+    if uid not in (campaign.players or []):
+        flash('You are not in this campaign.', 'error')
+        return redirect(url_for('player_dashboard'))
+    activity = request.form.get('activity', '').strip()
+    notes    = sanitize_for_prompt(request.form.get('notes', '').strip(), max_len=300)
+    if not activity:
+        flash('Please select a downtime activity.', 'error')
+        return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
+    active_char = _get_player_active_char(campaign_id)
+    char_name   = active_char.name if active_char else 'Unknown'
+
+    state = campaign.current_state or {}
+    log   = state.get('downtime_log', [])
+    # Replace any existing entry from this user this session
+    log = [e for e in log if e.get('user_id') != uid]
+    log.append({
+        'user_id':   uid,
+        'char_name': char_name,
+        'activity':  activity,
+        'notes':     notes,
+        'submitted': datetime.now().strftime('%b %d, %H:%M'),
+    })
+    state['downtime_log'] = log
+    campaign.current_state = state
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(campaign, 'current_state')
+    db.session.commit()
+    flash(f'Downtime activity submitted: {activity}.', 'success')
+    return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/dm/campaigns/<int:campaign_id>/downtime/clear', methods=['POST'])
+@dm_required
+def dm_downtime_clear(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    if campaign.dm_id != session['user_id']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dm_dashboard'))
+    state = campaign.current_state or {}
+    state['downtime_log'] = []
+    campaign.current_state = state
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(campaign, 'current_state')
+    db.session.commit()
+    flash('Downtime log cleared.', 'success')
+    return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id) + '#patron-card')
 
 
 @app.route('/dm/campaigns/<int:campaign_id>/save')
@@ -2230,6 +2373,12 @@ def player_campaign_detail(campaign_id):
         char = Character.query.filter_by(user_id=p.id).order_by(Character.id.desc()).first()
         party_members.append({'user': p, 'char': char})
 
+    state = campaign.current_state or {}
+    patron_type = state.get('patron_type', '')
+    patron_data = GROUP_PATRONS.get(patron_type, {})
+    downtime_log = state.get('downtime_log', [])
+    my_downtime = next((e for e in downtime_log if e.get('user_id') == uid), None)
+
     return render_template('player/campaign.html',
                            campaign=campaign,
                            dm=dm,
@@ -2239,7 +2388,11 @@ def player_campaign_detail(campaign_id):
                            active_slots=active_slots,
                            active_char=active_char,
                            party_members=party_members,
-                           view_uid=uid)
+                           view_uid=uid,
+                           patron_type=patron_type,
+                           patron_data=patron_data,
+                           downtime_activities=DOWNTIME_ACTIVITIES,
+                           my_downtime=my_downtime)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

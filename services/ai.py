@@ -522,3 +522,63 @@ def summarize_session(entries, session_name):
         },
     ]
     return _call(messages, max_tokens=400)
+
+
+def generate_patron_quests(patron_type, quest_flavor, party_summary, recent_log_text):
+    """
+    Generate 2-3 quest hooks tailored to a campaign's group patron.
+    Returns (list_of_dicts, error) where each dict has: title, hook, complication.
+    On error returns (None, error_str).
+    """
+    import json as _json
+
+    context = recent_log_text or "The campaign is just beginning."
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a creative Dungeon Master generating quest hooks for a D&D 5e campaign. "
+                "You MUST respond with ONLY a valid JSON array — no markdown, no preamble, pure JSON. "
+                "The array must contain exactly 3 objects, each with these keys:\n"
+                '  "title": string — a short evocative quest name (4-8 words)\n'
+                '  "hook": string — 2-3 sentences describing the quest setup and what the party is asked to do\n'
+                '  "complication": string — 1-2 sentences describing a twist or obstacle that will arise\n'
+                "All quests must align with the patron type and feel organic to the current campaign context."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Patron type: {patron_type}\n"
+                f"Patron quest themes: {quest_flavor}\n"
+                f"Party: {party_summary}\n\n"
+                f"Recent campaign context:\n{context}\n\n"
+                "Generate exactly 3 quest hooks as a JSON array."
+            ),
+        },
+    ]
+
+    text, error = _call(messages, max_tokens=800)
+    if error:
+        return None, error
+
+    text = text.strip()
+    if text.startswith('```'):
+        lines = text.split('\n')
+        text = '\n'.join(lines[1:]).rstrip('`').strip()
+
+    try:
+        data = _json.loads(text)
+        if not isinstance(data, list):
+            return None, "AI returned unexpected format."
+        result = []
+        for item in data[:3]:
+            result.append({
+                'title': str(item.get('title', 'Untitled Quest')).strip(),
+                'hook': str(item.get('hook', '')).strip(),
+                'complication': str(item.get('complication', '')).strip(),
+            })
+        return result, None
+    except _json.JSONDecodeError:
+        return None, "AI returned invalid JSON. Please try again."

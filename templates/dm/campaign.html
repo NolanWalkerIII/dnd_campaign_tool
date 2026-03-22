@@ -618,6 +618,185 @@ function toggleGettingStarted() {
 })();
 </script>
 
+<!-- ══ GROUP PATRON & DOWNTIME ══════════════════════════════════════════════ -->
+<div class="card" id="patron-card" style="margin-bottom:1.5rem;">
+  <details data-persist-key="dm_{{ campaign.id }}_patron_open">
+    <summary style="cursor:pointer; user-select:none; display:flex; align-items:center;
+                    justify-content:space-between; gap:1rem;">
+      <div style="display:flex; align-items:center; gap:0.6rem;">
+        <span style="font-size:1.1rem;">
+          {% if patron_type %}{{ patron_data.icon }}{% else %}🏛️{% endif %}
+        </span>
+        <span style="font-weight:600; font-size:0.95rem; color:var(--gold);">
+          Group Patron &amp; Downtime
+        </span>
+        {% if patron_type %}
+        <span style="font-size:0.8rem; color:var(--text); background:rgba(201,168,76,0.12);
+                     border:1px solid var(--gold); border-radius:4px; padding:1px 8px;">
+          {{ patron_type }}
+        </span>
+        {% else %}
+        <span style="font-size:0.78rem; color:var(--muted);">None set</span>
+        {% endif %}
+      </div>
+      {% if downtime_log %}
+      <span style="font-size:0.78rem; color:var(--muted);">
+        {{ downtime_log|length }} downtime submission{{ 's' if downtime_log|length != 1 else '' }}
+      </span>
+      {% endif %}
+    </summary>
+
+    <div class="two-col" style="margin-top:1.25rem; gap:1.5rem; align-items:start;">
+
+      <!-- ── LEFT: Patron ── -->
+      <div>
+        <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                    letter-spacing:0.5px; margin-bottom:0.6rem;">Current Patron</div>
+
+        {% if patron_type %}
+        <div style="background:rgba(201,168,76,0.06); border:1px solid rgba(201,168,76,0.3);
+                    border-radius:6px; padding:0.75rem 1rem; margin-bottom:1rem;">
+          <div style="font-size:1.15rem; margin-bottom:4px;">
+            {{ patron_data.icon }} <strong>{{ patron_type }}</strong>
+          </div>
+          <p style="font-size:0.83rem; color:var(--muted); margin:0 0 0.6rem;">
+            {{ patron_data.description }}
+          </p>
+          <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                      letter-spacing:0.5px; margin-bottom:4px;">Perks</div>
+          <ul style="margin:0 0 0.6rem; padding-left:1.2rem; font-size:0.82rem; color:var(--text);">
+            {% for perk in patron_data.perks %}
+            <li>{{ perk }}</li>
+            {% endfor %}
+          </ul>
+          <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                      letter-spacing:0.5px; margin-bottom:4px;">Quest Themes</div>
+          <p style="font-size:0.82rem; color:var(--text); margin:0; font-style:italic;">
+            {{ patron_data.quest_flavor | capitalize }}.
+          </p>
+        </div>
+
+        <!-- AI Quest Hook Generator -->
+        <div style="margin-bottom:1rem;">
+          <button type="button" class="btn btn-gold" id="patron-quest-btn"
+                  style="font-size:0.85rem; padding:6px 14px;"
+                  onclick="generatePatronQuests({{ campaign.id }})">
+            ✨ Generate Quest Hooks
+          </button>
+          <span id="patron-quest-status" style="font-size:0.82rem; color:var(--muted);
+                display:none; margin-left:0.5rem;">Generating…</span>
+        </div>
+
+        {% if patron_quests %}
+        <div id="patron-quests-list">
+          {% for q in patron_quests %}
+          <div style="border:1px solid var(--border); border-radius:6px; padding:0.65rem 0.85rem;
+                      margin-bottom:0.6rem; background:var(--card);">
+            <div style="font-weight:600; font-size:0.88rem; color:var(--gold); margin-bottom:4px;">
+              {{ q.title }}
+            </div>
+            <p style="font-size:0.82rem; color:var(--text); margin:0 0 4px;">{{ q.hook }}</p>
+            <p style="font-size:0.78rem; color:var(--accent); margin:0; font-style:italic;">
+              ⚡ Complication: {{ q.complication }}
+            </p>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div id="patron-quests-list"></div>
+        {% endif %}
+
+        {% else %}
+        <p style="font-size:0.85rem; color:var(--muted); margin-bottom:0.75rem;">
+          No patron set. Choose one to get themed quest hooks and party perks.
+        </p>
+        {% endif %}
+
+        <!-- Patron Selector -->
+        <form method="POST" action="/dm/campaigns/{{ campaign.id }}/patron"
+              style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+          <select name="patron_type" style="font-size:0.85rem; min-width:200px;">
+            <option value="">— No Patron —</option>
+            {% for pname, pdata in group_patrons.items() %}
+            <option value="{{ pname }}" {{ 'selected' if patron_type == pname }}>
+              {{ pdata.icon }} {{ pname }}
+            </option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-outline" style="font-size:0.85rem; padding:6px 14px;">
+            Set Patron
+          </button>
+        </form>
+      </div>
+
+      <!-- ── RIGHT: Downtime Log ── -->
+      <div>
+        <div style="display:flex; align-items:center; justify-content:space-between;
+                    margin-bottom:0.6rem;">
+          <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;
+                      letter-spacing:0.5px;">Player Downtime Submissions</div>
+          {% if downtime_log %}
+          <form method="POST" action="/dm/campaigns/{{ campaign.id }}/downtime/clear"
+                onsubmit="return confirm('Clear all downtime submissions?');" style="margin:0;">
+            <button type="submit" class="btn btn-outline"
+                    style="font-size:0.75rem; padding:2px 8px; color:var(--muted);">
+              Clear All
+            </button>
+          </form>
+          {% endif %}
+        </div>
+
+        {% if downtime_log %}
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+          {% for entry in downtime_log %}
+          {% set act_data = downtime_activities.get(entry.activity, {}) %}
+          <div style="background:var(--card); border:1px solid var(--border); border-radius:6px;
+                      padding:0.6rem 0.8rem;">
+            <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:4px;">
+              <span style="font-size:0.95rem;">{{ act_data.icon or '🎭' }}</span>
+              <strong style="font-size:0.88rem;">{{ entry.char_name }}</strong>
+              <span style="font-size:0.75rem; color:var(--muted);">{{ entry.submitted }}</span>
+            </div>
+            <div style="font-size:0.83rem; color:var(--gold);">{{ entry.activity }}</div>
+            {% if entry.notes %}
+            <p style="font-size:0.8rem; color:var(--muted); margin:4px 0 0;
+                      white-space:pre-line;">{{ entry.notes }}</p>
+            {% endif %}
+            {% if act_data.duration %}
+            <div style="font-size:0.73rem; color:var(--muted); margin-top:4px;">
+              ⏱ {{ act_data.duration }} · {{ act_data.cost }}
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p style="font-size:0.85rem; color:var(--muted);">
+          No downtime submissions yet. Players submit their between-session activities from their campaign view.
+        </p>
+        {% endif %}
+
+        <!-- Downtime activity reference (collapsed) -->
+        <details style="margin-top:1rem;" data-persist-key="dm_{{ campaign.id }}_downtime_ref">
+          <summary style="font-size:0.82rem; color:var(--muted); cursor:pointer; user-select:none;">
+            📖 Downtime Activity Reference
+          </summary>
+          <div style="margin-top:0.6rem; display:flex; flex-direction:column; gap:0.4rem;">
+            {% for aname, adata in downtime_activities.items() %}
+            <div style="font-size:0.8rem; padding:4px 0; border-bottom:1px solid var(--border);">
+              <span style="margin-right:4px;">{{ adata.icon }}</span>
+              <strong>{{ aname }}</strong>
+              <span style="color:var(--muted);">· {{ adata.duration }} · {{ adata.cost }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </details>
+      </div>
+
+    </div>
+  </details>
+</div>
+
 <!-- ══ COMBAT SECTION ══════════════════════════════════════════════════════ -->
 <div class="card" style="border-color:{{ 'var(--accent)' if combat_active else 'var(--border)' }};">
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
@@ -1955,6 +2134,42 @@ function summarizeSession(btn) {
     if (statusEl) { statusEl.textContent = 'Network error.'; statusEl.style.color = 'var(--accent)'; }
   })
   .finally(function() { btn.disabled = false; btn.style.opacity = '1'; });
+}
+
+/* ── Group Patron Quest Generator ────────────────────────────────────────── */
+async function generatePatronQuests(campaignId) {
+  var btn    = document.getElementById('patron-quest-btn');
+  var status = document.getElementById('patron-quest-status');
+  var list   = document.getElementById('patron-quests-list');
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+  status.style.display = 'inline';
+  status.textContent = 'Generating…';
+  try {
+    var resp = await fetch('/dm/campaigns/' + campaignId + '/patron/quests', {method: 'POST'});
+    var data = await resp.json();
+    if (!resp.ok || data.error) {
+      status.textContent = data.error || 'Error generating quests.';
+      status.style.color = 'var(--accent)';
+    } else {
+      list.innerHTML = '';
+      data.quests.forEach(function(q) {
+        var div = document.createElement('div');
+        div.style.cssText = 'border:1px solid var(--border); border-radius:6px; padding:0.65rem 0.85rem; margin-bottom:0.6rem; background:var(--card);';
+        div.innerHTML = '<div style="font-weight:600; font-size:0.88rem; color:var(--gold); margin-bottom:4px;">' + q.title + '</div>' +
+          '<p style="font-size:0.82rem; color:var(--text); margin:0 0 4px;">' + q.hook + '</p>' +
+          '<p style="font-size:0.78rem; color:var(--accent); margin:0; font-style:italic;">⚡ Complication: ' + q.complication + '</p>';
+        list.appendChild(div);
+      });
+      status.style.display = 'none';
+    }
+  } catch(e) {
+    status.textContent = 'Network error. Please try again.';
+    status.style.color = 'var(--accent)';
+  } finally {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
 }
 
 /* ── DM Page State Persistence — Phase 36 & 37 ───────────────────────────── */

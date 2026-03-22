@@ -879,6 +879,131 @@ FEATS = {
 }
 
 
+GROUP_PATRONS = {
+    "Academy": {
+        "icon": "🎓",
+        "description": "A school, university, or research institution. The party are students, faculty, or contracted field researchers.",
+        "perks": ["Library and laboratory access", "Free identification services", "Research assistants", "Institutional credibility"],
+        "quest_flavor": "retrieval of lost texts, investigation of phenomena, protection of researchers, rivalry with competing institutions",
+    },
+    "Ancient Being": {
+        "icon": "🐉",
+        "description": "A dragon, archfey, celestial, fiend, or other immensely powerful entity. The party serves as agents — willingly or otherwise.",
+        "perks": ["Supernatural gifts and boons", "Divination access", "Plane-hopping assistance", "The patron's vast accumulated knowledge"],
+        "quest_flavor": "collecting rare components, eliminating rivals, recovering artifacts of power, investigating threats to the patron's interests",
+    },
+    "Aristocrat": {
+        "icon": "👑",
+        "description": "A noble family, royal court, or merchant prince. The party are agents, bodyguards, and fixers.",
+        "perks": ["Wealth and social connections", "Legal immunity in patron's domain", "Access to noble estates", "Letters of introduction"],
+        "quest_flavor": "political intrigue, protection of trade routes, countering rival nobles, resolving succession crises",
+    },
+    "Criminal Syndicate": {
+        "icon": "🗡️",
+        "description": "A thieves' guild, smuggling ring, or crime family. The law is an obstacle, not a guide.",
+        "perks": ["Fences for stolen goods", "Safe houses across the region", "Forged documents on demand", "Street-level intelligence networks"],
+        "quest_flavor": "high-stakes heists, turf wars with rivals, evading law enforcement, running or busting protection rackets",
+    },
+    "Guild": {
+        "icon": "⚒️",
+        "description": "An artisan guild, merchant guild, or adventurer's guild. Business is the bottom line.",
+        "perks": ["Crafting discounts and materials", "Guild contacts in major cities", "Warehouse and storage access", "Guild certification"],
+        "quest_flavor": "protecting trade routes, investigating counterfeit goods, reclaiming stolen resources, resolving guild politics",
+    },
+    "Military Force": {
+        "icon": "⚔️",
+        "description": "An army, militia, navy, or special forces unit. Orders come from above; results are expected.",
+        "perks": ["Military-grade equipment and training", "Combat intelligence briefings", "Rank and command authority", "Logistics support"],
+        "quest_flavor": "reconnaissance, sabotage, escorting high-value targets, eliminating monster or enemy threats",
+    },
+    "Religious Order": {
+        "icon": "⛪",
+        "description": "A temple, monastery, paladin order, or sacred cult. Faith drives every mission.",
+        "perks": ["Free healing and restoration services", "Divination rituals", "Divine blessings and consecrated items", "Sanctuary in temples"],
+        "quest_flavor": "protecting sacred sites, recovering holy relics, combating undead and fiends, investigating heresies",
+    },
+    "Sovereign": {
+        "icon": "🏰",
+        "description": "A king, queen, emperor, or elected leader. The party are agents of the crown.",
+        "perks": ["Royal authority backed by decree", "State resources and funding", "Crown intelligence networks", "Legal backing anywhere in the realm"],
+        "quest_flavor": "diplomacy, espionage, hunting monsters threatening the realm, border conflicts, political threats",
+    },
+}
+
+DOWNTIME_ACTIVITIES = {
+    "Carousing": {
+        "icon": "🍺",
+        "duration": "1 workweek",
+        "cost": "10–250 gp (by lifestyle)",
+        "skill_check": "Persuasion",
+        "description": "Drinking, socializing, and making connections. Roll Persuasion: 1–5 hostile contact, 6–10 nothing, 11–15 useful ally, 16–20 ally who owes you a favor, 21+ significant reputation.",
+    },
+    "Crime": {
+        "icon": "🔓",
+        "duration": "1 workweek",
+        "cost": "None upfront (fencing cut taken from proceeds)",
+        "skill_check": "Stealth, Thieves' Tools, Deception/Persuasion/Intimidation",
+        "description": "Plan and execute a criminal job. Make 3 checks. 0 successes: caught. 1: partial haul. 2: full haul. 3: full haul + bonus loot or valuable info.",
+    },
+    "Gambling": {
+        "icon": "🎲",
+        "duration": "1 workweek",
+        "cost": "Your stake (varies)",
+        "skill_check": "Insight, Deception, Intimidation",
+        "description": "Hit the gambling dens. Make 3 checks. 0 successes: lose stake + same in debt. 1: lose half. 2: win 1.5×. 3: win 2×. 10% complication chance.",
+    },
+    "Pit Fighting": {
+        "icon": "🥊",
+        "duration": "1 workweek",
+        "cost": "None",
+        "skill_check": "Athletics, Acrobatics + DM choice",
+        "description": "Fight for prize money. Make 3 checks. 0: lose and take 3d6 damage. 1: lose and take 2d6. 2: win 100 gp. 3: win 200 gp and gain a reputation.",
+    },
+    "Research": {
+        "icon": "📚",
+        "duration": "1 workweek",
+        "cost": "50 gp expenses",
+        "skill_check": "Intelligence (relevant proficiency)",
+        "description": "Dig through libraries and consult sages. The DM reveals lore per 50 gp spent; accuracy scales with the INT check. Answers questions about monsters, locations, items, or history.",
+    },
+    "Training": {
+        "icon": "🏋️",
+        "duration": "10 workweeks",
+        "cost": "25 gp/week (250 gp total)",
+        "skill_check": "None (requires a trainer)",
+        "description": "Study under a trainer to gain proficiency in one language or tool. Must find a willing trainer. A long-term commitment.",
+    },
+    "Buying a Magic Item": {
+        "icon": "✨",
+        "duration": "1 workweek minimum",
+        "cost": "100 gp minimum (bribes, fees)",
+        "skill_check": "Persuasion + Investigation (combined total)",
+        "description": "Scour markets for magic. Combined check: 10–19 = 1d6 Common, 20–29 = + 1d4 Uncommon, 30–39 = + 1 Rare, 40+ = + 1 Very Rare. 10% complication chance per week.",
+    },
+    "Crafting a Magic Item": {
+        "icon": "⚗️",
+        "duration": "1–50 workweeks (by rarity)",
+        "cost": "50–100,000 gp (by rarity)",
+        "skill_check": "Relevant tool proficiency required",
+        "description": "Craft a magic item with a formula and exotic materials. Common: 1 wk/50 gp. Uncommon: 2 wk/200 gp. Rare: 10 wk/2,000 gp. Very Rare: 25 wk/20,000 gp. Multiple crafters divide time.",
+    },
+    "Scribing a Spell Scroll": {
+        "icon": "📜",
+        "duration": "1 day – 48 workweeks (by level)",
+        "cost": "15 gp – 250,000 gp",
+        "skill_check": "Must know/have prepared the spell",
+        "description": "Inscribe a spell into a scroll. Cantrip: 1 day/15 gp. 1st: 1 day/25 gp. 2nd: 3 days/250 gp. 3rd: 1 wk/500 gp. Higher levels scale dramatically. Material components consumed.",
+    },
+    "Other / Custom": {
+        "icon": "🎭",
+        "duration": "Varies",
+        "cost": "Varies",
+        "skill_check": "Varies",
+        "description": "A custom downtime activity agreed upon with your DM. Describe what your character is up to in the notes field.",
+    },
+}
+
+
 def get_spell_slots(class_name, level=1):
     """Return {slot_level_str: {max, current}} for the given class and character level."""
     sc_type = SPELLCASTING_TYPE.get(class_name)
