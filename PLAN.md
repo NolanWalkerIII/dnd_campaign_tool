@@ -944,7 +944,7 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
-### Phase 47: Character Leveling System
+### Phase 47: Character Leveling System ✓ Complete (2026-03-22)
 - **Source**: User request (2026-03-22) — no XP tracking, no level-up flow, no class feature progression exists yet. Characters are created at level 1 and stuck there.
 - **Objectives**: Full 5e-accurate leveling: DM awards XP, the character sheet shows progress toward the next level, and when a character hits the threshold a guided level-up wizard walks them through every rule-compliant choice available at that specific level (HP roll, ASI/feat, subclass pick, new spells known, unlocked features). No choice is presented unless the rules require it at that level for that class.
 
