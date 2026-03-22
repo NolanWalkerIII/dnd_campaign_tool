@@ -908,7 +908,7 @@ Full system health dashboard with one-click tests for: environment variables, xA
 - **New routes**: None (subclass stored with existing character update routes)
 - **Updated files**: `game_data.py`, `app.py`, `services/ai_dm.py`, `templates/player/character_create.html`
 - **Validation**: Player creates a Fighter, selects "Echo Knight" (TCoE) as subclass. Character sheet shows "Echo Knight (Fighter — TCoE)". AI DM narrates combat referencing Manifest Echo ability.
-- **Status**: Pending
+- **Status**: Complete ✓ (2026-03-22)
 
 ---
 

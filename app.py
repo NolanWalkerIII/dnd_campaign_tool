@@ -33,7 +33,7 @@ import re as _re
 
 from game_data import (
     RACES, MULTIVERSE_RACES, CLASSES, BACKGROUNDS, STANDARD_ARRAY,
-    ABILITY_SCORES, ABILITY_NAMES, SKILLS,
+    ABILITY_SCORES, ABILITY_NAMES, SKILLS, SUBCLASSES,
     get_spell_slots, SPELLCASTING_TYPE,
 )
 
@@ -497,6 +497,10 @@ def character_new():
         }),
         skills_json=json.dumps(SKILLS),
         ability_scores_json=json.dumps(ABILITY_SCORES),
+        subclasses_json=json.dumps({
+            cls: [{'name': s['name'], 'source': s['source']} for s in subs]
+            for cls, subs in SUBCLASSES.items()
+        }),
     )
 
 
@@ -869,6 +873,7 @@ def _create_character():
         else:
             equipment.append(item)
 
+    subclass = request.form.get('subclass', '').strip()
     sc = CLASSES[class_name].get('spellcasting')
     hit_die = CLASSES[class_name]['hit_die']
     char = Character(
@@ -885,6 +890,7 @@ def _create_character():
             'hit_dice_current': 1,
             'hit_die': hit_die,
             'gold': starting_gold,
+            'subclass': subclass,
         },
         background=background, alignment=alignment,
         user_id=session.get('user_id'),
@@ -922,6 +928,14 @@ def character_sheet(char_id):
 
     bg_data    = BACKGROUNDS.get(char.background, {})
     languages  = race_data.get('languages', [])
+    subclass   = extra.get('subclass', '')
+    # Look up subclass source tag for display
+    subclass_source = ''
+    if subclass:
+        for sc_entry in SUBCLASSES.get(char.class_name, []):
+            if sc_entry['name'] == subclass:
+                subclass_source = sc_entry['source']
+                break
     temp_hp     = extra.get('temp_hp', 0)
     inspiration = extra.get('inspiration', False)
     ai_player   = extra.get('ai_player', False)
@@ -971,6 +985,8 @@ def character_sheet(char_id):
         passive_investigation=passive_investigation,
         passive_insight=passive_insight,
         senses=senses,
+        subclass=subclass,
+        subclass_source=subclass_source,
     )
 
 

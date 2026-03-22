@@ -118,6 +118,13 @@
     <p style="color:var(--muted); font-size:0.88rem;">
       Level {{ character.level }}
       {{ character.race }} {{ character.class_name }}
+      {% if subclass %}
+      · <span style="color:var(--gold);">{{ subclass }}</span>
+      {% if subclass_source %}
+      <span style="font-size:0.72rem; background:var(--card); border:1px solid var(--border);
+                   border-radius:3px; padding:1px 5px; margin-left:2px; color:var(--muted);">{{ subclass_source }}</span>
+      {% endif %}
+      {% endif %}
       {% if character.background %} · {{ character.background }}{% endif %}
       {% if character.alignment %} · {{ character.alignment }}{% endif %}
     </p>

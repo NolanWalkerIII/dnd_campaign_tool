@@ -111,6 +111,13 @@
         </select>
         <div id="class-info" style="margin-top:8px; font-size:0.82rem; color:var(--muted);"></div>
       </div>
+      <div class="form-group" id="subclass-group" style="display:none;">
+        <label for="subclass">Subclass <span style="color:var(--muted); font-weight:400; font-size:0.8rem;">(optional — can choose later)</span></label>
+        <select id="subclass" name="subclass">
+          <option value="">— None / Choose Later —</option>
+        </select>
+        <div id="subclass-note" style="margin-top:6px; font-size:0.78rem; color:var(--muted);"></div>
+      </div>
       <div class="form-group">
         <label for="background">Background</label>
         <select id="background" name="background" required onchange="onBackgroundChange()">
@@ -219,10 +226,11 @@
 
 <script>
 // ── Data from server ──
-const RACES   = {{ races_json | safe }};
-const CLASSES = {{ classes_json | safe }};
-const BKGS    = {{ bgs_json | safe }};
+const RACES      = {{ races_json | safe }};
+const CLASSES    = {{ classes_json | safe }};
+const BKGS       = {{ bgs_json | safe }};
 const ABILITY_SCORES = {{ ability_scores_json | safe }};
+const SUBCLASSES = {{ subclasses_json | safe }};
 
 const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
 
@@ -300,6 +308,9 @@ function _setAbOptions(sel, excludeAb) {
   else sel.value = cur;
 }
 
+// Cleric, Sorcerer, Warlock pick subclass at level 1; others at level 3
+const SUBCLASS_LEVEL = {Cleric:1, Sorcerer:1, Warlock:1};
+
 // ── Class changed ──
 function onClassChange() {
   const cn = document.getElementById('class_name').value;
@@ -314,6 +325,30 @@ function onClassChange() {
   } else {
     infoEl.innerHTML = '';
   }
+
+  // Populate subclass select
+  const subGroup = document.getElementById('subclass-group');
+  const subSel   = document.getElementById('subclass');
+  const subNote  = document.getElementById('subclass-note');
+  const subs     = cn ? (SUBCLASSES[cn] || []) : [];
+  if (subs.length) {
+    subSel.innerHTML = '<option value="">— None / Choose Later —</option>';
+    subs.forEach(function(s) {
+      const opt = document.createElement('option');
+      opt.value = s.name;
+      opt.textContent = s.name + ' (' + s.source + ')';
+      subSel.appendChild(opt);
+    });
+    const lvl = SUBCLASS_LEVEL[cn] || 3;
+    subNote.textContent = (lvl === 1)
+      ? cn + 's choose their subclass at Level 1.'
+      : 'You choose your subclass at Level 3. You can set it now or leave it blank.';
+    subGroup.style.display = '';
+  } else {
+    subGroup.style.display = 'none';
+    subSel.innerHTML = '<option value="">— None / Choose Later —</option>';
+  }
+
   refreshSkills();
 }
 
