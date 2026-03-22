@@ -183,11 +183,13 @@ def get_character_summary(character):
     equip_str = f', Gear: {", ".join(equip[:5])}' if equip else ''
     subclass = spells_data.get('subclass', '')
     subclass_str = f' ({subclass})' if subclass else ''
+    feats = spells_data.get('feats', [])
+    feats_str = f', Feats: {", ".join(feats)}' if feats else ''
 
     return (
         f'{character.name}, Lv{character.level} {character.race} {character.class_name}{subclass_str}, '
         f'HP {character.hp_current}/{character.hp_max}, AC {character.ac}, '
-        f'{score_str}{spells_str}{equip_str}'
+        f'{score_str}{spells_str}{equip_str}{feats_str}'
     )
 
 

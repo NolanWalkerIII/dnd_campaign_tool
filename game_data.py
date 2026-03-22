@@ -727,6 +727,158 @@ SUBCLASSES = {
 }
 
 
+FEATS = {
+    # ── TCoE General Feats ──────────────────────────────────────────────────
+    "Artificer Initiate": {
+        "source": "TCoE",
+        "prereq": None,
+        "description": "Learn one artificer cantrip (INT-based) and one 1st-level artificer spell castable once per long rest with INT. Gain proficiency with one type of artisan's tools.",
+    },
+    "Chef": {
+        "source": "TCoE",
+        "prereq": "CON or WIS 13+",
+        "description": "Gain proficiency with cook's utensils (or expertise if already proficient). After a short rest, create up to PB special treats. Each treat grants 1d8 temp HP when eaten (lasts 1 hour). After a long rest, create a feast for PB creatures granting 2d8 temp HP.",
+    },
+    "Crusher": {
+        "source": "TCoE",
+        "prereq": "STR or CON 13+",
+        "description": "When you deal bludgeoning damage, push the target 5 ft (once per turn). When you score a critical hit, all attacks against that creature have advantage until the start of your next turn.",
+    },
+    "Eldritch Adept": {
+        "source": "TCoE",
+        "prereq": "Spellcasting or Pact Magic feature",
+        "description": "Learn one Eldritch Invocation from the Warlock list. If the invocation has a prerequisite, you must meet it. Can replace the invocation when you gain a level.",
+    },
+    "Fey Touched": {
+        "source": "TCoE",
+        "prereq": None,
+        "description": "Increase INT, WIS, or CHA by 1. Learn Misty Step and one 1st-level divination or enchantment spell. Cast each once per long rest for free; can also cast with spell slots. Use the chosen ability as your spellcasting ability.",
+    },
+    "Fighting Initiate": {
+        "source": "TCoE",
+        "prereq": "Proficiency with a martial weapon",
+        "description": "Learn one Fighting Style option from the Fighter class. Can replace the style when you gain a level in a class with this feature.",
+    },
+    "Gunner": {
+        "source": "TCoE",
+        "prereq": None,
+        "description": "Increase DEX by 1. Gain proficiency with firearms. Ignore the loading property of firearms. Being within 5 ft of a hostile creature doesn't impose disadvantage on ranged attack rolls with firearms.",
+    },
+    "Metamagic Adept": {
+        "source": "TCoE",
+        "prereq": "Spellcasting or Pact Magic feature",
+        "description": "Learn two Metamagic options from the Sorcerer list. Gain 2 sorcery points. Can replace one metamagic option when you gain a level.",
+    },
+    "Piercer": {
+        "source": "TCoE",
+        "prereq": "STR or DEX 13+",
+        "description": "When you deal piercing damage, reroll one damage die once per turn and use the higher result. When you score a critical hit with a piercing attack, add one extra damage die to the result.",
+    },
+    "Poisoner": {
+        "source": "TCoE",
+        "prereq": None,
+        "description": "Gain proficiency with the poisoner's kit (or expertise). As a bonus action, coat a weapon with potent poison. On a hit, the target must succeed on a DC 14 CON save or take 2d8 poison damage and be poisoned until end of next turn. Can create 50 gp worth of basic poison per day with the kit.",
+    },
+    "Shadow Touched": {
+        "source": "TCoE",
+        "prereq": None,
+        "description": "Increase INT, WIS, or CHA by 1. Learn Invisibility and one 1st-level illusion or necromancy spell. Cast each once per long rest for free; can also cast with spell slots.",
+    },
+    "Skill Expert": {
+        "source": "TCoE",
+        "prereq": None,
+        "description": "Increase one ability score by 1. Gain proficiency in one skill. Choose one skill you're already proficient in — gain expertise (double proficiency) with it.",
+    },
+    "Slasher": {
+        "source": "TCoE",
+        "prereq": "STR or DEX 13+",
+        "description": "When you deal slashing damage, reduce the target's speed by 10 ft until the start of your next turn. When you score a critical hit with a slashing attack, the target has disadvantage on attack rolls until the start of your next turn.",
+    },
+    "Telekinetic": {
+        "source": "TCoE",
+        "prereq": None,
+        "description": "Increase INT, WIS, or CHA by 1. Learn Mage Hand (invisible hand, cast without components). As a bonus action, telekinetically shove one creature within 30 ft: STR save vs. 8 + PB + spellcasting mod or pushed 5 ft toward or away from you.",
+    },
+    "Telepathic": {
+        "source": "TCoE",
+        "prereq": None,
+        "description": "Increase INT, WIS, or CHA by 1. Telepathically speak to any creature within 60 ft that you can see (no shared language needed). Learn Detect Thoughts, castable once per long rest for free (or with spell slots). Creatures can't detect the telepathy.",
+    },
+
+    # ── XGtE Racial Feats ───────────────────────────────────────────────────
+    "Bountiful Luck": {
+        "source": "XGtE",
+        "prereq": "Halfling",
+        "description": "When an ally within 30 ft rolls a 1 on an attack, ability check, or saving throw, use your reaction to let them reroll (must use the new result). You can't use your own Halfling Lucky trait on the same roll.",
+    },
+    "Dragon Fear": {
+        "source": "XGtE",
+        "prereq": "Dragonborn",
+        "description": "Increase STR, CON, or CHA by 1. Instead of breathing fire, roar: each creature within 30 ft must succeed on a WIS save (DC 8 + PB + CHA mod) or be frightened for 1 minute. Can repeat the save at end of each turn. Recharges on short or long rest.",
+    },
+    "Dragon Hide": {
+        "source": "XGtE",
+        "prereq": "Dragonborn",
+        "description": "Increase STR, CON, or CHA by 1. Your scales harden — AC = 13 + DEX modifier (no armor needed, stacks like natural armor). Grow retractable claws: unarmed strikes deal 1d4 slashing damage.",
+    },
+    "Drow High Magic": {
+        "source": "XGtE",
+        "prereq": "Elf (Drow)",
+        "description": "Learn Detect Magic, castable at will. Learn Levitate and Dispel Magic, each castable once per long rest. Use CHA as spellcasting ability.",
+    },
+    "Dwarf Fortitude": {
+        "source": "XGtE",
+        "prereq": "Dwarf",
+        "description": "Increase CON by 1. When you take the Dodge action, spend one Hit Die and regain HP (as during a short rest).",
+    },
+    "Elven Accuracy": {
+        "source": "XGtE",
+        "prereq": "Elf or Half-Elf",
+        "description": "Increase DEX, INT, WIS, or CHA by 1. When you have advantage on an attack roll using DEX, INT, WIS, or CHA, reroll one of the dice and use the highest of the three results.",
+    },
+    "Fade Away": {
+        "source": "XGtE",
+        "prereq": "Gnome",
+        "description": "Increase DEX or INT by 1. Immediately after taking damage, use a reaction to turn invisible until the start of your next turn or until you attack, deal damage, or force a saving throw. Recharges on short or long rest.",
+    },
+    "Fey Teleportation": {
+        "source": "XGtE",
+        "prereq": "Elf (High)",
+        "description": "Increase INT or CHA by 1. Learn to speak, read, and write Sylvan. Learn Misty Step, castable once per short or long rest for free (or with spell slots). Use INT or CHA as spellcasting ability.",
+    },
+    "Flames of Phlegethos": {
+        "source": "XGtE",
+        "prereq": "Tiefling",
+        "description": "Increase INT or CHA by 1. When rolling fire damage, reroll any 1s (must use new result). When casting a spell dealing fire damage, your body erupts in flames until end of next turn — any creature hitting you with a melee attack takes 1d4 fire damage.",
+    },
+    "Infernal Constitution": {
+        "source": "XGtE",
+        "prereq": "Tiefling",
+        "description": "Increase CON by 1. Gain resistance to cold and poison damage. Advantage on saving throws against being poisoned.",
+    },
+    "Orcish Fury": {
+        "source": "XGtE",
+        "prereq": "Half-Orc",
+        "description": "Increase STR or CON by 1. When you hit with an attack using a simple or martial weapon, add one extra die of the weapon's damage. When you use Relentless Endurance, make one weapon attack as a reaction immediately afterward.",
+    },
+    "Prodigy": {
+        "source": "XGtE",
+        "prereq": "Human, Half-Elf, or Half-Orc",
+        "description": "Gain one skill proficiency, one tool proficiency, and one language. Choose one skill you're already proficient in — gain expertise (double proficiency) with it.",
+    },
+    "Second Chance": {
+        "source": "XGtE",
+        "prereq": "Halfling",
+        "description": "Increase DEX, CON, or CHA by 1. When a creature hits you with an attack roll, use your reaction to force a reroll (must use the new result). Recharges on initiative roll or short/long rest.",
+    },
+    "Squat Nimbleness": {
+        "source": "XGtE",
+        "prereq": "Dwarf or Small race",
+        "description": "Increase STR or DEX by 1. Speed increases by 5 ft. Gain proficiency in Acrobatics or Athletics (your choice). You can move through the space of any creature that is of a size larger than yours.",
+    },
+}
+
+
 def get_spell_slots(class_name, level=1):
     """Return {slot_level_str: {max, current}} for the given class and character level."""
     sc_type = SPELLCASTING_TYPE.get(class_name)

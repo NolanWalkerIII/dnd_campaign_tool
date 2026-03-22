@@ -33,7 +33,7 @@ import re as _re
 
 from game_data import (
     RACES, MULTIVERSE_RACES, CLASSES, BACKGROUNDS, STANDARD_ARRAY,
-    ABILITY_SCORES, ABILITY_NAMES, SKILLS, SUBCLASSES,
+    ABILITY_SCORES, ABILITY_NAMES, SKILLS, SUBCLASSES, FEATS,
     get_spell_slots, SPELLCASTING_TYPE,
 )
 
@@ -947,6 +947,11 @@ def character_sheet(char_id):
             if sc_entry['name'] == subclass:
                 subclass_source = sc_entry['source']
                 break
+    char_feats  = extra.get('feats', [])
+    feats_data  = [
+        {'name': f, **FEATS[f]} if f in FEATS else {'name': f, 'source': '', 'prereq': None, 'description': ''}
+        for f in char_feats
+    ]
     temp_hp     = extra.get('temp_hp', 0)
     inspiration = extra.get('inspiration', False)
     ai_player   = extra.get('ai_player', False)
@@ -998,6 +1003,8 @@ def character_sheet(char_id):
         senses=senses,
         subclass=subclass,
         subclass_source=subclass_source,
+        feats_data=feats_data,
+        all_feats=FEATS,
     )
 
 
@@ -1037,6 +1044,53 @@ def character_temp_hp(char_id):
     flag_modified(char, 'spells')
     db.session.commit()
     return redirect(url_for('character_sheet', char_id=char_id))
+
+
+@app.route('/characters/<int:char_id>/feats/add', methods=['POST'])
+@login_required
+def character_feat_add(char_id):
+    char = Character.query.get_or_404(char_id)
+    if char.user_id != session.get('user_id') and session.get('role') != 'dm':
+        flash('Not authorized.', 'error')
+        return redirect(url_for('character_sheet', char_id=char_id))
+    feat_name = request.form.get('feat_name', '').strip()
+    if not feat_name:
+        flash('No feat selected.', 'error')
+        return redirect(url_for('character_sheet', char_id=char_id))
+    extra = char.spells or {}
+    feats = extra.get('feats', [])
+    if feat_name not in feats:
+        feats.append(feat_name)
+        extra['feats'] = feats
+        char.spells = extra
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(char, 'spells')
+        db.session.commit()
+        flash(f'Feat added: {feat_name}.', 'success')
+    else:
+        flash(f'{feat_name} is already on this character.', 'info')
+    return redirect(url_for('character_sheet', char_id=char_id) + '#panel-features')
+
+
+@app.route('/characters/<int:char_id>/feats/remove', methods=['POST'])
+@login_required
+def character_feat_remove(char_id):
+    char = Character.query.get_or_404(char_id)
+    if char.user_id != session.get('user_id') and session.get('role') != 'dm':
+        flash('Not authorized.', 'error')
+        return redirect(url_for('character_sheet', char_id=char_id))
+    feat_name = request.form.get('feat_name', '').strip()
+    extra = char.spells or {}
+    feats = extra.get('feats', [])
+    if feat_name in feats:
+        feats.remove(feat_name)
+        extra['feats'] = feats
+        char.spells = extra
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(char, 'spells')
+        db.session.commit()
+        flash(f'Feat removed: {feat_name}.', 'success')
+    return redirect(url_for('character_sheet', char_id=char_id) + '#panel-features')
 
 
 @app.route('/characters/<int:char_id>/background_details', methods=['POST'])

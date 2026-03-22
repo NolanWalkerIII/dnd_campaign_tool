@@ -521,6 +521,68 @@
           {% endif %}
         </div>
       </div>
+
+      <!-- Feats section (full-width below the two-col grid) -->
+      <div style="margin-top:1.25rem;">
+        <div class="section-label" style="margin-bottom:0.6rem;">Feats</div>
+
+        {% if feats_data %}
+        <div style="display:flex; flex-direction:column; gap:0.6rem; margin-bottom:1rem;">
+          {% for feat in feats_data %}
+          <div style="background:var(--card); border:1px solid var(--border); border-radius:6px; padding:0.6rem 0.75rem; display:flex; gap:0.75rem; align-items:flex-start;">
+            <div style="flex:1;">
+              <span style="font-weight:600; font-size:0.9rem;">{{ feat.name }}</span>
+              {% if feat.source %}
+              <span style="font-size:0.68rem; background:rgba(255,255,255,0.07); border:1px solid var(--border); border-radius:3px; padding:1px 5px; margin-left:6px; color:var(--muted);">{{ feat.source }}</span>
+              {% endif %}
+              {% if feat.prereq %}
+              <span style="font-size:0.75rem; color:var(--muted); margin-left:6px;">· Req: {{ feat.prereq }}</span>
+              {% endif %}
+              {% if feat.description %}
+              <p style="font-size:0.82rem; color:var(--muted); margin:0.25rem 0 0;">{{ feat.description }}</p>
+              {% endif %}
+            </div>
+            {% if can_edit %}
+            <form method="POST" action="/characters/{{ character.id }}/feats/remove" style="flex-shrink:0;">
+              <input type="hidden" name="feat_name" value="{{ feat.name }}">
+              <button type="submit" class="btn btn-outline" style="font-size:0.75rem; padding:3px 8px; color:var(--accent);" title="Remove feat"
+                      onclick="return confirm('Remove {{ feat.name }}?')">✕</button>
+            </form>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p style="font-size:0.85rem; color:var(--muted); margin-bottom:0.75rem;">No feats recorded.</p>
+        {% endif %}
+
+        {% if can_edit %}
+        <details style="margin-top:0.5rem;">
+          <summary style="font-size:0.85rem; color:var(--gold); cursor:pointer; user-select:none;">+ Add a Feat</summary>
+          <form method="POST" action="/characters/{{ character.id }}/feats/add"
+                style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+            <select name="feat_name" required style="min-width:240px; max-width:360px; font-size:0.85rem;">
+              <option value="">— Choose a Feat —</option>
+              <optgroup label="TCoE General Feats">
+                {% for fname, fdata in all_feats.items() if fdata.source == 'TCoE' %}
+                <option value="{{ fname }}" {% if fname in feats_data | map(attribute='name') | list %}disabled{% endif %}>
+                  {{ fname }}{% if fdata.prereq %} ({{ fdata.prereq }}){% endif %}
+                </option>
+                {% endfor %}
+              </optgroup>
+              <optgroup label="XGtE Racial Feats">
+                {% for fname, fdata in all_feats.items() if fdata.source == 'XGtE' %}
+                <option value="{{ fname }}" {% if fname in feats_data | map(attribute='name') | list %}disabled{% endif %}>
+                  {{ fname }}{% if fdata.prereq %} ({{ fdata.prereq }}){% endif %}
+                </option>
+                {% endfor %}
+              </optgroup>
+            </select>
+            <button type="submit" class="btn btn-gold" style="font-size:0.85rem; padding:6px 14px;">Add Feat</button>
+          </form>
+        </details>
+        {% endif %}
+      </div>
     </div>
 
     <!-- ══ TAB: BACKGROUND ══ -->
