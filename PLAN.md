@@ -1214,7 +1214,7 @@ Wizard:     1→Spellcasting/Arcane Recovery, 2→Arcane Tradition (subclass),
 
 ---
 
-### Phase 48: AI Context Enrichment with Expansion Content
+### Phase 48: AI Context Enrichment with Expansion Content ✓ Complete (2026-03-22)
 - **Source**: User request (2026-03-21) — the AI DM currently works from PHB rules only; expansion subclasses, spells, feats, and patron perks should inform its narration and rulings.
 - **Objectives**: Dynamically inject relevant expansion reference text into AI prompts based on what content each character actually uses, without bloating every prompt with all 9 expansion files.
 - **Tasks**:
