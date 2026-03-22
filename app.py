@@ -619,7 +619,14 @@ def character_import():
 def _render_generate_form(**kwargs):
     return render_template(
         'character_generate.html',
-        races=RACES, classes=CLASSES, backgrounds=BACKGROUNDS,
+        races=RACES,
+        multiverse_races=MULTIVERSE_RACES,
+        classes=CLASSES,
+        backgrounds=BACKGROUNDS,
+        subclasses_json=json.dumps({
+            cls: [{'name': s['name'], 'source': s['source']} for s in subs]
+            for cls, subs in SUBCLASSES.items()
+        }),
         **kwargs
     )
 
@@ -635,6 +642,7 @@ def character_generate():
     background = request.form.get('background', '')
     alignment  = request.form.get('alignment', 'True Neutral')
     name_hint  = request.form.get('name_hint', '').strip()
+    subclass   = request.form.get('subclass', '').strip()
     prompts    = {
         'origin': request.form.get('prompt_origin', '').strip(),
         'drive':  request.form.get('prompt_drive', '').strip(),
@@ -643,7 +651,7 @@ def character_generate():
     }
 
     errors = []
-    if not race or race not in RACES:         errors.append('Please select a valid race.')
+    if not race or race not in _ALL_RACES:    errors.append('Please select a valid race.')
     if not class_name or class_name not in CLASSES:    errors.append('Please select a valid class.')
     if not background or background not in BACKGROUNDS: errors.append('Please select a valid background.')
     if errors:
@@ -660,6 +668,7 @@ def character_generate():
         'inputs': {
             'race': race, 'class_name': class_name, 'background': background,
             'alignment': alignment, 'name_hint': name_hint, 'prompts': prompts,
+            'subclass': subclass,
         },
     }
     return redirect(url_for('character_generate_preview'))
@@ -742,6 +751,7 @@ def character_generate_confirm():
 
     sc      = cls_data.get('spellcasting')
     hit_die = cls_data['hit_die']
+    subclass = inputs.get('subclass', '')
 
     char = Character(
         name=name, race=race_name, class_name=class_name, level=1,
@@ -754,6 +764,7 @@ def character_generate_confirm():
             'known': [], 'concentration': None,
             'hit_dice_max': 1, 'hit_dice_current': 1, 'hit_die': hit_die,
             'gold': starting_gold,
+            'subclass': subclass,
             'background_details': {
                 'custom_background':  result.get('backstory', ''),
                 'personality_traits': result.get('personality_traits', ''),

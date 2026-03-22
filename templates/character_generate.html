@@ -27,16 +27,24 @@
         <label for="race">Race <span style="color:var(--accent);">*</span></label>
         <select id="race" name="race" required>
           <option value="">— Choose a Race —</option>
-          {% for race_name in races %}
-            <option value="{{ race_name }}"
-              {{ 'selected' if inputs.get('race') == race_name }}>{{ race_name }}</option>
-          {% endfor %}
+          <optgroup label="Core Races (PHB)">
+            {% for race_name in races %}
+              <option value="{{ race_name }}"
+                {{ 'selected' if inputs.get('race') == race_name }}>{{ race_name }}</option>
+            {% endfor %}
+          </optgroup>
+          <optgroup label="Multiverse Races (MotM / TCoE)">
+            {% for race_name in multiverse_races %}
+              <option value="{{ race_name }}"
+                {{ 'selected' if inputs.get('race') == race_name }}>{{ race_name }}</option>
+            {% endfor %}
+          </optgroup>
         </select>
       </div>
 
       <div class="form-group">
         <label for="class_name">Class <span style="color:var(--accent);">*</span></label>
-        <select id="class_name" name="class_name" required>
+        <select id="class_name" name="class_name" required onchange="onGenClassChange()">
           <option value="">— Choose a Class —</option>
           {% for cls_name, cls in classes.items() %}
             <option value="{{ cls_name }}"
@@ -45,6 +53,14 @@
             </option>
           {% endfor %}
         </select>
+      </div>
+
+      <div class="form-group" id="subclass-group" style="display:none;">
+        <label for="subclass">Subclass <span style="color:var(--muted); font-weight:400; font-size:0.8rem;">(optional)</span></label>
+        <select id="subclass" name="subclass">
+          <option value="">— None / Choose Later —</option>
+        </select>
+        <div id="subclass-note" style="margin-top:6px; font-size:0.78rem; color:var(--muted);"></div>
       </div>
 
       <div class="form-group">
@@ -139,6 +155,43 @@
 </form>
 
 <script>
+const SUBCLASSES = {{ subclasses_json | safe }};
+const SUBCLASS_LEVEL_GEN = {Cleric:1, Sorcerer:1, Warlock:1};
+
+function onGenClassChange() {
+  const cn = document.getElementById('class_name').value;
+  const subGroup = document.getElementById('subclass-group');
+  const subSel   = document.getElementById('subclass');
+  const subNote  = document.getElementById('subclass-note');
+  const subs     = cn ? (SUBCLASSES[cn] || []) : [];
+  const selected  = '{{ inputs.get("subclass", "") }}';
+
+  if (subs.length) {
+    subSel.innerHTML = '<option value="">— None / Choose Later —</option>';
+    subs.forEach(function(s) {
+      const opt = document.createElement('option');
+      opt.value = s.name;
+      opt.textContent = s.name + ' (' + s.source + ')';
+      if (s.name === selected) opt.selected = true;
+      subSel.appendChild(opt);
+    });
+    const lvl = SUBCLASS_LEVEL_GEN[cn] || 3;
+    subNote.textContent = (lvl === 1)
+      ? cn + 's choose their subclass at Level 1.'
+      : 'You choose your subclass at Level 3. You can set it now or leave it blank.';
+    subGroup.style.display = '';
+  } else {
+    subGroup.style.display = 'none';
+    subSel.innerHTML = '<option value="">— None / Choose Later —</option>';
+  }
+}
+
+// Restore subclass dropdown on page load if class is pre-selected
+(function() {
+  const cn = document.getElementById('class_name').value;
+  if (cn) onGenClassChange();
+})();
+
 document.getElementById('gen-form').addEventListener('submit', function() {
   const btn = document.getElementById('gen-btn');
   btn.textContent = '✨ Generating…';
