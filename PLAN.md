@@ -1210,7 +1210,7 @@ Wizard:     1→Spellcasting/Arcane Recovery, 2→Arcane Tradition (subclass),
 - **New template**: `templates/character_levelup.html`
 - **Updated files**: `game_data.py` (5 new dicts), `app.py` (3 routes + imports), `templates/character_sheet.html` (XP bar + DM award form + level-up button), `services/engine.py` (XP in AI context)
 - **Validation**: Fighter at 299 XP sees no level-up button. DM awards 1 XP → total 300 → "Level Up!" button appears. Player clicks it → wizard shows HP choice, no ASI (level 2 is not ASI level), no subclass (level 2 is not Fighter subclass level), no new spells (Fighter is non-caster). Player picks HP. Sheet shows Level 2, Action Surge listed in features. DM awards XP to reach level 3 → wizard shows subclass picker (Martial Archetype), HP choice, no ASI. Player picks Champion. Sheet updates. Level 4 → ASI picker appears; player picks +2 STR. Sheet shows STR 17.
-- **Status**: Pending
+- **Status**: Complete ✓ (2026-03-22)
 
 ---
 
@@ -1226,7 +1226,7 @@ Wizard:     1→Spellcasting/Arcane Recovery, 2→Arcane Tradition (subclass),
 - **New routes**: None (internal prompt-building change)
 - **Updated files**: `services/ai_dm.py`, `services/ai.py`, `Documentation/17_LLM_INSTRUCTIONS.md`
 - **Validation**: Fighter with Echo Knight subclass takes an attack action → AI narration mentions the Manifest Echo. Warlock casts Shadow Blade (TCoE) → AI describes the psychic blade correctly. Token count of AI requests stays under the model's practical limit.
-- **Status**: Pending
+- **Status**: Complete ✓ (2026-03-22)
 
 ---
 
@@ -1242,12 +1242,26 @@ Wizard:     1→Spellcasting/Arcane Recovery, 2→Arcane Tradition (subclass),
 ---
 
 ## Risks and Mitigations
-- **Complexity of Rules**: Start with simplified versions (e.g., basic combat); reference documentation for accuracy.
-- **Real-Time Updates**: Use polling initially; upgrade to WebSockets if lag becomes an issue.
-- **Multi-User Sync**: Store all state on server; use locks for critical sections (e.g., during turns).
-- **Scalability**: SQLite is fine for small groups; monitor for performance.
+
+*Updated after Phase 48 — reflects the current state of the project rather than initial projections.*
+
+- **Rules Complexity**: Resolved across Phases 1–48. Core 5e mechanics (combat, spellcasting, conditions, death saves, rests, leveling) are fully implemented and tested. Expansion content (MotM races, XGtE/TCoE subclasses/spells/feats) added in Phases 43–45 using documentation as the source of truth.
+- **Real-Time Updates**: 20-second polling is working well for current group sizes (4–8 players). WebSocket upgrade remains a future option if latency becomes a problem; the current architecture (Flask + SQLite) would require significant rework to support it.
+- **Multi-User Sync**: SQLAlchemy handles concurrent reads cleanly. Mutable JSON columns (`current_state`, `spells`) require `flag_modified()` after every mutation — documented in CLAUDE.md and enforced in code review. No race conditions observed in playtesting.
+- **Scalability**: SQLite is appropriate for small groups. At larger scales (10+ concurrent users or multi-campaign deployments), migration to PostgreSQL would be the primary lever. The SQLAlchemy ORM layer makes this feasible with minimal app-code changes. Back up `instance/` regularly.
+- **AI API Costs / Rate Limits**: xAI Grok API usage is logged in-memory (Phase 31 diagnostics). Prompts include a token budget guard (~400 tokens for expansion context injection). If usage spikes, the in-memory ring buffer will surface it before it becomes a cost issue.
+- **Discord Token Conflict**: Only one Discord bot instance can run per token. Running local and production simultaneously will break both. Always stop local before deploying. Documented in CLAUDE.md.
+- **API Key Security**: All secrets are stored in `.env` (gitignored). `.env.example` with placeholders is the only committed reference. Docker reads secrets at container start via `env_file`; a `docker compose up -d` (not `restart`) is required to pick up `.env` changes.
+- **Data Loss on Combat State**: All game state is serialized into the Campaign JSON column. The Phase 10 save/load system provides a manual backup path. Recommend DMs save before and after each session.
 
 ## Timeline and Resources
-- **Total Estimate**: 10-15 days for MVP, assuming 4-6 hours/day.
-- **Tools Needed**: VS Code for development; browser for testing; Git for version control.
-- **Dependencies**: Flask, SQLAlchemy, basic HTML/JS (no heavy frameworks).
+
+*Updated after Phase 48 — reflects actual development history.*
+
+- **MVP (Phases 1–6)**: Completed in approximately 10–15 days. Core character management, dice rolling, combat, and deployment.
+- **Post-MVP (Phases 7–12)**: 1–2 weeks. DM visibility, markdown import/export, AI narration, campaign save/load, rules reference, onboarding.
+- **Community Contribution (Phases 13+ baseline)**: REST API layer, Discord bot, SMS play mode, and AI DM engine contributed by BonzaiForest (JBEST2015), merged March 2026.
+- **Full Feature Build (Phases 13–48)**: March 2026. Navigation, character sheet polish, AI character generation, AI player mode, practice mode, admin console, combat UX improvements, state persistence, player narration, session markers, expansion content (races, subclasses, spells, feats), leveling system, and AI context enrichment.
+- **Total Phases Completed**: 48
+- **Tools**: VS Code, Python 3.12, Flask, SQLAlchemy, SQLite, Docker, xAI Grok, Discord API, Twilio.
+- **Dependencies**: See `requirements.txt`. Key libraries: Flask, Flask-SQLAlchemy, Flask-Login, python-dotenv, markdown, requests, discord.py, twilio.

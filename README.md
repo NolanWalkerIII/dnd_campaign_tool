@@ -142,10 +142,16 @@ python -m pytest tests/test_suite.py -v
 - **Equipment & Gold** — add/remove inventory items, adjust gold with ± form
 - **Spell Slots** — visual filled/empty slot indicators per spell level (auto-populated based on class/level); spellcasters only
 - **Hit Dice** — visual tracker; spend during short rests
+- **XP & Leveling** — DM awards XP from the character sheet; a progress bar shows current XP toward the next level threshold; a pulsing "🎲 Level Up!" button appears when the character is ready. The level-up wizard walks through every rule-compliant choice for that specific class and level: HP (roll or take average), ASI or feat pick (with 20-cap enforcement), subclass selection at the appropriate level, and new spells known for known-spell classes (Bard, Ranger, Sorcerer, Warlock). Proficiency bonus updates automatically. A "What's New" panel lists every class feature unlocked at the new level.
+- **Subclass tracking** — stored per character; displayed on sheet with source badge (PHB / XGtE / TCoE)
 
-Supported races: Human, Elf, Dwarf, Halfling, Gnome, Half-Elf, Half-Orc, Tiefling, Dragonborn
+**Core races (PHB):** Human, Elf, Dwarf, Halfling, Gnome, Half-Elf, Half-Orc, Tiefling, Dragonborn
 
-Supported classes: Fighter, Wizard, Rogue, Cleric, Ranger, Paladin, Bard, Druid, Warlock, Sorcerer, Monk, Barbarian
+**Expansion races (Mordenkainen's Monsters of the Multiverse):** Astral Elf, Autognome, Bugbear, Centaur, Changeling, Deep Gnome, Duergar, Eladrin, Fairy, Firbolg, Genasi (Air/Earth/Fire/Water), Githyanki, Githzerai, Goblin, Goliath, Harengon, Hobgoblin, Kenku, Kobold, Leonin, Lizardfolk, Minotaur, Orc, Satyr, Sea Elf, Shadar-kai, Shifter, Tabaxi, Tortle, Triton, Yuan-ti, Custom Lineage. Expansion races use the flexible ASI model (+2/+1 anywhere or +1/+1/+1).
+
+**Supported classes:** Fighter, Wizard, Rogue, Cleric, Ranger, Paladin, Bard, Druid, Warlock, Sorcerer, Monk, Barbarian
+
+**Subclasses:** All PHB subclasses plus 55 XGtE/TCoE subclasses (e.g. Echo Knight, Oath of Glory, Circle of Stars, Clockwork Soul, Fathomless Warlock). Subclass is selected at the appropriate level during the level-up wizard and displayed on the character sheet.
 
 ### Campaigns
 
@@ -202,6 +208,17 @@ Campaign template sections: `## Campaign Info`, `## Opening Narration`, `## Chap
 - **Health tracking** — damage applied to targets; death saves tracked when HP hits 0; conditions applied by DM
 - **Combat log** — timestamped log of all actions; DM can revert the last entry with one click
 - **Party panel** — players see all party members (name, class/level, HP bar) in the right column
+
+### Expansion Spells & Feats
+
+- **Expansion spells** (XGtE/TCoE) — searchable in the rules reference; injected into AI DM prompts when a character has them prepared so rulings are accurate
+- **Feat tracking** — feats list stored per character; selectable during the level-up ASI choice; feat mechanics injected into AI prompts during skill checks and combat
+
+### Group Patrons & Downtime
+
+- **Group Patron** — DM assigns a patron type (Thieves' Guild, Military, Academy, etc.) to the campaign; a patron card shows perks and a contact NPC template
+- **AI Quest Hooks** — "Generate Quest Hooks" calls xAI Grok with the patron type and party composition to produce 2–3 thematic quest suggestions
+- **Downtime Activities** — players submit their between-session downtime activity (Training, Carousing, Crafting, etc.); DM sees all submissions in the Downtime card
 
 ### Skill Checks & Dice Roller
 
@@ -330,7 +347,7 @@ Once you have one admin account, all subsequent promotions can be done through t
 ├── parsers.py              # Markdown parsers + v2 template strings for import/export
 ├── api_routes.py           # REST API Blueprint (27 endpoints, Bearer token auth)
 ├── sms_routes.py           # Twilio SMS play-by-text Blueprint
-├── game_data.py            # Races, classes, backgrounds, spell slot tables
+├── game_data.py            # Races (PHB + MotM), classes, subclasses, backgrounds, spell slot tables, XP thresholds, class features, feats, expansion spells, group patrons, downtime activities
 ├── services/
 │   ├── ai.py               # xAI Grok wrapper (narration, background, character generation)
 │   ├── ai_dm.py            # AI DM engine layer
@@ -346,7 +363,7 @@ Once you have one admin account, all subsequent promotions can be done through t
 ├── docker-compose.yml
 ├── docker-compose.prod.yml # Production docker-compose
 ├── DOCKER.md               # Docker operations reference
-├── PLAN.md                 # Full project plan and phase history (Phases 1–29, all complete)
+├── PLAN.md                 # Full project plan and phase history (Phases 1–48, all complete)
 ├── instance/
 │   └── dnd.db              # SQLite database (created at runtime)
 ├── static/
@@ -365,6 +382,7 @@ Once you have one admin account, all subsequent promotions can be done through t
 │   ├── character_create.html    # Two-path: AI generator or manual form
 │   ├── character_generate.html  # AI generator wizard form
 │   ├── character_preview.html   # AI character preview + approve/regenerate
+│   ├── character_levelup.html   # Level-up wizard (HP, ASI/feat, subclass, spells)
 │   ├── rules.html
 │   ├── admin/
 │   │   ├── dashboard.html       # Stats overview + recent users + audit log
@@ -403,6 +421,8 @@ Once you have one admin account, all subsequent promotions can be done through t
 | `/characters/<id>/ai/background/cleanup` | Owner/DM | AI-polish backstory |
 | `/characters/<id>/ai/trait` | Owner/DM | AI-generate a trait field |
 | `/characters/<id>/ai/appearance` | Owner/DM | AI-generate appearance |
+| `/characters/<id>/xp` | DM | Award XP to a character |
+| `/characters/<id>/levelup` | Owner/DM | Level-up wizard (GET: form, POST: apply choices) |
 | `/characters/template` | Any | Download character template (v2) |
 | `/characters/import` | Any | Import character from `.md` file |
 | `/dm/dashboard` | DM | Campaign list + create campaign |
