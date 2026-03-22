@@ -924,7 +924,7 @@ Full system health dashboard with one-click tests for: environment variables, xA
 - **New routes**: None critical; optionally `POST /player/characters/<id>/feats` for feat management
 - **Updated files**: `game_data.py`, `services/ai_dm.py`, `templates/player/character_sheet.html`
 - **Validation**: Character with "Fey Touched" feat — AI applies Misty Step and +1 to one mental stat automatically. Expansion spell "Shadow Blade" shows in spell reference with school and classes listed.
-- **Status**: Pending
+- **Status**: Complete ✓ (2026-03-22)
 
 ---
 
@@ -944,7 +944,277 @@ Full system health dashboard with one-click tests for: environment variables, xA
 
 ---
 
-### Phase 47: AI Context Enrichment with Expansion Content
+### Phase 47: Character Leveling System
+- **Source**: User request (2026-03-22) — no XP tracking, no level-up flow, no class feature progression exists yet. Characters are created at level 1 and stuck there.
+- **Objectives**: Full 5e-accurate leveling: DM awards XP, the character sheet shows progress toward the next level, and when a character hits the threshold a guided level-up wizard walks them through every rule-compliant choice available at that specific level (HP roll, ASI/feat, subclass pick, new spells known, unlocked features). No choice is presented unless the rules require it at that level for that class.
+
+---
+
+#### Data layer — `game_data.py`
+
+**`XP_THRESHOLDS`** — list of 21 integers indexed by level (index 0 unused):
+```python
+XP_THRESHOLDS = [
+    0,      # level 0 (unused)
+    0,      # level 1
+    300,    # level 2
+    900,    # level 3
+    2700,   # level 4
+    6500,   # level 5
+    14000,  # level 6
+    23000,  # level 7
+    34000,  # level 8
+    48000,  # level 9
+    64000,  # level 10
+    85000,  # level 11
+    100000, # level 12
+    120000, # level 13
+    140000, # level 14
+    165000, # level 15
+    195000, # level 16
+    225000, # level 17
+    265000, # level 18
+    305000, # level 19
+    355000, # level 20
+]
+```
+
+**`PROFICIENCY_BONUS_BY_LEVEL`** — dict, levels 1-20 → bonus value:
+```python
+{1:2, 2:2, 3:2, 4:2, 5:3, 6:3, 7:3, 8:3, 9:4, 10:4,
+ 11:4, 12:4, 13:5, 14:5, 15:5, 16:5, 17:6, 18:6, 19:6, 20:6}
+```
+
+**`ASI_LEVELS`** — per class, which levels grant an ASI-or-Feat:
+```python
+ASI_LEVELS = {
+    "Barbarian": [4, 8, 12, 16, 19],
+    "Bard":      [4, 8, 12, 16, 19],
+    "Cleric":    [4, 8, 12, 16, 19],
+    "Druid":     [4, 8, 12, 16, 19],
+    "Fighter":   [4, 6, 8, 12, 14, 16, 19],   # most ASIs in game
+    "Monk":      [4, 8, 12, 16, 19],
+    "Paladin":   [4, 8, 12, 16, 19],
+    "Ranger":    [4, 8, 12, 16, 19],
+    "Rogue":     [4, 8, 10, 12, 16, 19],       # extra at 10
+    "Sorcerer":  [4, 8, 12, 16, 19],
+    "Warlock":   [4, 8, 12, 16, 19],
+    "Wizard":    [4, 8, 12, 16, 19],
+}
+```
+
+**`SUBCLASS_LEVEL`** — when each class selects its subclass (already implied by `SUBCLASS_LEVEL_GEN` in templates, but needs a canonical server-side version):
+```python
+SUBCLASS_LEVEL = {
+    "Barbarian": 3, "Bard": 3, "Cleric": 1,
+    "Druid": 2, "Fighter": 3, "Monk": 3,
+    "Paladin": 3, "Ranger": 3, "Rogue": 3,
+    "Sorcerer": 1, "Warlock": 1, "Wizard": 2,
+}
+```
+
+**`KNOWN_SPELLS_GAINED`** — for classes that use a "spells known" model (Bard, Ranger, Sorcerer, Warlock), how many new spells known are gained per level. Prepared-spell classes (Cleric, Druid, Paladin, Wizard) don't use this — their "known" pool scales with level + ability modifier automatically:
+```python
+# Maps class → {level: spells_gained_at_that_level}
+# A value of 0 means no new spell is gained at that level (Sorcerer 1 already includes starting spells)
+KNOWN_SPELLS_GAINED = {
+    "Bard":    {1:4, 2:1, 3:1, 4:1, 5:1, 6:1, 7:1, 8:1, 9:1, 10:2, 11:1, 12:0, 13:1, 14:1, 15:1, 16:0, 17:1, 18:2, 19:0, 20:1},
+    "Ranger":  {1:0, 2:2, 3:1, 4:1, 5:1, 6:1, 7:1, 8:1, 9:1, 10:1, 11:1, 12:0, 13:1, 14:1, 15:1, 16:0, 17:1, 18:0, 19:0, 20:0},
+    "Sorcerer":{1:4, 2:1, 3:1, 4:1, 5:1, 6:1, 7:1, 8:1, 9:1, 10:1, 11:1, 12:0, 13:1, 14:1, 15:1, 16:0, 17:1, 18:1, 19:0, 20:1},
+    "Warlock": {1:2, 2:1, 3:1, 4:1, 5:1, 6:1, 7:1, 8:1, 9:1, 10:1, 11:1, 12:0, 13:1, 14:1, 15:1, 16:0, 17:1, 18:0, 19:0, 20:1},
+}
+```
+
+**`CLASS_FEATURES`** — the features a character unlocks at each class level. Used to display a "What's new" summary during level-up. Structure: `{class_name: {level: [feature_str, ...]}}`. Covers all 12 classes, levels 1-20. Key milestones for each class:
+
+```
+Barbarian:  1→Rage/Unarmored Defense, 2→Reckless Attack/Danger Sense,
+            3→Primal Path (subclass), 4→ASI, 5→Extra Attack/Fast Movement,
+            6→Path Feature/Rage damage +2, 7→Feral Instinct, 8→ASI,
+            9→Brutal Critical (1 die), 10→Path Feature, 11→Relentless Rage,
+            12→ASI, 13→Brutal Critical (2 dice), 14→Path Feature,
+            15→Persistent Rage, 16→ASI, 17→Brutal Critical (3 dice),
+            18→Indomitable Might, 19→ASI, 20→Primal Champion
+
+Bard:       1→Spellcasting/Bardic Inspiration (d6)/Spells Known ×4,
+            2→Jack of All Trades/Song of Rest (d6), 3→Expertise/Bard College (subclass),
+            4→ASI, 5→Bardic Inspiration (d8)/Font of Inspiration,
+            6→Countercharm/College Feature, 7→(spell slot), 8→ASI,
+            9→Song of Rest (d8), 10→Magical Secrets/Expertise ×2/Bardic Inspiration (d10),
+            11→(spell slot), 12→ASI, 13→Song of Rest (d10), 14→Magical Secrets/College Feature,
+            15→Bardic Inspiration (d12), 16→ASI, 17→Song of Rest (d12), 18→Magical Secrets,
+            19→ASI, 20→Superior Inspiration
+
+Cleric:     1→Spellcasting/Divine Domain (subclass)/Domain Spells, 2→Channel Divinity (1/sr)/Turn Undead/Domain Feature,
+            3→(2nd-level spells), 4→ASI, 5→Destroy Undead (CR 1/2),
+            6→Channel Divinity (2/sr)/Domain Feature, 7→(4th-level spells), 8→ASI/Domain Feature/Destroy Undead (CR 1),
+            9→(5th-level spells), 10→Divine Intervention, 11→Destroy Undead (CR 2),
+            12→ASI, 13→(7th-level spells), 14→Destroy Undead (CR 3), 15→(8th-level spells),
+            16→ASI, 17→Destroy Undead (CR 4)/Domain Feature, 18→Channel Divinity (3/sr),
+            19→ASI, 20→Divine Intervention (auto-succeeds)
+
+Druid:      1→Spellcasting/Druidic, 2→Wild Shape (CR 1/4)/Druid Circle (subclass),
+            3→(2nd-level spells), 4→Wild Shape (CR 1/2, swim)/ASI, 5→(3rd-level spells),
+            6→Circle Feature, 7→(4th-level spells), 8→Wild Shape (CR 1, fly)/ASI,
+            9→(5th-level spells), 10→Circle Feature, 11→(6th-level spells), 12→ASI,
+            13→(7th-level spells), 14→Circle Feature, 15→(8th-level spells), 16→ASI,
+            17→(9th-level spells), 18→Timeless Body/Beast Spells, 19→ASI, 20→Archdruid
+
+Fighter:    1→Fighting Style/Second Wind, 2→Action Surge (1/sr), 3→Martial Archetype (subclass),
+            4→ASI, 5→Extra Attack (×2), 6→ASI, 7→Archetype Feature, 8→ASI,
+            9→Indomitable (1/lr), 10→Archetype Feature, 11→Extra Attack (×3), 12→ASI,
+            13→Indomitable (2/lr), 14→ASI, 15→Archetype Feature, 16→ASI,
+            17→Action Surge (2/sr)/Indomitable (3/lr), 18→Archetype Feature, 19→ASI,
+            20→Extra Attack (×4)
+
+Monk:       1→Unarmored Defense/Martial Arts (d4), 2→Ki/Unarmored Movement (+10),
+            3→Deflect Missiles/Monastic Tradition (subclass)/Slow Fall,
+            4→Stunning Strike/Ki-Empowered Strikes/ASI/Slow Fall,
+            5→Extra Attack/Stunning Strike, 6→Ki-Empowered Strikes/Tradition Feature,
+            7→Evasion/Stillness of Mind, 8→ASI, 9→Unarmored Movement (+15)/run-on-walls,
+            10→Purity of Body, 11→Tongue of the Sun and Moon, 12→ASI,
+            13→Diamond Soul, 14→Timeless Body, 15→Empty Body, 16→ASI,
+            17→Quivering Palm/Martial Arts (d10), 18→Empty Body (improved)/Unarmored Movement (+30),
+            19→ASI, 20→Perfect Self
+
+Paladin:    1→Divine Sense/Lay on Hands, 2→Fighting Style/Spellcasting/Divine Smite,
+            3→Sacred Oath (subclass)/Divine Health/Oath Spells, 4→ASI,
+            5→Extra Attack/Oath Feature, 6→Aura of Protection (10 ft), 7→Oath Feature,
+            8→ASI, 9→(5th-level spells), 10→Aura of Courage (10 ft), 11→Improved Divine Smite,
+            12→ASI, 13→(7th-level spells), 14→Cleansing Touch, 15→Oath Feature,
+            16→ASI, 17→(9th-level spells), 18→Aura improvements (30 ft), 19→ASI,
+            20→Sacred Oath Capstone
+
+Ranger:     1→Favored Enemy/Natural Explorer, 2→Fighting Style/Spellcasting (spells known ×2),
+            3→Ranger Archetype (subclass)/Primeval Awareness, 4→ASI,
+            5→Extra Attack, 6→Favored Enemy (2nd)/Natural Explorer (2nd), 7→Archetype Feature,
+            8→ASI/Land's Stride, 9→(5th-level spells), 10→Natural Explorer (3rd)/Hide in Plain Sight,
+            11→Archetype Feature, 12→ASI, 13→(7th-level spells), 14→Favored Enemy (3rd)/Vanish,
+            15→Archetype Feature, 16→ASI, 17→(9th-level spells), 18→Feral Senses,
+            19→ASI, 20→Foe Slayer
+
+Rogue:      1→Expertise (×2)/Sneak Attack (1d6)/Thieves' Cant,
+            2→Cunning Action, 3→Roguish Archetype (subclass)/Sneak Attack (2d6),
+            4→ASI, 5→Uncanny Dodge/Sneak Attack (3d6), 6→Expertise (×2),
+            7→Evasion/Sneak Attack (4d6), 8→ASI, 9→Archetype Feature/Sneak Attack (5d6),
+            10→ASI, 11→Reliable Talent/Sneak Attack (6d6), 12→ASI,
+            13→Archetype Feature/Sneak Attack (7d6), 14→Blindsense, 15→Slippery Mind/Sneak Attack (8d6),
+            16→ASI, 17→Archetype Feature/Sneak Attack (9d6), 18→Elusive,
+            19→ASI/Sneak Attack (10d6), 20→Stroke of Luck
+
+Sorcerer:   1→Spellcasting/Sorcerous Origin (subclass)/Spells Known ×4,
+            2→Font of Magic/Sorcery Points, 3→Metamagic (×2),
+            4→ASI, 5→(3rd-level spells), 6→Origin Feature, 7→(4th-level spells), 8→ASI,
+            9→(5th-level spells), 10→Metamagic (×3), 11→(6th-level spells), 12→ASI,
+            13→(7th-level spells), 14→Origin Feature, 15→(8th-level spells), 16→ASI,
+            17→(9th-level spells)/Metamagic (×4), 18→Origin Feature, 19→ASI, 20→Sorcerous Restoration
+
+Warlock:    1→Otherworldly Patron (subclass)/Pact Magic/Eldritch Invocations (×1),
+            2→Eldritch Invocations (×2)/Spells Known +1, 3→Pact Boon/Invocations (×2)/Spells Known +1,
+            4→ASI, 5→Invocations (×3), 6→Patron Feature, 7→Invocations (×4),
+            8→ASI, 9→Invocations (×5), 10→Patron Feature, 11→Mystic Arcanum (6th)/Invocations (×5),
+            12→ASI, 13→Mystic Arcanum (7th), 14→Patron Feature, 15→Mystic Arcanum (8th),
+            16→ASI, 17→Mystic Arcanum (9th)/Invocations (×7), 18→Invocations (×8),
+            19→ASI, 20→Eldritch Master
+
+Wizard:     1→Spellcasting/Arcane Recovery, 2→Arcane Tradition (subclass),
+            3→(2nd-level spells), 4→ASI, 5→(3rd-level spells), 6→Tradition Feature,
+            7→(4th-level spells), 8→ASI, 9→(5th-level spells), 10→Tradition Feature,
+            11→(6th-level spells), 12→ASI, 13→(7th-level spells), 14→Tradition Feature,
+            15→(8th-level spells), 16→ASI, 17→(9th-level spells), 18→Spell Mastery,
+            19→ASI, 20→Signature Spells
+```
+
+---
+
+#### Tasks
+
+1. **`game_data.py`** — Add `XP_THRESHOLDS`, `PROFICIENCY_BONUS_BY_LEVEL`, `ASI_LEVELS`, `SUBCLASS_LEVEL`, `KNOWN_SPELLS_GAINED`, and `CLASS_FEATURES` dicts as specified above.
+
+2. **`app.py`** — Import all new dicts. Add three new routes:
+
+   - **`POST /characters/<id>/xp`** (`character_award_xp`) — DM-only. Accepts `xp_award` (int) from a form on the character sheet. Reads `extra['xp']` (default 0), adds award, writes back. Flashes result. Redirects to character sheet. If new total crosses a `XP_THRESHOLDS[level + 1]` boundary, flashes a "🎉 Level up available!" notice.
+
+   - **`GET /characters/<id>/levelup`** (`character_levelup_get`) — Builds the level-up context dict (see below) and renders `character_levelup.html`.
+
+   - **`POST /characters/<id>/levelup`** (`character_levelup_post`) — Validates and applies every choice:
+     - Increments `character.level`
+     - Updates `character.proficiency_bonus` from `PROFICIENCY_BONUS_BY_LEVEL`
+     - Applies HP increase: form sends `hp_method` ("roll" or "average") — average = `hit_die // 2 + 1 + con_mod`, roll uses `DiceRoller.roll`
+     - If ASI level: reads `asi_choice` ("stat_plus2", "stat_split", or "feat") and applies accordingly (validates score caps at 20)
+     - If subclass level and no subclass yet: reads `subclass` and stores in `spells['subclass']`
+     - If known-spell class: reads list of `new_spells[]` form values, appends to `spells['known']`
+     - Updates `spells['slots']` via `get_spell_slots(class_name, new_level)` (overwrites maxes, preserves current counts unless current > new max)
+     - Stores updated `character.spells` with `flag_modified`
+     - Commits and redirects to character sheet with flash
+
+3. **`templates/character_levelup.html`** — A single-page guided form. Sections appear or are hidden based on what the new level requires:
+
+   - **Always shown**: "You are leveling up to Level X" banner; new class features list (from `CLASS_FEATURES`); HP section with roll/average toggle (JS previews average value immediately; roll result fetched via AJAX or shown server-side on POST)
+
+   - **Conditionally shown** (each wrapped in `{% if %}` based on the level-up context):
+     - **Subclass picker** — only if `needs_subclass` is True (character has no subclass AND `new_level == SUBCLASS_LEVEL[class_name]`)
+     - **ASI / Feat picker** — only if `is_asi_level` is True. Three radio-button modes: "+2 to one score", "+1/+1 to two scores", "Take a Feat". The first two show score selects with JS enforcement of the 20-cap. The feat mode shows the `all_feats` dropdown grouped by source (same UI as character sheet), disabled for feats already taken.
+     - **New spells** — only if `spells_to_pick > 0` (known-spell classes). Shows a multi-select or checkbox list from the class's spell list filtered by newly available spell levels. Count badge shows how many left to select (JS enforced).
+
+   - **Proficiency bump notice** — if `prof_changed` is True, a callout explaining that proficiency bonus increases at this level and listing what it affects.
+
+   - **What's New sidebar / card** — lists every feature from `CLASS_FEATURES[class_name][new_level]` with a one-line description, so the player knows what they're getting.
+
+4. **`templates/character_sheet.html`** (update) — Add to the Stats/header area:
+   - **XP display**: `{xp} / {xp_needed} XP` with a CSS `<progress>` bar (or styled div) showing progress to next level.
+   - **Level-Up button**: if `xp >= xp_for_next_level` and `character.level < 20`, show a pulsing "🎲 Level Up!" gold button linking to `/characters/<id>/levelup`.
+   - **XP Award form**: DM-only section (behind `{% if session.role == 'dm' %}`), small inline form: numeric input + "Award XP" button. Posts to `POST /characters/<id>/xp`.
+
+5. **`services/engine.py`** — Update `get_character_summary()` to include XP: `XP {xp}/{xp_next}` appended to the context string so the AI DM knows the character's progression state.
+
+---
+
+#### Level-up context dict (built in `character_levelup_get`)
+
+```python
+{
+    "new_level":       character.level + 1,
+    "new_prof_bonus":  PROFICIENCY_BONUS_BY_LEVEL[new_level],
+    "prof_changed":    new_prof_bonus != character.proficiency_bonus,
+    "hit_die":         CLASSES[class_name]["hit_die"],
+    "con_mod":         ability_modifier(scores.get("CON", 10)),
+    "hp_average":      hit_die // 2 + 1 + con_mod,
+    "new_features":    CLASS_FEATURES[class_name].get(new_level, []),
+    "is_asi_level":    new_level in ASI_LEVELS[class_name],
+    "needs_subclass":  (not subclass) and (new_level == SUBCLASS_LEVEL[class_name]),
+    "subclass_options":SUBCLASSES[class_name] if needs_subclass else [],
+    "new_slots":       get_spell_slots(class_name, new_level),
+    "spells_to_pick":  KNOWN_SPELLS_GAINED.get(class_name, {}).get(new_level, 0),
+    "current_known":   spells_data.get("known", []),
+    "all_feats":       FEATS,
+    "char_feats":      spells_data.get("feats", []),
+    "ability_scores":  scores,
+}
+```
+
+---
+
+#### Validation rules (server-side in `character_levelup_post`)
+- Reject if `character.level >= 20`
+- Reject if `xp < XP_THRESHOLDS[character.level + 1]` (not yet earned — but DM can override via a `force=1` hidden field)
+- ASI: each ability score must stay ≤ 20 after boost
+- ASI split: must choose two *different* abilities
+- Feat: `feat_name` must be in `FEATS` and not already in `spells['feats']`
+- Subclass: must be in `SUBCLASSES[class_name]` list
+- Known spells: count of submitted `new_spells[]` must equal `KNOWN_SPELLS_GAINED[class_name][new_level]`
+
+---
+
+- **New routes**: `POST /characters/<id>/xp`, `GET /characters/<id>/levelup`, `POST /characters/<id>/levelup`
+- **New template**: `templates/character_levelup.html`
+- **Updated files**: `game_data.py` (5 new dicts), `app.py` (3 routes + imports), `templates/character_sheet.html` (XP bar + DM award form + level-up button), `services/engine.py` (XP in AI context)
+- **Validation**: Fighter at 299 XP sees no level-up button. DM awards 1 XP → total 300 → "Level Up!" button appears. Player clicks it → wizard shows HP choice, no ASI (level 2 is not ASI level), no subclass (level 2 is not Fighter subclass level), no new spells (Fighter is non-caster). Player picks HP. Sheet shows Level 2, Action Surge listed in features. DM awards XP to reach level 3 → wizard shows subclass picker (Martial Archetype), HP choice, no ASI. Player picks Champion. Sheet updates. Level 4 → ASI picker appears; player picks +2 STR. Sheet shows STR 17.
+- **Status**: Pending
+
+---
+
+### Phase 48: AI Context Enrichment with Expansion Content
 - **Source**: User request (2026-03-21) — the AI DM currently works from PHB rules only; expansion subclasses, spells, feats, and patron perks should inform its narration and rulings.
 - **Objectives**: Dynamically inject relevant expansion reference text into AI prompts based on what content each character actually uses, without bloating every prompt with all 9 expansion files.
 - **Tasks**:
