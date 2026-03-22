@@ -940,7 +940,7 @@ Full system health dashboard with one-click tests for: environment variables, xA
 - **New routes**: `POST /dm/campaigns/<id>/patron`, `POST /dm/campaigns/<id>/patron/quest`, optionally `POST /player/campaigns/<id>/downtime`
 - **Updated files**: `game_data.py`, `app.py`, `services/ai.py`, `templates/dm/campaign.html`, optionally `templates/player/campaign.html`
 - **Validation**: DM sets patron to "Thieves' Guild". DM page shows patron card with guild perks. DM clicks "Generate Quest Hooks" → 3 guild-flavored hooks appear. Players submit downtime activities; DM sees "Aria — Carousing", "Theron — Training".
-- **Status**: Pending
+- **Status**: Complete ✓ (2026-03-22)
 
 ---
 
