@@ -39,6 +39,7 @@ from game_data import (
     XP_THRESHOLDS, PROFICIENCY_BONUS_BY_LEVEL, ASI_LEVELS,
     SUBCLASS_LEVEL, KNOWN_SPELLS_GAINED, CLASS_FEATURES,
     get_spell_slots, SPELLCASTING_TYPE,
+    SPELLS_BY_NAME, get_class_spells,
 )
 
 # Merged lookup: check PHB races first, then MotM
@@ -1086,6 +1087,16 @@ def character_levelup_get(char_id):
     new_features     = CLASS_FEATURES.get(class_name, {}).get(new_level, [])
     new_slots        = get_spell_slots(class_name, new_level)
 
+    # Spell picker: build available spells for known-spell classes
+    current_known = extra.get('known', [])
+    available_spells = []
+    if spells_to_pick > 0:
+        max_new_slot = max((int(k) for k in new_slots), default=0) if new_slots else 0
+        available_spells = [
+            s for s in get_class_spells(class_name, max_new_slot)
+            if s['name'] not in current_known
+        ]
+
     return render_template('character_levelup.html',
                            character=char,
                            new_level=new_level,
@@ -1098,6 +1109,7 @@ def character_levelup_get(char_id):
                            subclass_options=SUBCLASSES.get(class_name, []) if needs_subclass else [],
                            is_asi_level=is_asi_level,
                            spells_to_pick=spells_to_pick,
+                           available_spells=available_spells,
                            new_features=new_features,
                            new_slots=new_slots,
                            ability_scores=scores,
@@ -2578,7 +2590,68 @@ def player_campaign_detail(campaign_id):
 
     # Determine active character's spell slots for the action panel
     active_char = _get_player_active_char(campaign_id)
-    active_slots = (active_char.spells or {}).get('slots', {}) if active_char else {}
+    spells_data  = active_char.spells or {} if active_char else {}
+    active_slots = spells_data.get('slots', {})
+
+    # Extra character data for the in-session character panel
+    char_items      = spells_data.get('items', [])
+    char_conditions = spells_data.get('conditions', [])
+    char_feats      = spells_data.get('feats', [])
+    char_temp_hp    = spells_data.get('temp_hp', 0)
+    char_hit_die    = spells_data.get('hit_die', CLASSES.get(getattr(active_char, 'class_name', ''), {}).get('hit_die', 8)) if active_char else 8
+    char_hd_current = spells_data.get('hit_dice_current', getattr(active_char, 'level', 1)) if active_char else 0
+    char_hd_max     = spells_data.get('hit_dice_max', getattr(active_char, 'level', 1)) if active_char else 0
+
+    # Ability score summary for the character panel
+    char_stats = {}
+    if active_char:
+        scores = active_char.ability_scores or {}
+        cls_data = CLASSES.get(active_char.class_name, {})
+        save_profs = cls_data.get('saving_throws', [])
+        prof = active_char.proficiency_bonus or 2
+        sc_type = SPELLCASTING_TYPE.get(active_char.class_name)
+        sc_ability_map = {'full': None, 'half': None, 'third': None, 'warlock': 'CHA'}
+        sc_ab_override = {'Wizard': 'INT', 'Sorcerer': 'CHA', 'Bard': 'CHA', 'Cleric': 'WIS',
+                          'Druid': 'WIS', 'Paladin': 'CHA', 'Ranger': 'WIS', 'Warlock': 'CHA'}
+        sc_ab = sc_ab_override.get(active_char.class_name, '') if sc_type else ''
+        sc_mod = ability_modifier(scores.get(sc_ab, 10)) if sc_ab else 0
+        char_stats = {
+            'scores': scores,
+            'mods': {ab: ability_modifier(v) for ab, v in scores.items()},
+            'save_profs': save_profs,
+            'prof': prof,
+            'speed': CLASSES.get(active_char.class_name, {}).get('speed', 30),
+            'passive_perception': 10 + ability_modifier(scores.get('WIS', 10)) + (prof if 'Perception' in (active_char.skills or []) else 0),
+            'spell_dc': 8 + prof + sc_mod if sc_ab else None,
+            'spell_atk': prof + sc_mod if sc_ab else None,
+            'sc_ability': sc_ab,
+            'concentration': spells_data.get('concentration'),
+        }
+
+    # Spell dropdown for Cast Spell form
+    spell_dropdown = []
+    if active_char and SPELLCASTING_TYPE.get(active_char.class_name):
+        known = spells_data.get('known', [])
+        slots = spells_data.get('slots', {})
+        max_slot = max((int(k) for k, v in slots.items() if v.get('max', 0) > 0), default=0)
+        if known:
+            # Known-spell classes: enrich their specific list with ALL_SPELLS data
+            enriched = []
+            for n in known:
+                if n in SPELLS_BY_NAME:
+                    enriched.append(SPELLS_BY_NAME[n])
+                else:
+                    enriched.append({'name': n, 'level': 0, 'school': '', 'casting_time': '',
+                                     'range': '', 'components': '', 'duration': '',
+                                     'concentration': False, 'description': '', 'classes': [], 'source': ''})
+            spell_dropdown = sorted(enriched, key=lambda s: (s['level'], s['name']))
+        elif max_slot > 0:
+            # Prepared-spell classes: full class list up to highest available slot
+            spell_dropdown = get_class_spells(active_char.class_name, max_slot)
+        # Always include cantrips (level 0) for spellcasters
+        cantrips = [s for s in get_class_spells(active_char.class_name, 0)
+                    if s['name'] not in {sp['name'] for sp in spell_dropdown}]
+        spell_dropdown = cantrips + spell_dropdown
 
     # Build party list: other players + their most recent character
     player_ids = campaign.players or []
@@ -2602,12 +2675,21 @@ def player_campaign_detail(campaign_id):
                            skills_sorted=sorted(SKILLS.keys()),
                            active_slots=active_slots,
                            active_char=active_char,
+                           char_items=char_items,
+                           char_conditions=char_conditions,
+                           char_feats=char_feats,
+                           char_temp_hp=char_temp_hp,
+                           char_hit_die=char_hit_die,
+                           char_hd_current=char_hd_current,
+                           char_hd_max=char_hd_max,
+                           char_stats=char_stats,
                            party_members=party_members,
                            view_uid=uid,
                            patron_type=patron_type,
                            patron_data=patron_data,
                            downtime_activities=DOWNTIME_ACTIVITIES,
-                           my_downtime=my_downtime)
+                           my_downtime=my_downtime,
+                           spell_dropdown=spell_dropdown)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -3636,6 +3718,140 @@ def player_ai_narration_generate(campaign_id):
     if error:
         return jsonify({'error': error}), 500
     return jsonify({'text': text})
+
+
+# ── Phase 49: Use Item & Short Rest from campaign page ─────────────────────────
+
+@app.route('/player/campaigns/<int:campaign_id>/use-item', methods=['POST'])
+@player_required
+def player_use_item(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    uid = _effective_uid()
+    if uid not in (campaign.players or []):
+        flash('Not in this campaign.', 'error')
+        return redirect(url_for('player_dashboard'))
+
+    char = _get_player_active_char(campaign_id)
+    if not char:
+        flash('No active character found.', 'error')
+        return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
+    item_name = request.form.get('item_name', '').strip()
+    extra = dict(char.spells or {})
+    items = list(extra.get('items', []))
+
+    # Guard: item must exist
+    if item_name not in items:
+        flash(f'"{item_name}" not found in inventory.', 'error')
+        return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
+    heal_amount = 0
+    item_lower = item_name.lower()
+    is_healing_potion = 'healing potion' in item_lower or 'potion of healing' in item_lower
+
+    if is_healing_potion:
+        if 'supreme' in item_lower:
+            roll_expr, bonus = '10d4', 20
+        elif 'superior' in item_lower:
+            roll_expr, bonus = '8d4', 8
+        elif 'greater' in item_lower:
+            roll_expr, bonus = '4d4', 4
+        else:
+            roll_expr, bonus = '2d4', 2
+        rolled, _, _, _, _ = DiceRoller.parse_and_roll(roll_expr)
+        heal_amount = rolled + bonus
+        old_hp = char.hp_current
+        char.hp_current = min(char.hp_max, char.hp_current + heal_amount)
+        healed = char.hp_current - old_hp
+        log_text = f'{char.name} drinks {item_name} and recovers {healed} HP ({roll_expr}+{bonus} = {heal_amount}).'
+    else:
+        log_text = f'{char.name} uses {item_name}.'
+
+    items.remove(item_name)
+    extra['items'] = items
+    char.spells = extra
+    _flag(char, 'spells')
+
+    # Append to narration log
+    state = campaign.current_state or {}
+    log = state.get('narration_log', [])
+    from datetime import datetime
+    log.append({'text': log_text, 'timestamp': datetime.utcnow().strftime('%H:%M'), 'author': char.name, 'type': 'system'})
+    state['narration_log'] = log
+    campaign.current_state = state
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(campaign, 'current_state')
+
+    db.session.commit()
+    flash(log_text, 'success')
+    return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
+
+@app.route('/player/campaigns/<int:campaign_id>/short-rest', methods=['POST'])
+@player_required
+def player_short_rest(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    uid = _effective_uid()
+    if uid not in (campaign.players or []):
+        flash('Not in this campaign.', 'error')
+        return redirect(url_for('player_dashboard'))
+
+    state = campaign.current_state or {}
+    if state.get('combat_active'):
+        flash('Cannot rest during combat.', 'error')
+        return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
+    char = _get_player_active_char(campaign_id)
+    if not char:
+        flash('No active character found.', 'error')
+        return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
+    extra = dict(char.spells or {})
+    hit_die          = extra.get('hit_die', CLASSES.get(char.class_name, {}).get('hit_die', 8))
+    hit_dice_current = extra.get('hit_dice_current', 1)
+
+    if hit_dice_current <= 0:
+        flash('No hit dice remaining. Take a long rest to recover them.', 'error')
+        return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
+
+    try:
+        num = max(1, min(int(request.form.get('num_dice', 1)), hit_dice_current))
+    except (ValueError, TypeError):
+        num = 1
+
+    con_mod    = ability_modifier((char.ability_scores or {}).get('CON', 10))
+    total_heal = sum(max(1, DiceRoller.roll(f'1d{hit_die}', modifier=con_mod)[0]) for _ in range(num))
+    old_hp     = char.hp_current
+    char.hp_current = min(char.hp_max, char.hp_current + total_heal)
+    healed     = char.hp_current - old_hp
+
+    extra['hit_dice_current'] = hit_dice_current - num
+
+    is_warlock = char.class_name == 'Warlock'
+    if is_warlock:
+        slots = extra.get('slots', {})
+        for sl in slots:
+            slots[sl]['current'] = slots[sl]['max']
+        extra['slots'] = slots
+
+    char.spells = extra
+    _flag(char, 'spells')
+
+    die_word  = 'die' if num == 1 else 'dice'
+    slot_msg  = ' Warlock spell slots restored!' if is_warlock else ''
+    log_text  = f'{char.name} takes a short rest: spent {num} hit {die_word} (d{hit_die}), healed {healed} HP.{slot_msg}'
+
+    log = state.get('narration_log', [])
+    from datetime import datetime
+    log.append({'text': log_text, 'timestamp': datetime.utcnow().strftime('%H:%M'), 'author': char.name, 'type': 'system'})
+    state['narration_log'] = log
+    campaign.current_state = state
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(campaign, 'current_state')
+
+    db.session.commit()
+    flash(log_text, 'success')
+    return redirect(url_for('player_campaign_detail', campaign_id=campaign_id))
 
 
 # ── Phase 41: Session Markers & AI Summary ─────────────────────────────────────

@@ -1230,14 +1230,318 @@ Wizard:     1→Spellcasting/Arcane Recovery, 2→Arcane Tradition (subclass),
 
 ---
 
+### Phase 49: Player Campaign Page — Character Sheet Sync ✓ Complete (2026-03-22)
+- **Source**: Playtest feedback from Donut (2026-03-22) — during active play, players must tab away to the character sheet to look up spells, check inventory, see conditions, or take a short rest. The campaign page has all the action forms but none of the character reference data needed to fill them in confidently.
+- **Objectives**: Surface the most gameplay-critical character sheet information directly on the player campaign page so a player never needs to leave mid-session. The character sheet remains the full reference; this adds a focused in-session companion panel.
+- **Root causes**:
+  1. Cast Spell form uses a free-text input — player must remember every spell name from memory
+  2. Inventory (`spells['items']`) is never passed to or rendered on the campaign page
+  3. Active conditions on the player's own character are invisible on the campaign page
+  4. Short Rest requires navigating to the character sheet, breaking session flow
+  5. Key combat stats (ability modifiers, spell DC, save bonuses, speed) are not surfaced anywhere in the campaign view
+
+---
+
+#### New data passed from `player_campaign_detail` route (`app.py`)
+
+The `active_char` object is already fetched. The route just needs to extract and pass:
+
+```python
+spells_data     = active_char.spells or {} if active_char else {}
+known_spells    = spells_data.get('known', [])          # list of spell name strings
+char_items      = spells_data.get('items', [])          # inventory list
+char_conditions = spells_data.get('conditions', [])     # active conditions list
+char_feats      = spells_data.get('feats', [])          # feat list (for reference)
+char_temp_hp    = spells_data.get('temp_hp', 0)
+char_hit_dice   = spells_data.get('hit_dice', {})       # {current, max, die}
+```
+
+Ability score modifiers and derived stats (spell DC, spell attack, passive perception, save bonuses) are computed with the existing `ability_modifier()` helper already used in the character sheet route — extract into a small `stats_summary` dict and pass it to the template.
+
+---
+
+#### Tasks
+
+1. **Cast Spell — spell dropdown** (`templates/player/campaign.html`):
+   - Replace the free-text `<input type="text" name="spell_name">` with a `<select>` populated from `known_spells` when the list is non-empty.
+   - Include an "Other…" option at the bottom that reveals a custom text input (same pattern as the attack target dropdown from Phase 16).
+   - No backend change — `known_spells` is already available on `active_char`; just pass it to the template.
+   - Non-known-spell classes (Fighter, Barbarian, etc.) see the existing free-text input unchanged.
+
+2. **Spell slots always visible** (`templates/player/campaign.html`):
+   - Move the slot pip indicators (currently buried inside the collapsed Cast Spell `<details>`) to a small persistent row just below the page-header HP bar, visible at all times when the character has slots.
+   - Format: compact inline pills — `1st ●●○ · 2nd ●○○ · 3rd ●●●` — so the player can see remaining slots at a glance without opening the cast form.
+   - Keep the full slot display inside Cast Spell as well for click-to-cast context.
+
+3. **My Character panel** — new collapsible card in the right column, placed between Actions and My Characters:
+   - **Header row**: character name, Lv/race/class, AC, Speed, Passive Perception — all from `active_char` fields.
+   - **Ability scores mini-grid**: six boxes showing score + modifier (e.g. STR 16 / +3). Compact 3×2 layout.
+   - **Saving throws**: list only the proficient saves highlighted in gold; others shown muted. Computed from `saving_throw_profs` + proficiency bonus.
+   - **Conditions pill row**: if `char_conditions` is non-empty, show each condition as a coloured pill (same colours as the DM campaign page). If empty, show nothing (no "no conditions" clutter).
+   - **Hit Dice**: show `Xd8 remaining (Y/Z)` — relevant when considering a short rest.
+   - **Temp HP**: show if non-zero.
+   - **Feats**: list feat names as small pills if the character has any. No descriptions — they're in the rules reference.
+   - State persisted via `data-persist-key` (open/closed remembered per campaign, same pattern as Phases 34–37).
+
+4. **Inventory inline** (`templates/player/campaign.html` + `app.py`):
+   - Add an **Inventory** collapsible section inside the My Character panel (or as its own card — DM feedback will decide which is less cluttered).
+   - Lists each item in `char_items`. Shows gold (`character.gold`) at the bottom.
+   - **Use Item** button per item: `POST /player/campaigns/<id>/use-item` — accepts `item_name`.
+     - For items whose name contains "healing potion" (case-insensitive): rolls the appropriate die (Healing Potion = 2d4+2, Greater = 4d4+4, Superior = 8d4+8, Supreme = 10d4+20), applies HP via the existing HP update logic, removes the item from `spells['items']`, logs the result to the narration log as a `system` type entry.
+     - For all other items: simply logs `"<CharName> uses <item>."` to the narration log with `type='system'` — no mechanical effect. The DM can narrate consequences.
+   - Guard: item must exist in `char_items` before applying any effect (prevent duplicate submits).
+
+5. **Short Rest on campaign page** (`templates/player/campaign.html` + `app.py`):
+   - Add a **⛺ Short Rest** button at the bottom of the My Character panel, available outside of combat only (hidden when `combat_active` is true — you can't rest mid-fight).
+   - Opens an inline form: hit dice count selector (1 to available hit dice count) + Roll button.
+   - `POST /player/campaigns/<id>/short-rest` — accepts `dice_count`; performs the same logic as the existing character sheet short rest route (rolls hit dice + CON mod per die, heals HP up to max, decrements hit dice count, updates `spells` with `flag_modified`); logs result to narration log; redirects back to campaign page.
+   - Long Rest is intentionally excluded — a long rest between sessions is a DM-narrated event, not a solo button click.
+
+---
+
+#### What is NOT changing
+
+- The full character sheet remains the authoritative view for editing spells, background, leveling up, managing equipment in detail, etc.
+- The "My Characters" mini-card (HP bar + link to sheet) stays as-is — it's still the fastest way to get to the full sheet.
+- No new AI routes — this phase is purely data surfacing and UX.
+
+---
+
+- **New routes**: `POST /player/campaigns/<id>/use-item`, `POST /player/campaigns/<id>/short-rest`
+- **Updated files**: `app.py` (2 new routes + additional data passed from `player_campaign_detail`), `templates/player/campaign.html`
+- **Validation**:
+  - Spellcaster opens Cast Spell → dropdown shows all known spells → selects "Fireball" → form submits with "Fireball" pre-filled. "Other…" option reveals free-text fallback.
+  - Slot pips visible in header without opening Cast Spell section.
+  - My Character panel shows ability scores, saves, and conditions without leaving the page.
+  - Player with a Healing Potion clicks "Use" → HP increases, item removed from list, narration log entry appears on both DM and player views.
+  - Short Rest button hidden during combat; visible between encounters; clicking it rolls hit dice and updates HP inline.
+- **Status**: Complete ✓ (2026-03-22)
+
+---
+
+### Phase 50: Spell Database & Class-Filtered Spell Dropdown ✓ Complete (2026-03-22)
+- **Source**: Playtest feedback from Donut (2026-03-22) — Cast Spell form requires typing spell names from memory; no dropdown, no quick reference, no way to know what spells are available to your class at your level.
+- **Objectives**: Parse both spell documentation files into a structured `ALL_SPELLS` list in `game_data.py`, then use it to power a class-and-level-filtered spell dropdown on the player campaign page, a hover tooltip with spell details, and an improved spell picker in the level-up wizard.
+- **Prerequisites**: Phase 49 (player campaign page character panel) ideally in place so the Cast Spell form is already receiving attention; the dropdown update is a direct enhancement to that form.
+
+---
+
+#### Spell data source analysis
+
+| File | Spells | Coverage |
+|------|--------|----------|
+| `Documentation/07_SPELLS_REFERENCE.md` | ~60 | Cantrips–5th full; 6th–9th "key spells" only (Heal, Wish, etc.) |
+| `Documentation/24_EXPANSION_SPELLS.md` | ~67 | Cantrips–9th full (XGtE + TCoE) |
+| **Total** | **~127** | All classes, all levels |
+
+Both files use a consistent format parseable with a single regex:
+
+```
+**Spell Name** | School | Casting Time | Range | Components | Duration
+One or two line mechanical description.
+*Classes: Bard, Cleric, Wizard*  *(XGtE)*  ← optional source annotation
+```
+
+Level comes from `## Cantrips (Level 0)` / `## 1st Level` section headers. The 6th–9th entries in the core doc use a slightly different first line (`**Heal** (6th) | ...`) — the parser handles this as a special case.
+
+---
+
+#### Tasks
+
+1. **`services/spell_parser.py`** — new module, called once at import time by `game_data.py`:
+
+   ```python
+   def parse_spell_docs() -> list[dict]:
+       """Parse 07_SPELLS_REFERENCE.md and 24_EXPANSION_SPELLS.md.
+       Returns a list of spell dicts, one per spell."""
+   ```
+
+   Parser logic:
+   - Walk lines; track current level from `## N Level` / `## Cantrips` headers.
+   - For each `**Bold**` line: extract name and pipe-separated metadata (school, casting time, range, components, duration).
+   - Set `concentration: True` if the word "Concentration" appears in the duration field.
+   - Accumulate description lines until the `*Classes:` line is reached.
+   - Parse `*Classes: Bard, Cleric, Wizard*` — strip any trailing `*(XGtE)*` / `*(TCoE)*` source annotation into a separate `source` field (default `"PHB"`).
+   - Handle the `**Spell** (6th)` level-hint pattern in the core doc's 6th–9th section.
+   - Return a list of dicts:
+
+   ```python
+   {
+       "name":         "Fireball",
+       "level":        3,
+       "school":       "Evocation",
+       "casting_time": "1 action",
+       "range":        "150 ft",
+       "components":   "V, S, M",
+       "duration":     "Instant",
+       "concentration": False,
+       "description":  "Targets in 20-ft radius sphere...",
+       "classes":      ["Sorcerer", "Wizard"],
+       "source":       "PHB",    # or "XGtE" / "TCoE"
+   }
+   ```
+
+2. **`game_data.py`** — at the bottom, after all existing dicts:
+
+   ```python
+   from services.spell_parser import parse_spell_docs as _parse_spell_docs
+   ALL_SPELLS     = _parse_spell_docs()
+   SPELLS_BY_NAME = {s["name"]: s for s in ALL_SPELLS}   # O(1) lookup
+   ```
+
+   `ALL_SPELLS` replaces the ad-hoc expansion spell injection in `services/ai_dm.py` (Phase 48). Update `ai_dm.py` to read from `game_data.ALL_SPELLS` instead of re-reading the doc files — cleaner and avoids double parsing.
+
+3. **Helper in `game_data.py`** — `get_class_spells(class_name, max_level)`:
+
+   ```python
+   def get_class_spells(class_name: str, max_level: int) -> list[dict]:
+       """Return all spells available to class_name up to max_level, sorted by level then name."""
+       return sorted(
+           [s for s in ALL_SPELLS if class_name in s["classes"] and s["level"] <= max_level],
+           key=lambda s: (s["level"], s["name"])
+       )
+   ```
+
+   `max_level` is derived from the character's available spell slots (highest slot level with `current > 0`, or the theoretical max from `SPELL_SLOTS` at their level).
+
+4. **`app.py` — `player_campaign_detail` route** — pass spell list to template:
+
+   ```python
+   # Spellcasters only — skip for Fighter, Barbarian, etc.
+   from game_data import get_class_spells, SPELLCASTING_TYPE, SPELLS_BY_NAME
+
+   spell_dropdown = []
+   if active_char and SPELLCASTING_TYPE.get(active_char.class_name):
+       known = (active_char.spells or {}).get('known', [])
+       slots = (active_char.spells or {}).get('slots', {})
+       max_slot = max((int(k) for k, v in slots.items() if v.get('max', 0) > 0), default=0)
+
+       if known:
+           # Known-spell classes (Bard, Ranger, Sorcerer, Warlock):
+           # dropdown = their specific known list, enriched with data from ALL_SPELLS
+           spell_dropdown = [SPELLS_BY_NAME[n] for n in known if n in SPELLS_BY_NAME]
+           spell_dropdown += [{"name": n, "level": 0, "school": "", ...}
+                               for n in known if n not in SPELLS_BY_NAME]  # unknown spells kept as fallback
+       else:
+           # Prepared-spell classes (Cleric, Druid, Paladin, Wizard):
+           # dropdown = full class list up to their highest available slot level
+           spell_dropdown = get_class_spells(active_char.class_name, max_slot)
+   ```
+
+5. **`templates/player/campaign.html` — Cast Spell form** (updating the change planned in Phase 49):
+
+   Replace the free-text `<input name="spell_name">` with:
+
+   ```html
+   <select name="spell_name" id="spell-select" onchange="updateSpellTooltip(this.value)">
+     <optgroup label="Cantrips">
+       <!-- options for level 0 -->
+     </optgroup>
+     <optgroup label="1st Level">
+       <!-- options for level 1 -->
+     </optgroup>
+     ...
+     <option value="__other__">Other…</option>
+   </select>
+   <input type="text" id="spell-custom" name="spell_name_custom"
+          placeholder="Spell name" style="display:none; margin-top:4px;">
+   ```
+
+   - Options grouped by level with `<optgroup>` labels.
+   - "Other…" option reveals the free-text fallback (same `display:none` toggle pattern as attack target).
+   - For prepared-spell classes the list may be long (40–60 spells) — grouping by level keeps it navigable.
+
+6. **Spell tooltip** (`templates/player/campaign.html`):
+
+   Embed spell data as a JSON object in the page (passed from Flask via `tojson` filter), keyed by name:
+
+   ```html
+   <script>
+   const SPELL_DATA = {{ spell_dropdown | tojson }};
+   </script>
+   ```
+
+   A small JS function `updateSpellTooltip(name)` populates a small tooltip/info-card below the select:
+
+   ```
+   ✦ Fireball (3rd · Evocation)
+   1 action · 150 ft · V, S, M · Instant
+   Targets in 20-ft radius sphere make DEX save or take 8d6 fire (half on save).
+   ```
+
+   The tooltip card is hidden when "Other…" is selected. Concentration spells show a ⚠ Conc. badge. This replaces the need to open the rules reference mid-cast.
+
+7. **Level-up wizard spell picker** (`templates/character_levelup.html` + `app.py`):
+
+   The existing Phase 47 "new spells" section uses a multi-select or checkbox list. Update it to use `get_class_spells(class_name, max_new_level)` filtered to only show spells the character doesn't already know — same grouped-by-level layout, checkboxes with spell tooltips. Count badge enforces the `KNOWN_SPELLS_GAINED` limit client-side.
+
+---
+
+#### Prepared-spell classes — design decision
+
+For Cleric, Druid, Paladin, and Wizard the dropdown shows **all spells available to their class up to their highest slot level**. This is the "simple" approach:
+- No daily prep step required
+- The DM/player still narrates which spells were prepared; the dropdown is a reference tool, not a hard lock
+- A future "Spell Preparation" phase (below) can layer a `spells['prepared']` list on top and filter the dropdown to that — the infrastructure is already in place
+
+**Deferred to a future phase**: A "Prepare Spells" UI where the player checks off daily prepared spells before a session. Would add `spells['prepared']` to character data and filter the Cast Spell dropdown to that list. Noted in the Wishlist after this phase.
+
+---
+
+#### What `ALL_SPELLS` unlocks beyond this phase
+
+- **AI DM context (Phase 48)**: `ai_dm.py` can look up spell descriptions directly from `SPELLS_BY_NAME` instead of re-reading doc files — cleaner and faster.
+- **Rules reference search**: The `/rules` spell page could offer filter-by-class and filter-by-level UI using the same data, without any new parsing.
+- **NPC/DM spell reference**: DM campaign page could show a spell quick-ref when adjudicating player casts.
+
+---
+
+- **New files**: `services/spell_parser.py`
+- **Updated files**: `game_data.py` (add `ALL_SPELLS`, `SPELLS_BY_NAME`, `get_class_spells()`), `app.py` (pass `spell_dropdown` from `player_campaign_detail`), `templates/player/campaign.html` (grouped `<select>` + tooltip JS), `templates/character_levelup.html` (improved spell picker), `services/ai_dm.py` (use `SPELLS_BY_NAME` instead of doc re-reads)
+- **Validation**:
+  - Bard with "Vicious Mockery" and "Healing Word" in `spells['known']` → Cast Spell dropdown shows exactly those two spells in their respective level groups; selecting "Vicious Mockery" populates tooltip with school, range, and description.
+  - 5th-level Wizard (3rd-level slots available) → dropdown shows all Wizard spells 0–3 grouped by level, ~35 options; "Other…" reveals free-text fallback.
+  - Level-up wizard for a Warlock gaining 1 new spell → picks from filtered class list with checkboxes; limit enforced at 1.
+  - Selecting a concentration spell shows ⚠ Conc. badge in tooltip.
+  - Non-spellcaster (Fighter) → Cast Spell section not shown (unchanged from today).
+- **Status**: Complete ✓ (2026-03-22)
+
+---
+
 ## Wishlist (Future Consideration)
-*Not prioritized for active development; revisit after Phase 13.*
+*Not prioritized for active development; revisit after Phase 50.*
+
+- **Spell Preparation (Cleric, Druid, Paladin, Wizard)**: Add a daily "Prepare Spells" workflow for prepared-spell classes. Before or during a session, the player checks off which spells they're preparing from their class list (limited to level + ability modifier spells per day per the rules). Stored in `spells['prepared']`. The Cast Spell dropdown on the campaign page filters to that list instead of the full class list. Deferred from Phase 50 — the infrastructure (`ALL_SPELLS`, `SPELLS_BY_NAME`, the dropdown) is in place; this adds the prep step on top.
 
 - **AI Rules Q&A (RAG over Documentation)**: Index the `Documentation/*.md` files so players and the DM can ask natural-language questions (e.g. "Can I bonus action after an Attack action?") and get answers grounded in the actual rule text via xAI Grok. Would require a vector store or simple BM25 retrieval layer feeding relevant chunks into the Grok context.
 - **D&D Beyond Import**: Allow players to paste a D&D Beyond character URL or upload a PDF export to auto-fill the character creation form. Viability depends on D&D Beyond's API/export format — treat as exploratory research first.
 - **Custom Rules & Homebrew Classes**: Let the DM define custom classes, races, and mechanics per campaign (stored in `current_state` or a separate `campaign_rules` JSON field). The character creation wizard would merge official and homebrew options for that campaign. Complex feature — design a data schema before implementing.
 - **Battle Board Integration**: Add an optional field on the campaign for an external battle board URL (e.g., Owlbear Rodeo). If set, show a "Open Battle Board" button/link that opens it in a new tab for all players.
 - **Preloaded Campaigns**: Bundle a full "Lost Mines of Phandelver" (or other OGL-compatible) campaign as an importable `.md` bundle using the Phase 8 format.
+- **Google & Apple OAuth (Social Login)**: Allow players and DMs to register and log in with their Google or Apple account instead of a username/password. Removes the password-management burden for users and simplifies onboarding.
+
+  **Shared work (both providers)**:
+  - `User` model: add `email` (String, unique, nullable), `oauth_provider` (String, nullable), `oauth_id` (String, nullable); make `password_hash` nullable — OAuth users have no password.
+  - DB migration for the three new columns.
+  - Add `Authlib` to `requirements.txt` (handles OAuth 2.0 / OIDC for both providers).
+  - Role selection step: after a brand-new OAuth sign-in, redirect to `/auth/complete-profile` so the user can pick DM or Player (neither provider supplies this). Returning users skip this.
+  - Duplicate-account handling: decide policy if someone already has a username/password account with the same email (merge vs. block).
+  - Add provider env vars to `.env.example`; update tests that assume `password_hash` is always set.
+
+  **Google OAuth**:
+  - External setup: create a project in Google Cloud Console, enable the Google Identity API, register redirect URIs (`/auth/google/callback`), download client ID + secret.
+  - New env vars: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+  - Two new routes: `GET /auth/google` (redirect to consent screen) and `GET /auth/google/callback` (look up or create User, set session).
+  - Add "Continue with Google" button to `login.html` and `register.html`.
+  - Effort: moderate — a few hours of code plus Google Cloud Console setup.
+
+  **Apple OAuth** (additional complexity on top of Google):
+  - Requires an active Apple Developer account ($99/year) and a registered Services ID + .p8 private key.
+  - Apple requires a real HTTPS domain — `localhost` does not work without a tunnel (e.g. ngrok) during development.
+  - Apple only sends the user's name and email on the *very first* sign-in; must store both immediately in the callback or they are lost permanently.
+  - New env vars: `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`.
+  - Two new routes: `GET /auth/apple` and `GET /auth/apple/callback`.
+  - Recommendation: implement Google first; add Apple only if iOS users or App Store distribution becomes a goal.
 
 ---
 

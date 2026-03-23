@@ -214,23 +214,56 @@
           ✨ New Spells Known
           <span id="spell-count-badge" style="font-size:0.78rem; font-weight:400;
                 color:var(--muted); margin-left:6px;">
-            ({{ spells_to_pick }} to choose)
+            (<span id="spell-picked">0</span> / {{ spells_to_pick }} chosen)
           </span>
         </h2>
         <p style="font-size:0.85rem; color:var(--muted); margin:0 0 0.75rem;">
-          Enter the name of each new spell. Check the Rules Reference for your class spell list.
+          Choose exactly {{ spells_to_pick }} spell{% if spells_to_pick != 1 %}s{% endif %} from your class list below.
         </p>
-        <div id="spell-inputs" style="display:flex; flex-direction:column; gap:0.5rem;">
-          {% for i in range(spells_to_pick) %}
-          <div style="display:flex; align-items:center; gap:0.5rem;">
-            <span style="font-size:0.82rem; color:var(--muted); min-width:20px;">{{ loop.index }}.</span>
-            <input type="text" name="new_spells" placeholder="Spell name…"
-                   style="flex:1; max-width:320px; font-size:0.85rem;">
+
+        {% if available_spells %}
+          {% set ns = namespace(current_level=-1) %}
+          <div id="spell-checkbox-list" style="display:flex; flex-direction:column; gap:0.25rem; max-height:360px; overflow-y:auto; padding-right:4px;">
+            {% for spell in available_spells %}
+              {% if spell.level != ns.current_level %}
+                {% set ns.current_level = spell.level %}
+                <div style="font-size:0.72rem; font-weight:700; color:var(--gold);
+                            letter-spacing:0.05em; text-transform:uppercase;
+                            margin-top:{% if not loop.first %}0.6rem{% else %}0{% endif %}; padding-bottom:2px;
+                            border-bottom:1px solid rgba(201,168,76,0.25);">
+                  {{ 'Cantrip' if spell.level == 0 else (spell.level|string + ('st' if spell.level == 1 else ('nd' if spell.level == 2 else ('rd' if spell.level == 3 else 'th'))) + ' Level') }}
+                </div>
+              {% endif %}
+              <label class="spell-cb-row" style="display:flex; align-items:center; gap:0.5rem;
+                            padding:3px 6px; border-radius:4px; cursor:pointer;
+                            transition:background 0.15s; font-size:0.84rem;">
+                <input type="checkbox" name="new_spells" value="{{ spell.name }}"
+                       class="spell-checkbox" style="accent-color:var(--gold);">
+                <span style="flex:1;">{{ spell.name }}</span>
+                {% if spell.concentration %}
+                  <span style="font-size:0.7rem; color:var(--muted); font-style:italic;">conc.</span>
+                {% endif %}
+                <span style="font-size:0.7rem; color:var(--muted);">{{ spell.school }}</span>
+              </label>
+            {% endfor %}
           </div>
-          {% endfor %}
-        </div>
+        {% else %}
+          <p style="font-size:0.84rem; color:var(--muted); margin:0 0 0.5rem;">
+            No spells available in the database for your class. Enter spell names below.
+          </p>
+          <div style="display:flex; flex-direction:column; gap:0.5rem;">
+            {% for i in range(spells_to_pick) %}
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <span style="font-size:0.82rem; color:var(--muted); min-width:20px;">{{ loop.index }}.</span>
+              <input type="text" name="new_spells" placeholder="Spell name…"
+                     style="flex:1; max-width:320px; font-size:0.85rem;">
+            </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+
         <a href="/rules" target="_blank"
-           style="font-size:0.8rem; color:var(--gold); display:inline-block; margin-top:0.6rem;">
+           style="font-size:0.8rem; color:var(--gold); display:inline-block; margin-top:0.75rem;">
           📖 Open Rules Reference →
         </a>
       </div>
@@ -357,5 +390,34 @@ function updateHpPreview() {
     prev.textContent = 'New HP max will be at least ' + (curMax + Math.max(1, avg)) + '.';
   }
 }
+
+(function() {
+  var MAX_SPELLS = {{ spells_to_pick if spells_to_pick is defined else 0 }};
+  if (!MAX_SPELLS) return;
+
+  var badge   = document.getElementById('spell-picked');
+  var cbs     = document.querySelectorAll('.spell-checkbox');
+  var rows    = document.querySelectorAll('.spell-cb-row');
+  if (!cbs.length) return;
+
+  function updateSpellCount() {
+    var checked = document.querySelectorAll('.spell-checkbox:checked').length;
+    if (badge) badge.textContent = checked;
+    // Disable unchecked boxes once limit reached; re-enable if under limit
+    cbs.forEach(function(cb) {
+      if (!cb.checked) cb.disabled = (checked >= MAX_SPELLS);
+    });
+    // Visual feedback: highlight checked rows
+    rows.forEach(function(row) {
+      var cb = row.querySelector('.spell-checkbox');
+      row.style.background = (cb && cb.checked) ? 'rgba(201,168,76,0.12)' : '';
+    });
+  }
+
+  cbs.forEach(function(cb) {
+    cb.addEventListener('change', updateSpellCount);
+  });
+  updateSpellCount();
+})();
 </script>
 {% endblock %}

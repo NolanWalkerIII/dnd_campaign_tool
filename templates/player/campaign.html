@@ -38,7 +38,23 @@
       <span style="font-size:0.78rem; color:{{ hp_col }}; white-space:nowrap; font-weight:600;">
         {{ active_char.hp_current }}/{{ active_char.hp_max }} HP
       </span>
+      {% if char_temp_hp %}<span style="font-size:0.75rem; color:var(--success); white-space:nowrap;">(+{{ char_temp_hp }} tmp)</span>{% endif %}
     </div>
+    {# Spell slot pips — always visible for spellcasters #}
+    {% if active_slots %}
+    <div style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-top:6px;">
+      {% for lvl in ['1','2','3','4','5','6','7','8','9'] %}{% if lvl in active_slots %}
+      {% set sl = active_slots[lvl] %}
+      <div style="display:flex; align-items:center; gap:3px;">
+        <span style="font-size:0.68rem; color:var(--muted);">{{ lvl }}{% if lvl=='1' %}st{% elif lvl=='2' %}nd{% elif lvl=='3' %}rd{% else %}th{% endif %}</span>
+        {% for i in range(sl.max) %}<span style="width:8px; height:8px; border-radius:50%; display:inline-block;
+          background:{{ 'var(--gold)' if i < sl.current else 'transparent' }};
+          border:1px solid {{ 'var(--gold)' if i < sl.current else 'var(--muted)' }};"></span>{% endfor %}
+        <span style="font-size:0.65rem; color:var(--muted);">{{ sl.current }}/{{ sl.max }}</span>
+      </div>
+      {% endif %}{% endfor %}
+    </div>
+    {% endif %}
     {% endif %}
   </div>
   <a href="/player/dashboard" class="btn btn-outline">← Dashboard</a>
@@ -329,9 +345,27 @@
         </div>
         <form method="POST" action="/player/campaigns/{{ campaign.id }}/cast"
               style="display:flex; gap:0.5rem; align-items:flex-end; flex-wrap:wrap;">
-          <div class="form-group" style="flex:1; min-width:130px;">
-            <label>Spell name</label>
+          <div class="form-group" style="flex:1; min-width:160px;">
+            <label>Spell</label>
+            {% if spell_dropdown %}
+            <select name="spell_name" id="spell-select" onchange="updateSpellTooltip(this.value)">
+              {% set levels_seen = [] %}
+              {% for spell in spell_dropdown %}
+                {% if spell.level not in levels_seen %}
+                  {% if levels_seen %}</optgroup>{% endif %}
+                  {% set _ = levels_seen.append(spell.level) %}
+                  <optgroup label="{{ 'Cantrips' if spell.level == 0 else (spell.level|string + ('st' if spell.level==1 else 'nd' if spell.level==2 else 'rd' if spell.level==3 else 'th') + ' Level') }}">
+                {% endif %}
+              <option value="{{ spell.name }}">{{ spell.name }}{% if spell.concentration %} ⚠{% endif %}</option>
+              {% endfor %}
+              {% if levels_seen %}</optgroup>{% endif %}
+              <option value="__other__">Other…</option>
+            </select>
+            <input type="text" id="spell-custom" name="spell_name_custom"
+                   placeholder="Spell name" style="display:none; margin-top:4px; flex:1;">
+            {% else %}
             <input type="text" name="spell_name" placeholder="e.g. Fireball">
+            {% endif %}
           </div>
           <div class="form-group">
             <label>Slot</label>
@@ -349,9 +383,179 @@
           </div>
           <button type="submit" class="btn btn-gold" style="padding:7px 14px;">Cast</button>
         </form>
+        {# Spell tooltip card #}
+        <div id="spell-tooltip" style="display:none; margin-top:0.6rem; padding:0.65rem 0.85rem;
+             background:var(--card); border:1px solid var(--border); border-radius:6px; font-size:0.8rem;">
+          <div id="spell-tip-name" style="font-weight:700; color:var(--gold); margin-bottom:3px;"></div>
+          <div id="spell-tip-meta" style="color:var(--muted); margin-bottom:4px;"></div>
+          <div id="spell-tip-desc" style="color:var(--text); line-height:1.5;"></div>
+        </div>
       </details>
       {% endif %}
     </div>
+
+    <!-- ── My Character Panel (Phase 49) ── -->
+    {% if active_char and char_stats %}
+    <div class="card">
+      <details id="details-my-char">
+        <summary style="cursor:pointer; user-select:none; padding:4px 0; list-style:none; display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:0.95rem; font-weight:600; color:var(--gold);">🧙 {{ active_char.name }}</span>
+          <span style="font-size:0.78rem; color:var(--muted);">
+            AC {{ active_char.ac }} &nbsp;·&nbsp; Spd {{ char_stats.speed }}ft &nbsp;·&nbsp; PP {{ char_stats.passive_perception }}
+          </span>
+        </summary>
+        <div style="margin-top:0.85rem;">
+
+          {# Ability scores 3×2 grid #}
+          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-bottom:0.85rem;">
+            {% for ab in ['STR','DEX','CON','INT','WIS','CHA'] %}
+            {% set sc = char_stats.scores.get(ab, 10) %}
+            {% set md = char_stats.mods.get(ab, 0) %}
+            <div style="text-align:center; background:var(--card); border:1px solid var(--border);
+                        border-radius:6px; padding:4px 0;">
+              <div style="font-size:0.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">{{ ab }}</div>
+              <div style="font-size:1rem; font-weight:700; color:var(--text);">{{ sc }}</div>
+              <div style="font-size:0.75rem; color:var(--gold); font-weight:600;">{{ '+' if md >= 0 else '' }}{{ md }}</div>
+            </div>
+            {% endfor %}
+          </div>
+
+          {# Saving throws — proficient highlighted #}
+          <div style="margin-bottom:0.75rem;">
+            <div style="font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Saving Throws</div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+              {% for ab in ['STR','DEX','CON','INT','WIS','CHA'] %}
+              {% set is_prof = ab in char_stats.save_profs %}
+              {% set bonus = char_stats.mods.get(ab, 0) + (char_stats.prof if is_prof else 0) %}
+              <span style="font-size:0.75rem; padding:2px 7px; border-radius:10px;
+                background:{{ 'rgba(201,168,76,0.15)' if is_prof else 'var(--card)' }};
+                border:1px solid {{ 'var(--gold)' if is_prof else 'var(--border)' }};
+                color:{{ 'var(--gold)' if is_prof else 'var(--muted)' }};">
+                {{ ab }} {{ '+' if bonus >= 0 else '' }}{{ bonus }}{% if is_prof %} ✦{% endif %}
+              </span>
+              {% endfor %}
+            </div>
+          </div>
+
+          {# Spellcasting stats if applicable #}
+          {% if char_stats.spell_dc %}
+          <div style="display:flex; gap:1rem; margin-bottom:0.75rem; font-size:0.8rem;">
+            <span style="color:var(--muted);">Spell DC: <strong style="color:var(--gold);">{{ char_stats.spell_dc }}</strong></span>
+            <span style="color:var(--muted);">Spell Atk: <strong style="color:var(--gold);">+{{ char_stats.spell_atk }}</strong></span>
+            <span style="color:var(--muted);">Ability: <strong style="color:var(--gold);">{{ char_stats.sc_ability }}</strong></span>
+          </div>
+          {% if char_stats.concentration %}
+          <div style="font-size:0.78rem; background:rgba(201,168,76,0.1); border:1px solid rgba(201,168,76,0.3);
+                      border-radius:5px; padding:4px 8px; margin-bottom:0.75rem; color:var(--gold);">
+            ⚠ Concentrating: <strong>{{ char_stats.concentration }}</strong>
+          </div>
+          {% endif %}
+          {% endif %}
+
+          {# Active conditions #}
+          {% if char_conditions %}
+          <div style="margin-bottom:0.75rem;">
+            <div style="font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Conditions</div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+              {% for cond in char_conditions %}
+              <span style="font-size:0.75rem; padding:2px 8px; border-radius:10px;
+                           background:rgba(233,69,96,0.15); border:1px solid var(--accent);
+                           color:var(--accent); font-weight:600;">{{ cond }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          {# Hit Dice #}
+          <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem; font-size:0.8rem; flex-wrap:wrap;">
+            <span style="color:var(--muted);">Hit Dice:
+              <strong style="color:{{ 'var(--gold)' if char_hd_current > 0 else 'var(--accent)' }};">
+                {{ char_hd_current }}/{{ char_hd_max }} d{{ char_hit_die }}
+              </strong>
+            </span>
+            {% if char_temp_hp %}
+            <span style="color:var(--muted);">Temp HP: <strong style="color:var(--success);">{{ char_temp_hp }}</strong></span>
+            {% endif %}
+          </div>
+
+          {# Feats #}
+          {% if char_feats %}
+          <div style="margin-bottom:0.75rem;">
+            <div style="font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Feats</div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+              {% for feat in char_feats %}
+              <span style="font-size:0.75rem; padding:2px 8px; border-radius:10px;
+                           background:var(--card); border:1px solid var(--border); color:var(--text);">{{ feat }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          {# Inventory #}
+          <details id="details-inventory">
+            <summary style="cursor:pointer; color:var(--gold); font-size:0.85rem; font-weight:600;
+                            user-select:none; padding:3px 0; margin-bottom:0.4rem;">
+              🎒 Inventory
+              {% if char_items %}<span style="font-size:0.72rem; color:var(--muted); font-weight:400;"> ({{ char_items|length }} item{{ 's' if char_items|length != 1 }})</span>{% endif %}
+            </summary>
+            {% if char_items %}
+            <div style="display:flex; flex-direction:column; gap:4px; margin-top:0.4rem;">
+              {% for item in char_items %}
+              <div style="display:flex; align-items:center; justify-content:space-between;
+                          padding:5px 8px; background:var(--card); border-radius:5px;
+                          border:1px solid var(--border);">
+                <span style="font-size:0.82rem; color:var(--text);">{{ item }}</span>
+                <form method="POST" action="/player/campaigns/{{ campaign.id }}/use-item" style="margin:0;">
+                  <input type="hidden" name="item_name" value="{{ item }}">
+                  <button type="submit" class="btn btn-outline"
+                          style="padding:2px 8px; font-size:0.72rem;">Use</button>
+                </form>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <p style="font-size:0.82rem; color:var(--muted); margin:4px 0 0;">No items in inventory.</p>
+            {% endif %}
+            {% set char_gold = (active_char.spells or {}).get('gold', 0) %}
+            <div style="font-size:0.78rem; color:var(--gold); margin-top:6px;">💰 {{ char_gold }} gp</div>
+          </details>
+
+          {# Short Rest (hidden during combat) #}
+          {% if not combat_active %}
+          <hr style="border-color:var(--border); margin:0.75rem 0 0.6rem;">
+          <details id="details-short-rest">
+            <summary style="cursor:pointer; color:var(--muted); font-size:0.85rem;
+                            font-weight:600; user-select:none; padding:3px 0;">
+              ⛺ Short Rest
+            </summary>
+            {% if char_hd_current > 0 %}
+            <form method="POST" action="/player/campaigns/{{ campaign.id }}/short-rest"
+                  style="display:flex; gap:0.5rem; align-items:flex-end; margin-top:0.5rem; flex-wrap:wrap;">
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:0.78rem;">Hit dice to spend</label>
+                <select name="num_dice" style="width:70px; font-size:0.85rem;">
+                  {% for n in range(1, char_hd_current + 1) %}
+                  <option value="{{ n }}">{{ n }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <button type="submit" class="btn btn-gold" style="padding:6px 14px; font-size:0.85rem;">
+                Rest
+              </button>
+            </form>
+            <p style="font-size:0.75rem; color:var(--muted); margin:4px 0 0;">
+              Rolls d{{ char_hit_die }} + CON mod per die spent. Heals up to max HP.
+            </p>
+            {% else %}
+            <p style="font-size:0.82rem; color:var(--accent); margin:6px 0 0;">No hit dice remaining.</p>
+            {% endif %}
+          </details>
+          {% endif %}
+
+        </div>
+      </details>
+    </div>
+    {% endif %}
 
     <!-- My Characters -->
     <div class="card">
@@ -613,6 +817,9 @@ function _sk(key) { return 'player_' + _CID + '_' + key; }
   { id: 'details-cast-spell',  key: 'cast_spell',   forcedOpen: false },
   { id: 'details-quick-ref',   key: 'quick_ref',    forcedOpen: false },
   { id: 'details-scene-hist',  key: 'scene_hist',   forcedOpen: false },
+  { id: 'details-my-char',     key: 'my_char',      forcedOpen: false },
+  { id: 'details-inventory',   key: 'inventory',    forcedOpen: false },
+  { id: 'details-short-rest',  key: 'short_rest',   forcedOpen: false },
 ].forEach(function(s) {
   var el = document.getElementById(s.id);
   if (!el) return;
@@ -653,8 +860,9 @@ _persistEl(document.querySelector('select[name="skill"]'),       'skill_sel');
 _persistEl(document.querySelector('select[name="ability"]'),     'atk_ability');
 _persistEl(document.querySelector('input[name="damage_dice"]'),  'dmg_dice');
 _persistEl(document.querySelector('input[name="target_ac"]'),    'target_ac');
-// Spell form
-_persistEl(document.querySelector('input[name="spell_name"]'),   'spell_name');
+// Spell form — select takes priority over text input
+_persistEl(document.getElementById('spell-select') ||
+           document.querySelector('input[name="spell_name"]'),   'spell_name');
 _persistEl(document.querySelector('select[name="slot_level"]'),  'spell_slot');
 _persistEl(document.getElementById('p_conc'),                    'conc', true);
 
@@ -687,6 +895,43 @@ _persistEl(document.getElementById('p_conc'),                    'conc', true);
       document.getElementById('target-custom').name = '';
     }
   });
+})();
+
+// ── Spell dropdown: "Other…" reveal + tooltip (Phase 50) ─────────────────
+const _SPELL_DATA = {{ spell_dropdown | tojson }};
+const _SPELL_MAP  = {};
+_SPELL_DATA.forEach(function(s) { _SPELL_MAP[s.name] = s; });
+
+function updateSpellTooltip(name) {
+  var tip = document.getElementById('spell-tooltip');
+  var custom = document.getElementById('spell-custom');
+  if (!tip) return;
+  if (name === '__other__') {
+    tip.style.display = 'none';
+    if (custom) { custom.style.display = 'block'; custom.required = true; }
+    var sel = document.getElementById('spell-select');
+    if (sel) sel.name = '';
+    return;
+  }
+  if (custom) { custom.style.display = 'none'; custom.required = false; }
+  var sel = document.getElementById('spell-select');
+  if (sel) sel.name = 'spell_name';
+  var s = _SPELL_MAP[name];
+  if (!s || !s.school) { tip.style.display = 'none'; return; }
+  var levelLabel = s.level === 0 ? 'Cantrip' : ('Level ' + s.level);
+  document.getElementById('spell-tip-name').textContent =
+    s.name + (s.concentration ? ' ⚠ Concentration' : '');
+  document.getElementById('spell-tip-meta').textContent =
+    levelLabel + ' · ' + s.school + ' · ' + s.casting_time + ' · ' + s.range +
+    ' · ' + s.components + ' · ' + s.duration;
+  document.getElementById('spell-tip-desc').textContent = s.description;
+  tip.style.display = 'block';
+}
+
+// Trigger tooltip for the initially selected spell on page load
+(function() {
+  var sel = document.getElementById('spell-select');
+  if (sel) updateSpellTooltip(sel.value);
 })();
 
 // ── Player AI narration (Phase 40) ────────────────────────────────────────

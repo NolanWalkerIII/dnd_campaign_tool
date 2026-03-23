@@ -1341,3 +1341,25 @@ def get_spell_slots(class_name, level=1):
         str(sl): {'max': count, 'current': count}
         for sl, count in table.get(capped, {}).items()
     }
+
+
+# ── Spell database (parsed from Documentation/) ───────────────────────────────
+# Imported lazily to avoid circular imports at module load time.
+# ALL_SPELLS  : list of spell dicts (name, level, school, casting_time, range,
+#               components, duration, concentration, description, classes, source)
+# SPELLS_BY_NAME : dict keyed by spell name for O(1) lookup
+try:
+    from services.spell_parser import parse_spell_docs as _parse_spell_docs
+    ALL_SPELLS     = _parse_spell_docs()
+except Exception:
+    ALL_SPELLS     = []
+
+SPELLS_BY_NAME = {s['name']: s for s in ALL_SPELLS}
+
+
+def get_class_spells(class_name, max_level):
+    """Return all spells available to class_name up to max_level, sorted by level then name."""
+    return sorted(
+        [s for s in ALL_SPELLS if class_name in s['classes'] and s['level'] <= max_level],
+        key=lambda s: (s['level'], s['name'])
+    )
