@@ -1992,6 +1992,32 @@ def dm_adjust_hp(char_id):
     return redirect(url_for('character_sheet', char_id=char_id))
 
 
+@app.route('/dm/characters/<int:char_id>/xp', methods=['POST'])
+@dm_required
+def dm_award_xp(char_id):
+    from sqlalchemy.orm.attributes import flag_modified
+    char = Character.query.get_or_404(char_id)
+    campaign_id = request.form.get('campaign_id', type=int)
+    try:
+        award = max(0, int(request.form.get('xp_award', 0)))
+    except (ValueError, TypeError):
+        award = 0
+    if award > 0:
+        extra = char.spells or {}
+        old_xp = extra.get('xp', 0)
+        new_xp = old_xp + award
+        extra['xp'] = new_xp
+        char.spells = extra
+        flag_modified(char, 'spells')
+        db.session.commit()
+        flash(f'Awarded {award:,} XP to {char.name}. Total: {new_xp:,} XP.', 'success')
+        if char.level < 20 and new_xp >= XP_THRESHOLDS[char.level + 1]:
+            flash(f'🎉 {char.name} has enough XP to level up to Level {char.level + 1}!', 'success')
+    if campaign_id:
+        return redirect(url_for('dm_campaign_detail', campaign_id=campaign_id))
+    return redirect(url_for('character_sheet', char_id=char_id))
+
+
 @app.route('/dm/characters/<int:char_id>/inspiration', methods=['POST'])
 @dm_required
 def dm_toggle_inspiration(char_id):

@@ -1384,7 +1384,7 @@ function toggleGettingStarted() {
                 <span style="font-size:0.82rem; color:var(--muted);">AC {{ char.ac }}</span>
               </div>
               <!-- HP bar -->
-              <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
                 <div style="flex:1; background:var(--border); border-radius:4px; height:7px; overflow:hidden;">
                   <div style="width:{{ pct }}%; background:{{ bar_col }}; height:100%;"></div>
                 </div>
@@ -1392,15 +1392,28 @@ function toggleGettingStarted() {
                   {{ char.hp_current }}/{{ char.hp_max }} HP
                 </span>
               </div>
-              <!-- HP adjust -->
-              <form method="POST" action="/dm/characters/{{ char.id }}/hp"
-                    style="display:flex; gap:6px;">
-                <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
-                <input type="number" name="delta" placeholder="±HP"
-                       style="width:80px; padding:4px 8px; font-size:0.85rem;">
-                <button type="submit" class="btn btn-outline"
-                        style="padding:4px 10px; font-size:0.8rem;">Apply</button>
-              </form>
+              <!-- HP + XP controls (two columns, right-aligned) -->
+              {% set char_xp = (char.spells or {}).get('xp', 0) %}
+              <div style="display:flex; gap:8px; justify-content:flex-end; margin-bottom:6px;">
+                <form method="POST" action="/dm/characters/{{ char.id }}/hp"
+                      style="display:flex; gap:4px; align-items:center;">
+                  <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+                  <span style="font-size:0.72rem; color:var(--muted);">HP</span>
+                  <input type="number" name="delta" placeholder="±HP"
+                         style="width:68px; padding:3px 6px; font-size:0.82rem;">
+                  <button type="submit" class="btn btn-outline"
+                          style="padding:3px 8px; font-size:0.78rem;">Apply</button>
+                </form>
+                <form method="POST" action="/dm/characters/{{ char.id }}/xp"
+                      style="display:flex; gap:4px; align-items:center;">
+                  <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+                  <span style="font-size:0.72rem; color:var(--muted);" title="{{ char_xp }} XP total">XP</span>
+                  <input type="number" name="xp_award" placeholder="+XP" min="1"
+                         style="width:68px; padding:3px 6px; font-size:0.82rem;">
+                  <button type="submit" class="btn btn-outline"
+                          style="padding:3px 8px; font-size:0.78rem; color:var(--gold);">Award</button>
+                </form>
+              </div>
               <!-- Inspiration toggle -->
               {% set char_inspired = (char.spells or {}).get('inspiration', false) %}
               <form method="POST" action="/dm/characters/{{ char.id }}/inspiration"
@@ -1511,7 +1524,7 @@ function toggleGettingStarted() {
             </div>
           </div>
           <!-- HP bar -->
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
             <div style="flex:1; background:var(--border); border-radius:4px; height:7px; overflow:hidden;">
               <div style="width:{{ pct }}%; background:{{ bar_col }}; height:100%;"></div>
             </div>
@@ -1519,15 +1532,28 @@ function toggleGettingStarted() {
               {{ char.hp_current }}/{{ char.hp_max }} HP
             </span>
           </div>
-          <!-- HP adjust -->
-          <form method="POST" action="/dm/characters/{{ char.id }}/hp"
-                style="display:flex; gap:6px;">
-            <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
-            <input type="number" name="delta" placeholder="±HP"
-                   style="width:80px; padding:4px 8px; font-size:0.85rem;">
-            <button type="submit" class="btn btn-outline"
-                    style="padding:4px 10px; font-size:0.8rem;">Apply</button>
-          </form>
+          <!-- HP + XP controls (two columns, right-aligned) -->
+          {% set char_xp = (char.spells or {}).get('xp', 0) %}
+          <div style="display:flex; gap:8px; justify-content:flex-end; margin-bottom:6px;">
+            <form method="POST" action="/dm/characters/{{ char.id }}/hp"
+                  style="display:flex; gap:4px; align-items:center;">
+              <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+              <span style="font-size:0.72rem; color:var(--muted);">HP</span>
+              <input type="number" name="delta" placeholder="±HP"
+                     style="width:68px; padding:3px 6px; font-size:0.82rem;">
+              <button type="submit" class="btn btn-outline"
+                      style="padding:3px 8px; font-size:0.78rem;">Apply</button>
+            </form>
+            <form method="POST" action="/dm/characters/{{ char.id }}/xp"
+                  style="display:flex; gap:4px; align-items:center;">
+              <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+              <span style="font-size:0.72rem; color:var(--muted);" title="{{ char_xp }} XP total">XP</span>
+              <input type="number" name="xp_award" placeholder="+XP" min="1"
+                     style="width:68px; padding:3px 6px; font-size:0.82rem;">
+              <button type="submit" class="btn btn-outline"
+                      style="padding:3px 8px; font-size:0.78rem; color:var(--gold);">Award</button>
+            </form>
+          </div>
           <!-- Inspiration toggle -->
           {% set char_inspired = (char.spells or {}).get('inspiration', false) %}
           <form method="POST" action="/dm/characters/{{ char.id }}/inspiration"
