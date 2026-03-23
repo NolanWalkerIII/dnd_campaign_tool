@@ -177,6 +177,169 @@
     </div>
     {% endif %}
 
+    <!-- ── My Character Panel (Phase 49) ── -->
+    {% if active_char and char_stats %}
+    <div class="card">
+      <details id="details-my-char">
+        <summary style="cursor:pointer; user-select:none; padding:4px 0; list-style:none; display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:0.95rem; font-weight:600; color:var(--gold);">🧙 {{ active_char.name }}</span>
+          <span style="font-size:0.78rem; color:var(--muted);">
+            AC {{ active_char.ac }} &nbsp;·&nbsp; Spd {{ char_stats.speed }}ft &nbsp;·&nbsp; PP {{ char_stats.passive_perception }}
+          </span>
+        </summary>
+        <div style="margin-top:0.85rem;">
+
+          {# Ability scores 3×2 grid #}
+          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-bottom:0.85rem;">
+            {% for ab in ['STR','DEX','CON','INT','WIS','CHA'] %}
+            {% set sc = char_stats.scores.get(ab, 10) %}
+            {% set md = char_stats.mods.get(ab, 0) %}
+            <div style="text-align:center; background:var(--card); border:1px solid var(--border);
+                        border-radius:6px; padding:4px 0;">
+              <div style="font-size:0.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">{{ ab }}</div>
+              <div style="font-size:1rem; font-weight:700; color:var(--text);">{{ sc }}</div>
+              <div style="font-size:0.75rem; color:var(--gold); font-weight:600;">{{ '+' if md >= 0 else '' }}{{ md }}</div>
+            </div>
+            {% endfor %}
+          </div>
+
+          {# Saving throws — proficient highlighted #}
+          <div style="margin-bottom:0.75rem;">
+            <div style="font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Saving Throws</div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+              {% for ab in ['STR','DEX','CON','INT','WIS','CHA'] %}
+              {% set is_prof = ab in char_stats.save_profs %}
+              {% set bonus = char_stats.mods.get(ab, 0) + (char_stats.prof if is_prof else 0) %}
+              <span style="font-size:0.75rem; padding:2px 7px; border-radius:10px;
+                background:{{ 'rgba(201,168,76,0.15)' if is_prof else 'var(--card)' }};
+                border:1px solid {{ 'var(--gold)' if is_prof else 'var(--border)' }};
+                color:{{ 'var(--gold)' if is_prof else 'var(--muted)' }};">
+                {{ ab }} {{ '+' if bonus >= 0 else '' }}{{ bonus }}{% if is_prof %} ✦{% endif %}
+              </span>
+              {% endfor %}
+            </div>
+          </div>
+
+          {# Spellcasting stats if applicable #}
+          {% if char_stats.spell_dc %}
+          <div style="display:flex; gap:1rem; margin-bottom:0.75rem; font-size:0.8rem;">
+            <span style="color:var(--muted);">Spell DC: <strong style="color:var(--gold);">{{ char_stats.spell_dc }}</strong></span>
+            <span style="color:var(--muted);">Spell Atk: <strong style="color:var(--gold);">+{{ char_stats.spell_atk }}</strong></span>
+            <span style="color:var(--muted);">Ability: <strong style="color:var(--gold);">{{ char_stats.sc_ability }}</strong></span>
+          </div>
+          {% if char_stats.concentration %}
+          <div style="font-size:0.78rem; background:rgba(201,168,76,0.1); border:1px solid rgba(201,168,76,0.3);
+                      border-radius:5px; padding:4px 8px; margin-bottom:0.75rem; color:var(--gold);">
+            ⚠ Concentrating: <strong>{{ char_stats.concentration }}</strong>
+          </div>
+          {% endif %}
+          {% endif %}
+
+          {# Active conditions #}
+          {% if char_conditions %}
+          <div style="margin-bottom:0.75rem;">
+            <div style="font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Conditions</div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+              {% for cond in char_conditions %}
+              <span style="font-size:0.75rem; padding:2px 8px; border-radius:10px;
+                           background:rgba(233,69,96,0.15); border:1px solid var(--accent);
+                           color:var(--accent); font-weight:600;">{{ cond }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          {# Hit Dice #}
+          <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem; font-size:0.8rem; flex-wrap:wrap;">
+            <span style="color:var(--muted);">Hit Dice:
+              <strong style="color:{{ 'var(--gold)' if char_hd_current > 0 else 'var(--accent)' }};">
+                {{ char_hd_current }}/{{ char_hd_max }} d{{ char_hit_die }}
+              </strong>
+            </span>
+            {% if char_temp_hp %}
+            <span style="color:var(--muted);">Temp HP: <strong style="color:var(--success);">{{ char_temp_hp }}</strong></span>
+            {% endif %}
+          </div>
+
+          {# Feats #}
+          {% if char_feats %}
+          <div style="margin-bottom:0.75rem;">
+            <div style="font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Feats</div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+              {% for feat in char_feats %}
+              <span style="font-size:0.75rem; padding:2px 8px; border-radius:10px;
+                           background:var(--card); border:1px solid var(--border); color:var(--text);">{{ feat }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          {# Inventory #}
+          <details id="details-inventory">
+            <summary style="cursor:pointer; color:var(--gold); font-size:0.85rem; font-weight:600;
+                            user-select:none; padding:3px 0; margin-bottom:0.4rem;">
+              🎒 Inventory
+              {% if char_items %}<span style="font-size:0.72rem; color:var(--muted); font-weight:400;"> ({{ char_items|length }} item{{ 's' if char_items|length != 1 }})</span>{% endif %}
+            </summary>
+            {% if char_items %}
+            <div style="display:flex; flex-direction:column; gap:4px; margin-top:0.4rem;">
+              {% for item in char_items %}
+              <div style="display:flex; align-items:center; justify-content:space-between;
+                          padding:5px 8px; background:var(--card); border-radius:5px;
+                          border:1px solid var(--border);">
+                <span style="font-size:0.82rem; color:var(--text);">{{ item }}</span>
+                <form method="POST" action="/player/campaigns/{{ campaign.id }}/use-item" style="margin:0;">
+                  <input type="hidden" name="item_name" value="{{ item }}">
+                  <button type="submit" class="btn btn-outline"
+                          style="padding:2px 8px; font-size:0.72rem;">Use</button>
+                </form>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <p style="font-size:0.82rem; color:var(--muted); margin:4px 0 0;">No items in inventory.</p>
+            {% endif %}
+            {% set char_gold = (active_char.spells or {}).get('gold', 0) %}
+            <div style="font-size:0.78rem; color:var(--gold); margin-top:6px;">💰 {{ char_gold }} gp</div>
+          </details>
+
+          {# Short Rest (hidden during combat) #}
+          {% if not combat_active %}
+          <hr style="border-color:var(--border); margin:0.75rem 0 0.6rem;">
+          <details id="details-short-rest">
+            <summary style="cursor:pointer; color:var(--muted); font-size:0.85rem;
+                            font-weight:600; user-select:none; padding:3px 0;">
+              ⛺ Short Rest
+            </summary>
+            {% if char_hd_current > 0 %}
+            <form method="POST" action="/player/campaigns/{{ campaign.id }}/short-rest"
+                  style="display:flex; gap:0.5rem; align-items:flex-end; margin-top:0.5rem; flex-wrap:wrap;">
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:0.78rem;">Hit dice to spend</label>
+                <select name="num_dice" style="width:70px; font-size:0.85rem;">
+                  {% for n in range(1, char_hd_current + 1) %}
+                  <option value="{{ n }}">{{ n }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <button type="submit" class="btn btn-gold" style="padding:6px 14px; font-size:0.85rem;">
+                Rest
+              </button>
+            </form>
+            <p style="font-size:0.75rem; color:var(--muted); margin:4px 0 0;">
+              Rolls d{{ char_hit_die }} + CON mod per die spent. Heals up to max HP.
+            </p>
+            {% else %}
+            <p style="font-size:0.82rem; color:var(--accent); margin:6px 0 0;">No hit dice remaining.</p>
+            {% endif %}
+          </details>
+          {% endif %}
+
+        </div>
+      </details>
+    </div>
+    {% endif %}
+
   </div>
 
   <!-- ── RIGHT: ACTIONS + MY CHARACTERS ── -->
@@ -393,169 +556,6 @@
       </details>
       {% endif %}
     </div>
-
-    <!-- ── My Character Panel (Phase 49) ── -->
-    {% if active_char and char_stats %}
-    <div class="card">
-      <details id="details-my-char">
-        <summary style="cursor:pointer; user-select:none; padding:4px 0; list-style:none; display:flex; align-items:center; justify-content:space-between;">
-          <span style="font-size:0.95rem; font-weight:600; color:var(--gold);">🧙 {{ active_char.name }}</span>
-          <span style="font-size:0.78rem; color:var(--muted);">
-            AC {{ active_char.ac }} &nbsp;·&nbsp; Spd {{ char_stats.speed }}ft &nbsp;·&nbsp; PP {{ char_stats.passive_perception }}
-          </span>
-        </summary>
-        <div style="margin-top:0.85rem;">
-
-          {# Ability scores 3×2 grid #}
-          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-bottom:0.85rem;">
-            {% for ab in ['STR','DEX','CON','INT','WIS','CHA'] %}
-            {% set sc = char_stats.scores.get(ab, 10) %}
-            {% set md = char_stats.mods.get(ab, 0) %}
-            <div style="text-align:center; background:var(--card); border:1px solid var(--border);
-                        border-radius:6px; padding:4px 0;">
-              <div style="font-size:0.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">{{ ab }}</div>
-              <div style="font-size:1rem; font-weight:700; color:var(--text);">{{ sc }}</div>
-              <div style="font-size:0.75rem; color:var(--gold); font-weight:600;">{{ '+' if md >= 0 else '' }}{{ md }}</div>
-            </div>
-            {% endfor %}
-          </div>
-
-          {# Saving throws — proficient highlighted #}
-          <div style="margin-bottom:0.75rem;">
-            <div style="font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Saving Throws</div>
-            <div style="display:flex; flex-wrap:wrap; gap:4px;">
-              {% for ab in ['STR','DEX','CON','INT','WIS','CHA'] %}
-              {% set is_prof = ab in char_stats.save_profs %}
-              {% set bonus = char_stats.mods.get(ab, 0) + (char_stats.prof if is_prof else 0) %}
-              <span style="font-size:0.75rem; padding:2px 7px; border-radius:10px;
-                background:{{ 'rgba(201,168,76,0.15)' if is_prof else 'var(--card)' }};
-                border:1px solid {{ 'var(--gold)' if is_prof else 'var(--border)' }};
-                color:{{ 'var(--gold)' if is_prof else 'var(--muted)' }};">
-                {{ ab }} {{ '+' if bonus >= 0 else '' }}{{ bonus }}{% if is_prof %} ✦{% endif %}
-              </span>
-              {% endfor %}
-            </div>
-          </div>
-
-          {# Spellcasting stats if applicable #}
-          {% if char_stats.spell_dc %}
-          <div style="display:flex; gap:1rem; margin-bottom:0.75rem; font-size:0.8rem;">
-            <span style="color:var(--muted);">Spell DC: <strong style="color:var(--gold);">{{ char_stats.spell_dc }}</strong></span>
-            <span style="color:var(--muted);">Spell Atk: <strong style="color:var(--gold);">+{{ char_stats.spell_atk }}</strong></span>
-            <span style="color:var(--muted);">Ability: <strong style="color:var(--gold);">{{ char_stats.sc_ability }}</strong></span>
-          </div>
-          {% if char_stats.concentration %}
-          <div style="font-size:0.78rem; background:rgba(201,168,76,0.1); border:1px solid rgba(201,168,76,0.3);
-                      border-radius:5px; padding:4px 8px; margin-bottom:0.75rem; color:var(--gold);">
-            ⚠ Concentrating: <strong>{{ char_stats.concentration }}</strong>
-          </div>
-          {% endif %}
-          {% endif %}
-
-          {# Active conditions #}
-          {% if char_conditions %}
-          <div style="margin-bottom:0.75rem;">
-            <div style="font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Conditions</div>
-            <div style="display:flex; flex-wrap:wrap; gap:4px;">
-              {% for cond in char_conditions %}
-              <span style="font-size:0.75rem; padding:2px 8px; border-radius:10px;
-                           background:rgba(233,69,96,0.15); border:1px solid var(--accent);
-                           color:var(--accent); font-weight:600;">{{ cond }}</span>
-              {% endfor %}
-            </div>
-          </div>
-          {% endif %}
-
-          {# Hit Dice #}
-          <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem; font-size:0.8rem; flex-wrap:wrap;">
-            <span style="color:var(--muted);">Hit Dice:
-              <strong style="color:{{ 'var(--gold)' if char_hd_current > 0 else 'var(--accent)' }};">
-                {{ char_hd_current }}/{{ char_hd_max }} d{{ char_hit_die }}
-              </strong>
-            </span>
-            {% if char_temp_hp %}
-            <span style="color:var(--muted);">Temp HP: <strong style="color:var(--success);">{{ char_temp_hp }}</strong></span>
-            {% endif %}
-          </div>
-
-          {# Feats #}
-          {% if char_feats %}
-          <div style="margin-bottom:0.75rem;">
-            <div style="font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Feats</div>
-            <div style="display:flex; flex-wrap:wrap; gap:4px;">
-              {% for feat in char_feats %}
-              <span style="font-size:0.75rem; padding:2px 8px; border-radius:10px;
-                           background:var(--card); border:1px solid var(--border); color:var(--text);">{{ feat }}</span>
-              {% endfor %}
-            </div>
-          </div>
-          {% endif %}
-
-          {# Inventory #}
-          <details id="details-inventory">
-            <summary style="cursor:pointer; color:var(--gold); font-size:0.85rem; font-weight:600;
-                            user-select:none; padding:3px 0; margin-bottom:0.4rem;">
-              🎒 Inventory
-              {% if char_items %}<span style="font-size:0.72rem; color:var(--muted); font-weight:400;"> ({{ char_items|length }} item{{ 's' if char_items|length != 1 }})</span>{% endif %}
-            </summary>
-            {% if char_items %}
-            <div style="display:flex; flex-direction:column; gap:4px; margin-top:0.4rem;">
-              {% for item in char_items %}
-              <div style="display:flex; align-items:center; justify-content:space-between;
-                          padding:5px 8px; background:var(--card); border-radius:5px;
-                          border:1px solid var(--border);">
-                <span style="font-size:0.82rem; color:var(--text);">{{ item }}</span>
-                <form method="POST" action="/player/campaigns/{{ campaign.id }}/use-item" style="margin:0;">
-                  <input type="hidden" name="item_name" value="{{ item }}">
-                  <button type="submit" class="btn btn-outline"
-                          style="padding:2px 8px; font-size:0.72rem;">Use</button>
-                </form>
-              </div>
-              {% endfor %}
-            </div>
-            {% else %}
-            <p style="font-size:0.82rem; color:var(--muted); margin:4px 0 0;">No items in inventory.</p>
-            {% endif %}
-            {% set char_gold = (active_char.spells or {}).get('gold', 0) %}
-            <div style="font-size:0.78rem; color:var(--gold); margin-top:6px;">💰 {{ char_gold }} gp</div>
-          </details>
-
-          {# Short Rest (hidden during combat) #}
-          {% if not combat_active %}
-          <hr style="border-color:var(--border); margin:0.75rem 0 0.6rem;">
-          <details id="details-short-rest">
-            <summary style="cursor:pointer; color:var(--muted); font-size:0.85rem;
-                            font-weight:600; user-select:none; padding:3px 0;">
-              ⛺ Short Rest
-            </summary>
-            {% if char_hd_current > 0 %}
-            <form method="POST" action="/player/campaigns/{{ campaign.id }}/short-rest"
-                  style="display:flex; gap:0.5rem; align-items:flex-end; margin-top:0.5rem; flex-wrap:wrap;">
-              <div class="form-group" style="margin:0;">
-                <label style="font-size:0.78rem;">Hit dice to spend</label>
-                <select name="num_dice" style="width:70px; font-size:0.85rem;">
-                  {% for n in range(1, char_hd_current + 1) %}
-                  <option value="{{ n }}">{{ n }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <button type="submit" class="btn btn-gold" style="padding:6px 14px; font-size:0.85rem;">
-                Rest
-              </button>
-            </form>
-            <p style="font-size:0.75rem; color:var(--muted); margin:4px 0 0;">
-              Rolls d{{ char_hit_die }} + CON mod per die spent. Heals up to max HP.
-            </p>
-            {% else %}
-            <p style="font-size:0.82rem; color:var(--accent); margin:6px 0 0;">No hit dice remaining.</p>
-            {% endif %}
-          </details>
-          {% endif %}
-
-        </div>
-      </details>
-    </div>
-    {% endif %}
 
     <!-- My Characters -->
     <div class="card">
