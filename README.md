@@ -117,7 +117,7 @@ python -m pytest tests/test_suite.py -v
 ### Dungeon Master (DM)
 - Register with role **DM** at `/register`
 - Full access to all character sheets (read + edit)
-- Can adjust any character's HP, grant/revoke Inspiration, and manage combat
+- Can adjust any character's HP, award XP, grant/revoke Inspiration, and manage combat
 - Sees which players are currently online (active within 5 minutes)
 - Can impersonate any player to see exactly what they see (read-only — no actions)
 
@@ -142,7 +142,7 @@ python -m pytest tests/test_suite.py -v
 - **Equipment & Gold** — add/remove inventory items, adjust gold with ± form
 - **Spell Slots** — visual filled/empty slot indicators per spell level (auto-populated based on class/level); spellcasters only
 - **Hit Dice** — visual tracker; spend during short rests
-- **XP & Leveling** — DM awards XP from the character sheet; a progress bar shows current XP toward the next level threshold; a pulsing "🎲 Level Up!" button appears when the character is ready. The level-up wizard walks through every rule-compliant choice for that specific class and level: HP (roll or take average), ASI or feat pick (with 20-cap enforcement), subclass selection at the appropriate level, and new spells known for known-spell classes (Bard, Ranger, Sorcerer, Warlock). Proficiency bonus updates automatically. A "What's New" panel lists every class feature unlocked at the new level.
+- **XP & Leveling** — DM awards XP from the character sheet or directly from the campaign page (HP and XP controls sit side-by-side per character). A progress bar shows current XP toward the next level threshold; a pulsing "🎲 Level Up!" button appears when the character is ready. The level-up wizard walks through every rule-compliant choice for that specific class and level: HP (roll or take average), ASI or feat pick (with 20-cap enforcement), subclass selection at the appropriate level, and new spells known for known-spell classes (Bard, Ranger, Sorcerer, Warlock) via a filtered, grouped checkbox list. Proficiency bonus updates automatically. A "What's New" panel lists every class feature unlocked at the new level.
 - **Subclass tracking** — stored per character; displayed on sheet with source badge (PHB / XGtE / TCoE)
 
 **Core races (PHB):** Human, Elf, Dwarf, Halfling, Gnome, Half-Elf, Half-Orc, Tiefling, Dragonborn
@@ -226,15 +226,29 @@ Campaign template sections: `## Campaign Info`, `## Opening Narration`, `## Chap
 - **Dice dropdowns** — count (1–6) and die type (d4/d6/d8/d10/d12/d20) dropdowns for quick common rolls
 - Free-text expressions still accepted: `1d20`, `2d6+3`, `4d6kh3`, etc.
 
+### In-Session Character Panel (Player Campaign Page)
+
+The left column of the player campaign page includes a collapsible **My Character** panel that keeps all gameplay-critical stats visible without leaving the page:
+
+- **Ability scores** — 3×2 grid showing score and modifier for all six abilities
+- **Saving throws** — all six with proficient ones highlighted in gold (✦)
+- **Spellcasting stats** — Spell DC, Spell Attack bonus, and casting ability (spellcasters only); concentration warning banner when active
+- **Active conditions** — red pills for any conditions applied by the DM
+- **Hit Dice** — remaining / max, die type; Temp HP when active
+- **Feats** — pill list of all feats acquired
+- **Inventory** — collapsible; each item has a **Use** button; healing potions automatically roll the correct dice and heal the character (four tiers: base 2d4+2 through Supreme 10d4+20). Gold displayed at the bottom.
+- **Short Rest** — collapsible (hidden during combat); select how many hit dice to spend; rolls hit die + CON modifier per die and heals the character in place
+
 ### Spellcasting
 
-- Cast a spell by name, slot level, and optional concentration flag
+- **Spell dropdown** — Cast Spell form uses a grouped `<select>` filtered to the character's class and available slot levels; spells organized by level with concentration indicator (⚠); hovering or selecting a spell shows a tooltip with school, casting time, range, components, duration, and description; "Other…" option reveals a free-text fallback
+- Cast a spell by selecting from the dropdown (or typing a custom name), choose slot level, and optional concentration flag
 - Slot consumed on cast; concentration replaces any existing concentration spell
 - DM can end concentration on any character
 
 ### Rests
 
-- **Short Rest** — spend hit dice to recover HP (rolls hit die + CON modifier per die)
+- **Short Rest** — spend hit dice to recover HP (rolls hit die + CON modifier per die); available from the character sheet or directly from the player campaign page (hidden during combat)
 - **Long Rest** — fully restores HP, resets all spell slots and hit dice
 
 ### AI Features (xAI Grok)
@@ -347,12 +361,13 @@ Once you have one admin account, all subsequent promotions can be done through t
 ├── parsers.py              # Markdown parsers + v2 template strings for import/export
 ├── api_routes.py           # REST API Blueprint (27 endpoints, Bearer token auth)
 ├── sms_routes.py           # Twilio SMS play-by-text Blueprint
-├── game_data.py            # Races (PHB + MotM), classes, subclasses, backgrounds, spell slot tables, XP thresholds, class features, feats, expansion spells, group patrons, downtime activities
+├── game_data.py            # Races (PHB + MotM), classes, subclasses, backgrounds, spell slot tables, XP thresholds, class features, feats, expansion spells, group patrons, downtime activities; ALL_SPELLS / SPELLS_BY_NAME / get_class_spells()
 ├── services/
 │   ├── ai.py               # xAI Grok wrapper (narration, background, character generation)
 │   ├── ai_dm.py            # AI DM engine layer
 │   ├── ai_player.py        # AI Player mode (out-of-combat actions, combat decisions, practice debrief)
 │   ├── engine.py           # Pure-function game logic (rolls, attacks, skill checks)
+│   ├── spell_parser.py     # Parses Documentation/07_SPELLS_REFERENCE.md + 24_EXPANSION_SPELLS.md into ALL_SPELLS list
 │   ├── discord_bot.py      # Discord bot with slash commands
 │   └── sms.py              # Twilio SMS helpers
 ├── seed.py                 # Sample data for demo/playtesting
@@ -363,7 +378,7 @@ Once you have one admin account, all subsequent promotions can be done through t
 ├── docker-compose.yml
 ├── docker-compose.prod.yml # Production docker-compose
 ├── DOCKER.md               # Docker operations reference
-├── PLAN.md                 # Full project plan and phase history (Phases 1–48, all complete)
+├── PLAN.md                 # Full project plan and phase history (Phases 1–50, all complete)
 ├── instance/
 │   └── dnd.db              # SQLite database (created at runtime)
 ├── static/
@@ -421,7 +436,7 @@ Once you have one admin account, all subsequent promotions can be done through t
 | `/characters/<id>/ai/background/cleanup` | Owner/DM | AI-polish backstory |
 | `/characters/<id>/ai/trait` | Owner/DM | AI-generate a trait field |
 | `/characters/<id>/ai/appearance` | Owner/DM | AI-generate appearance |
-| `/characters/<id>/xp` | DM | Award XP to a character |
+| `/characters/<id>/xp` | DM | Award XP to a character (from character sheet) |
 | `/characters/<id>/levelup` | Owner/DM | Level-up wizard (GET: form, POST: apply choices) |
 | `/characters/template` | Any | Download character template (v2) |
 | `/characters/import` | Any | Import character from `.md` file |
@@ -446,6 +461,8 @@ Once you have one admin account, all subsequent promotions can be done through t
 | `/dm/campaigns/<id>/practice-mode/toggle` | DM | Enable/disable Practice Mode |
 | `/dm/campaigns/<id>/practice-summary` | DM | Practice session summary page |
 | `/dm/campaigns/<id>/practice-summary/generate` | DM | Generate AI coaching debrief |
+| `/dm/characters/<id>/hp` | DM | Adjust character HP (from campaign page) |
+| `/dm/characters/<id>/xp` | DM | Award XP from the campaign page (redirects back to campaign) |
 | `/dm/characters/<id>/ai-toggle` | DM | Enable/disable AI Player for a character |
 | `/dm/characters/<id>/ai-level` | DM | Set AI persona level (novice/intermediate/experienced) |
 | `/dm/characters/<id>/ai-action` | DM | Generate out-of-combat AI action |
@@ -454,6 +471,8 @@ Once you have one admin account, all subsequent promotions can be done through t
 | `/dm/characters/<id>/ai-combat-execute` | DM | Execute approved AI combat action |
 | `/player/dashboard` | Player | Dashboard — campaigns + characters |
 | `/player/campaigns/<id>` | Player | Play in campaign |
+| `/player/campaigns/<id>/use-item` | Player | Use an inventory item (healing potions auto-heal) |
+| `/player/campaigns/<id>/short-rest` | Player | Take a short rest (spend hit dice to heal) |
 | `/change-password` | Any | Change own password (forced after admin reset) |
 | `/admin` | Admin | Admin dashboard — stats + recent activity |
 | `/admin/users` | Admin | User list with search |
